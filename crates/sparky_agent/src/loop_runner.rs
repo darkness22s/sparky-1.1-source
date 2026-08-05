@@ -28,6 +28,7 @@ pub struct AgentLoopOptions {
     pub reasoning_effort: Option<String>,
     pub append_system_prompt: Option<String>,
     pub context_window_tokens: Option<usize>,
+    pub memory_context: Option<String>,
     pub interaction_mode: InteractionMode,
 }
 
@@ -568,6 +569,7 @@ impl Default for AgentLoopOptions {
             reasoning_effort: None,
             append_system_prompt: None,
             context_window_tokens: Some(DEFAULT_CONTEXT_WINDOW_TOKENS),
+            memory_context: None,
             interaction_mode: InteractionMode::Build,
         }
     }
@@ -673,7 +675,17 @@ impl AgentLoop {
         let prompt_builder = PromptBuilder::new(&self.options.cwd)
             .with_append_prompt(self.options.append_system_prompt.clone())
             .with_plan_mode(plan_mode);
-        let system_prompt = prompt_builder.build().await;
+        let mut system_prompt = prompt_builder.build().await;
+        if let Some(memory_context) = self
+            .options
+            .memory_context
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(memory_context);
+        }
 
         self.event_bus.emit(&SparkyEvent::BeforeAgentStart {
             prompt: user_prompt.to_string(),

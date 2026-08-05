@@ -41,6 +41,7 @@ import {
 import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
+  BrainIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -1809,6 +1810,7 @@ type WorkEntryIconName =
   | "hammer"
   | "keyboard"
   | "list-checks"
+  | "brain"
   | "message-circle"
   | "mouse-pointer-click"
   | "square-pen"
@@ -1837,6 +1839,8 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <KeyboardIcon className={className} aria-hidden />;
     case "list-checks":
       return <ListChecksIcon className={className} aria-hidden />;
+    case "brain":
+      return <BrainIcon className={className} aria-hidden />;
     case "message-circle":
       return <MessageCircleIcon className={className} aria-hidden />;
     case "mouse-pointer-click":
@@ -1956,6 +1960,14 @@ function workEntryIconName(workEntry: TimelineWorkEntry): WorkEntryIconName {
   if (workEntry.itemType === "image_view") return "eye";
 
   const toolName = workEntry.toolName?.trim().toLowerCase();
+  if (
+    toolName === "memory_add" ||
+    toolName === "memory_update" ||
+    toolName === "memory_delete" ||
+    toolName === "memory_search"
+  ) {
+    return "brain";
+  }
   if (toolName === "update_plan") return "list-checks";
   if (toolName?.startsWith("preview_")) {
     if (toolName === "preview_click") return "mouse-pointer-click";

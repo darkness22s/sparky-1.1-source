@@ -169,6 +169,14 @@ describe("sparkyToolPresentation", () => {
     });
   });
 
+  it("humanizes memory tool names while preserving their wire names", () => {
+    expect(sparkyToolPresentation("memory_search", { query: "preferences" })).toMatchObject({
+      itemType: "dynamic_tool_call",
+      title: "Search memory",
+      data: { toolName: "memory_search" },
+    });
+  });
+
   it("humanizes built-in planning tool names", () => {
     expect(sparkyToolPresentation("update_plan", {})).toMatchObject({
       itemType: "dynamic_tool_call",

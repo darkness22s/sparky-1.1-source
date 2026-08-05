@@ -8,6 +8,7 @@ authors.workspace = true
 sparky_ai = { path = "../sparky_ai" }
 sparky_tools = { path = "../sparky_tools" }
 sparky_session = { path = "../sparky_session" }
+sparky_memory = { path = "../sparky_memory" }
 sparky_compaction = { path = "../sparky_compaction" }
 sparky_prompt = { path = "../sparky_prompt" }
 sparky_extensions = { path = "../sparky_extensions" }

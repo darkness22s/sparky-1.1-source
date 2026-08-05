@@ -7,6 +7,7 @@ use sparky_ai::{
 };
 use sparky_config::{DEFAULT_CONTEXT_WINDOW_TOKENS, DEFAULT_MAX_TURNS};
 use sparky_extensions::{EventBus, JsExtensionRunner, SparkyEvent};
+use sparky_memory::MemoryStore;
 use sparky_session::SessionManager;
 use sparky_tools::{is_hidden_control_tool, register_http_mcp_tools, ToolRegistry};
 use std::env;
@@ -363,7 +364,13 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let mut tool_registry = ToolRegistry::new();
+    let memory_store = std::sync::Arc::new(tokio::sync::Mutex::new(
+        MemoryStore::load(&cli.cwd, None).await?,
+    ));
+    let mut tool_registry = ToolRegistry::with_memory_store(
+        sparky_config::ToolOutputLimits::default(),
+        memory_store.clone(),
+    );
     if let Some(mcp_url) = cli.mcp_url.as_deref() {
         let token_variable = cli
             .mcp_bearer_token_env_var
@@ -496,6 +503,7 @@ async fn main() -> anyhow::Result<()> {
         reasoning_effort: cli.effort.clone(),
         append_system_prompt: cli.append_system_prompt.clone(),
         context_window_tokens,
+        memory_context: None,
         interaction_mode,
     };
 
