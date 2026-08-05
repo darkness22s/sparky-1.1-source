@@ -6,6 +6,7 @@ authors.workspace = true
 
 [dependencies]
 sparky_ai = { path = "../sparky_ai" }
+sparky_memory = { path = "../sparky_memory" }
 sparky_config = { path = "../sparky_config" }
 tokio.workspace = true
 serde.workspace = true

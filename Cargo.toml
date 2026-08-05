@@ -5,6 +5,7 @@ members = [
     "crates/sparky_ai",
     "crates/sparky_tools",
     "crates/sparky_session",
+    "crates/sparky_memory",
     "crates/sparky_compaction",
     "crates/sparky_prompt",
     "crates/sparky_extensions",

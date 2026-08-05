@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 sparky_ai = { path = "../sparky_ai" }
 sparky_tools = { path = "../sparky_tools" }
+sparky_memory = { path = "../sparky_memory" }
 sparky_session = { path = "../sparky_session" }
 sparky_compaction = { path = "../sparky_compaction" }
 sparky_prompt = { path = "../sparky_prompt" }
