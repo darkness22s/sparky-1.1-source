@@ -1,0 +1,152 @@
+use crate::bash::BashTool;
+use crate::edit::EditTool;
+use crate::find::FindTool;
+use crate::grep::GrepTool;
+use crate::ls::LsTool;
+use crate::plan::{AskUserTool, EndTaskTool, UpdatePlanTool, END_TASK_TOOL_NAME};
+use crate::read::ReadTool;
+use crate::tool::Tool;
+use crate::web_search::WebSearchTool;
+use crate::write::WriteTool;
+use sparky_ai::ToolParamSchema;
+use sparky_config::ToolOutputLimits;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+pub fn is_hidden_control_tool(name: &str) -> bool {
+    name == END_TASK_TOOL_NAME
+}
+
+#[derive(Default, Clone)]
+pub struct ToolRegistry {
+    tools: HashMap<String, Arc<dyn Tool>>,
+    plan_tools: HashMap<String, Arc<dyn Tool>>,
+}
+
+impl ToolRegistry {
+    const PLAN_TOOL_NAMES: [&'static str; 8] = [
+        "read",
+        "ls",
+        "grep",
+        "find",
+        "web_search",
+        "ask_user",
+        "update_plan",
+        END_TASK_TOOL_NAME,
+    ];
+
+    pub fn new() -> Self {
+        Self::with_output_limits(ToolOutputLimits::default())
+    }
+
+    pub fn with_output_limits(limits: ToolOutputLimits) -> Self {
+        let mut reg = Self::default();
+        reg.register_builtin(Arc::new(ReadTool::new(limits.read_bytes)));
+        reg.register_builtin(Arc::new(WriteTool));
+        reg.register_builtin(Arc::new(EditTool));
+        reg.register_builtin(Arc::new(BashTool::new(limits.bash_bytes)));
+        reg.register_builtin(Arc::new(LsTool));
+        reg.register_builtin(Arc::new(GrepTool));
+        reg.register_builtin(Arc::new(WebSearchTool));
+        reg.register_builtin(Arc::new(FindTool));
+        reg.register_builtin(Arc::new(AskUserTool));
+        reg.register_builtin(Arc::new(UpdatePlanTool));
+        reg.register_builtin(Arc::new(EndTaskTool));
+        reg
+    }
+
+    pub fn register(&mut self, tool: Arc<dyn Tool>) {
+        self.tools.insert(tool.name().to_string(), tool);
+    }
+
+    fn register_builtin(&mut self, tool: Arc<dyn Tool>) {
+        let name = tool.name().to_string();
+        self.tools.insert(name.clone(), tool.clone());
+        if Self::PLAN_TOOL_NAMES.contains(&name.as_str()) {
+            self.plan_tools.insert(name, tool);
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.get(name).cloned()
+    }
+
+    pub fn get_for_mode(&self, name: &str, plan_mode: bool) -> Option<Arc<dyn Tool>> {
+        if plan_mode && !Self::PLAN_TOOL_NAMES.contains(&name) {
+            return None;
+        }
+        if plan_mode {
+            return self.plan_tools.get(name).cloned();
+        }
+        self.get(name)
+    }
+
+    pub fn get_schemas(&self) -> Vec<ToolParamSchema> {
+        self.tools
+            .values()
+            .map(|tool| ToolParamSchema {
+                name: tool.name().to_string(),
+                description: tool.description().to_string(),
+                parameters: tool.parameters(),
+            })
+            .collect()
+    }
+
+    pub fn get_schemas_for_mode(&self, plan_mode: bool) -> Vec<ToolParamSchema> {
+        if plan_mode {
+            return self.schemas_for_names(Self::PLAN_TOOL_NAMES.iter().copied(), &self.plan_tools);
+        }
+        self.get_schemas()
+    }
+
+    fn schemas_for_names<'a, I>(
+        &self,
+        names: I,
+        tools: &HashMap<String, Arc<dyn Tool>>,
+    ) -> Vec<ToolParamSchema>
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        names
+            .into_iter()
+            .filter_map(|name| tools.get(name))
+            .map(|t| ToolParamSchema {
+                name: t.name().to_string(),
+                description: t.description().to_string(),
+                parameters: t.parameters(),
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plan_mode_exposes_only_read_context_and_planning_tools() {
+        let registry = ToolRegistry::new();
+        let names = registry
+            .get_schemas_for_mode(true)
+            .into_iter()
+            .map(|schema| schema.name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "read",
+                "ls",
+                "grep",
+                "find",
+                "web_search",
+                "ask_user",
+                "update_plan",
+                "end_task",
+            ]
+        );
+        assert!(registry.get_for_mode("read", true).is_some());
+        assert!(registry.get_for_mode("write", true).is_none());
+        assert!(registry.get_for_mode("write", false).is_some());
+    }
+}

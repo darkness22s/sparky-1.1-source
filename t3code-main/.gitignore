@@ -1,0 +1,14 @@
+
+# Temp render/generation scripts
+render-*.html
+render-*.py
+icon-gen*.py
+gen-icons.py
+assets/prod/logo-*.png
+assets/prod/sphere-*.png
+
+# Temp render artifacts
+t3code-main/t3code-main/assets/prod/logo-1024.png
+t3code-main/t3code-main/assets/prod/logo-rendered.png
+t3code-main/t3code-main/assets/prod/sphere-1024.png
+t3code-main/t3code-main/assets/prod/sphere-rendered.png

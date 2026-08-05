@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Changelog - Sparky</title>
+  <link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo"><img src="logo.svg" alt="Sparky"> Sparky</a>
+      <div class="nav-links">
+        <a href="index.html">Product</a>
+        <a href="docs/overview.html">Docs</a>
+        <a href="changelog.html" class="active">Changelog</a>
+      </div>
+      <div class="nav-right">
+        <a href="download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-tag">Changelog</div>
+      <h1>What's changed<br><em>in each release.</em></h1>
+    </div>
+  </section>
+
+  <section class="section" style="background:var(--bg-subtle);">
+    <div class="container">
+      <div id="changelog-list" class="cl-list">
+        <p class="cl-loading">Loading published releases&hellip;</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo"><img src="logo.svg" alt="Sparky"><span>Sparky</span></div>
+        <span class="footer-tagline">local · private · your call</span>
+        <div class="footer-links">
+          <a href="docs/overview.html">Docs</a>
+          <a href="changelog.html">Changelog</a>
+          <a href="download.html">Download</a>
+          <a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+  <script type="module" src="changelog.js"></script>
+</body>
+</html>

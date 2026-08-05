@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Commands - Sparky Docs</title>
+    <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=13">
+</head>
+<body>
+  <nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items">
+          <li><a href="read-edit.html">Read & Edit Files</a></li>
+          <li><a href="terminal.html" class="active">Terminal Commands</a></li>
+          <li><a href="search.html">Search</a></li>
+          <li><a href="git.html">Git Operations</a></li>
+          <li><a href="preview.html">Preview Websites</a></li>
+          <li><a href="web-search.html">Web Search</a></li>
+        </ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">TOOLS</div>
+        <h1>Terminal Commands</h1>
+        <p>Build, test, install, lint — Sparky runs any command in your project's terminal and shows you the full output.</p>
+      </div>
+
+      <h2 id="how-it-works">How it works</h2>
+      <p>Sparky can run any shell command in your project's directory. It captures stdout, stderr, and the exit code, then shows you the results. You control the timeout — default is 300 seconds.</p>
+
+      <h2 id="running-commands">Running commands</h2>
+      <p>Just tell Sparky what to run. It figures out the right command for your project (npm, cargo, python, go, make, etc.).</p>
+      <div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Example prompts</span></div><div class="docs-code-body">
+        <span class="cmd">"Run the tests"</span><br>
+        <span class="cmd">"Install the dependencies"</span><br>
+        <span class="cmd">"Build the project"</span><br>
+        <span class="cmd">"Run the linter and fix any errors"</span>
+      </div></div>
+
+      <h2 id="long-commands">Long-running commands</h2>
+      <p>Some commands take a while — large test suites, builds, deployments. Sparky handles these in the background and shows results when they finish. You can press <strong>Ctrl+C</strong> to interrupt.</p>
+      <div class="docs-note"><strong>Tip:</strong> For dev servers or watchers that run indefinitely, start them in a separate terminal. Sparky works best with commands that have a clear end.</div>
+
+      <h2 id="timeouts">Timeouts</h2>
+      <p>Commands time out after <strong>300 seconds</strong> by default. If your task needs more time, ask Sparky to increase the timeout or break it into smaller steps.</p>
+
+      <div class="docs-next"><h3>Next steps</h3><ul>
+        <li><a href="read-edit.html">Read & Edit Files</a> — modify code and config files</li>
+        <li><a href="search.html">Search</a> — find files and text patterns</li>
+        <li><a href="sessions.html">Sessions</a> — resume where you left off</li>
+      </ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list">
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#running-commands">Running commands</a></li>
+        <li><a href="#long-commands">Long-running commands</a></li>
+        <li><a href="#timeouts">Timeouts</a></li>
+      </ul>
+    </aside>
+  </div>
+  <footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+  <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+</body>
+</html>

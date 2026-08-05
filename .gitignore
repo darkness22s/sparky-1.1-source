@@ -1,0 +1,17 @@
+/target/
+/.sparky/
+/.wrangler/
+/Website/.env.local
+/Website/.wrangler/
+/Website/assets/*
+!/Website/assets/sparky-browser-ui.png
+!/Website/assets/sparky-desktop-ui.png
+!/Website/assets/sparky-diff-ui.png
+/Website/beta-docs/
+/Website/dist/
+/Website/docs/api-key-ad-v2.mp4
+/Website/download-worker/.wrangler/
+/Website/node_modules/
+/Website/Website.zip
+/Website/design-qa.md
+/Website/site-audit.md

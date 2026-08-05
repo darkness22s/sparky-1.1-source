@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supported Models - Sparky Docs</title>
+    <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=13">
+  <style>
+    .model-group { margin-bottom: 2rem; }
+    .model-list { list-style: none; padding: 0; }
+    .model-list li {
+      padding: 0.4rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .model-list li:last-child { border-bottom: none; }
+    .model-id { font-family: monospace; font-size: 0.85rem; color: var(--text-muted); }
+    .model-featured {
+      background: var(--bg-subtle);
+      border-radius: 6px;
+      margin-bottom: 0.3rem;
+    }
+    .model-featured .model-name { font-weight: 600; }
+    .show-more-btn {
+      display: block;
+      width: 100%;
+      padding: 0.6rem;
+      margin-top: 0.5rem;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--accent);
+      text-align: center;
+    }
+    .show-more-btn:hover { background: var(--border); }
+    .model-hidden { display: none; }
+    .provider-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+    .badge-openai { background: #74aa9c20; color: #74aa9c; }
+    .badge-anthropic { background: #d4a57420; color: #d4a574; }
+    .badge-google { background: #8ab4f820; color: #8ab4f8; }
+    .badge-opencode { background: #a78bfa20; color: #a78bfa; }
+  </style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+<aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
+<li><a href="terminal.html">Terminal Commands</a></li>
+<li><a href="search.html">Search</a></li>
+<li><a href="git.html">Git Operations</a></li>
+<li><a href="preview.html">Preview Websites</a></li>
+<li><a href="web-search.html">Web Search</a></li>
+</ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">REFERENCE</div>
+        <h1>Supported Models</h1>
+        <p>Sparky connects to AI providers through their APIs. Models are discovered automatically when you add your API key. Below are the current models available from each provider.</p>
+      </div>
+
+<h2 id="providers">Providers</h2>
+<p>Click a provider to get your API key, then add it in <strong>Settings, Models</strong>. Sparky discovers available models automatically.</p>
+<table class="docs-table" style="margin-bottom:2rem;">
+<tr><th>Provider</th><th>Get your API key</th></tr>
+<tr><td><strong>Anthropic</strong> (Claude)</td><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></td></tr>
+<tr><td><strong>OpenAI</strong> (GPT)</td><td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a></td></tr>
+<tr><td><strong>Google</strong> (Gemini)</td><td><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a></td></tr>
+<tr><td><strong>OpenCode Zen</strong></td><td><a href="https://opencode.ai/" target="_blank" rel="noopener">opencode.ai</a></td></tr>
+</table>
+
+<div id="app">
+  <div class="model-group" id="provider-openai">
+    <h3>OpenAI</h3>
+    <ul class="model-list" id="list-openai"></ul>
+  </div>
+
+  <div class="model-group" id="provider-anthropic">
+    <h3>Anthropic (Claude)</h3>
+    <ul class="model-list" id="list-anthropic"></ul>
+  </div>
+
+  <div class="model-group" id="provider-google">
+    <h3>Google (Gemini)</h3>
+    <ul class="model-list" id="list-google"></ul>
+  </div>
+
+  <div class="model-group" id="provider-opencode">
+    <h3>OpenCode Zen</h3>
+    <ul class="model-list" id="list-opencode"></ul>
+  </div>
+</div>
+
+<h2 id="switching">Switching models</h2>
+<p>Switch anytime in <strong>Settings, Models</strong> in the desktop app. Select the provider and model you want from the dropdown.</p>
+
+<div class="docs-next"><h3>Next steps</h3><ul>
+<li><a href="getting-started.html">Quickstart</a> — set up your key</li>
+<li><a href="prompts.html">Writing Prompts</a> — write effective prompts</li>
+<li><a href="sessions.html">Sessions</a> — manage conversations</li>
+</ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list"><li><a href="#providers">Providers</a></li>
+<li><a href="#switching">Switching models</a></li>
+</ul>
+    </aside>
+  </div>
+<footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+
+<script>
+(function() {
+var MODELS = {
+  "openai": {
+    "label": "OpenAI",
+    "badge": "badge-openai",
+    "featured": 4,
+    "models": [
+      { name: "GPT-5.6 Sol", id: "gpt-5.6-sol", note: "Frontier model for complex professional work" },
+      { name: "GPT-5.6 Terra", id: "gpt-5.6-terra", note: "Balances intelligence and cost" },
+      { name: "GPT-5.6 Luna", id: "gpt-5.6-luna", note: "Optimized for cost-sensitive workloads" },
+      { name: "GPT-5.5", id: "gpt-5.5", note: "Intelligence for coding and professional work" },
+      { name: "GPT-5.5 Pro", id: "gpt-5.5-pro", note: "Smarter and more precise responses" },
+      { name: "GPT-5.4", id: "gpt-5.4", note: "Affordable model for coding" },
+      { name: "GPT-5.4 Pro", id: "gpt-5.4-pro", note: "Smarter and more precise responses" },
+      { name: "GPT-5.4 mini", id: "gpt-5.4-mini", note: "Strongest mini model for coding, computer use, subagents" },
+      { name: "GPT-5.4 nano", id: "gpt-5.4-nano", note: "Cheapest GPT-5.4-class model for high-volume tasks" },
+      { name: "GPT-5.3-Codex", id: "gpt-5.3-codex", note: "Most capable agentic coding model" },
+      { name: "GPT-5.2", id: "gpt-5.2", note: "Previous frontier model with configurable reasoning" },
+      { name: "GPT-5.2 Pro", id: "gpt-5.2-pro", note: "Smarter and more precise responses" },
+      { name: "GPT-5.1", id: "gpt-5.1", note: "Best model for coding and agentic tasks" },
+      { name: "GPT-5", id: "gpt-5", note: "Intelligent reasoning model for coding" },
+      { name: "GPT-5 mini", id: "gpt-5-mini", note: "Near-frontier intelligence for cost-sensitive workloads" },
+      { name: "gpt-oss-120b", id: "gpt-oss-120b", note: "Most powerful open-weight model" },
+      { name: "gpt-oss-20b", id: "gpt-oss-20b", note: "Medium-sized open-weight model" }
+    ]
+  },
+  "anthropic": {
+    "label": "Anthropic",
+    "badge": "badge-anthropic",
+    "featured": 3,
+    "models": [
+      { name: "Claude Fable 5", id: "claude-fable-5", note: "Next-generation intelligence for long-running agents" },
+      { name: "Claude Opus 5", id: "claude-opus-5", note: "Complex agentic coding and enterprise work" },
+      { name: "Claude Sonnet 5", id: "claude-sonnet-5", note: "Best combination of speed and intelligence" },
+      { name: "Claude Haiku 4.5", id: "claude-haiku-4-5-20251001", note: "Fastest model with near-frontier intelligence" },
+      { name: "Claude Opus 4.8", id: "claude-opus-4-8", note: "Previous-generation pro model" },
+      { name: "Claude Opus 4.7", id: "claude-opus-4-7", note: "Previous pro model" },
+      { name: "Claude Opus 4.6", id: "claude-opus-4-6", note: "Previous pro model" },
+      { name: "Claude Opus 4.5", id: "claude-opus-4-5", note: "Previous pro model" },
+      { name: "Claude Sonnet 4.6", id: "claude-sonnet-4-6", note: "Previous fast model" },
+      { name: "Claude Sonnet 4.5", id: "claude-sonnet-4-5", note: "Previous fast model" }
+    ]
+  },
+  "google": {
+    "label": "Google",
+    "badge": "badge-google",
+    "featured": 3,
+    "models": [
+      { name: "Gemini 3.5 Flash", id: "gemini-3.5-flash", note: "Smartest model for sustained frontier performance" },
+      { name: "Gemini 3.1 Pro", id: "gemini-3.1-pro", note: "Advanced intelligence, complex problem-solving" },
+      { name: "Gemini 3.1 Flash-Lite", id: "gemini-3.1-flash-lite", note: "Frontier-class performance at a fraction of the cost" },
+      { name: "Gemini 3 Flash", id: "gemini-3-flash", note: "Frontier-class performance at low cost" },
+      { name: "Gemini 2.5 Flash", id: "gemini-2.5-flash", note: "Best price-performance for high-volume tasks" },
+      { name: "Gemini 2.5 Flash-Lite", id: "gemini-2.5-flash-lite", note: "Fastest and most economical multimodal model" },
+      { name: "Gemini 2.5 Pro", id: "gemini-2.5-pro", note: "Most advanced model for complex tasks" }
+    ]
+  },
+  "opencode": {
+    "label": "OpenCode Zen",
+    "badge": "badge-opencode",
+    "featured": 4,
+    "models": [
+      { name: "GPT-5.6 Sol", id: "opencode/gpt-5.6-sol", note: "Frontier model via OpenCode Zen" },
+      { name: "GPT-5.5", id: "opencode/gpt-5.5", note: "Coding intelligence via OpenCode Zen" },
+      { name: "Claude Fable 5", id: "opencode/claude-fable-5", note: "Anthropic's best via OpenCode Zen" },
+      { name: "Claude Opus 5", id: "opencode/claude-opus-5", note: "Complex coding via OpenCode Zen" },
+      { name: "Claude Sonnet 5", id: "opencode/claude-sonnet-5", note: "Speed + intelligence via OpenCode Zen" },
+      { name: "Claude Haiku 4.5", id: "opencode/claude-haiku-4-5", note: "Fast model via OpenCode Zen" },
+      { name: "Gemini 3.6 Flash", id: "opencode/gemini-3.6-flash", note: "Latest Gemini via OpenCode Zen" },
+      { name: "Gemini 3.5 Flash", id: "opencode/gemini-3.5-flash", note: "Google's best via OpenCode Zen" },
+      { name: "Gemini 3.1 Pro", id: "opencode/gemini-3.1-pro", note: "Advanced reasoning via OpenCode Zen" },
+      { name: "DeepSeek V4 Pro", id: "opencode/deepseek-v4-pro", note: "Powerful reasoning model" },
+      { name: "DeepSeek V4 Flash", id: "opencode/deepseek-v4-flash", note: "Fast, cost-effective model" },
+      { name: "Qwen3.7 Max", id: "opencode/qwen3.7-max", note: "Top-tier open model" },
+      { name: "Qwen3.7 Plus", id: "opencode/qwen3.7-plus", note: "Strong open model" },
+      { name: "MiniMax M3", id: "opencode/minimax-m3", note: "Latest MiniMax model" },
+      { name: "GLM 5.2", id: "opencode/glm-5.2", note: "Advanced GLM model" },
+      { name: "Kimi K2.7 Code", id: "opencode/kimi-k2.7-code", note: "Specialized coding model" },
+      { name: "GPT-5.4 mini", id: "opencode/gpt-5.4-mini", note: "Affordable mini via OpenCode Zen" },
+      { name: "GPT-5.3-Codex", id: "opencode/gpt-5.3-codex", note: "Coding specialist via OpenCode Zen" },
+      { name: "DeepSeek V4 Flash Free", id: "opencode/deepseek-v4-flash-free", note: "Free tier, fast model" },
+      { name: "Nemotron 3 Ultra Free", id: "opencode/nemotron-3-ultra-free", note: "Free tier model" }
+    ]
+  }
+};
+
+function renderProvider(key, provider) {
+  var list = document.getElementById("list-" + key);
+  if (!list) return;
+  var html = "";
+  var total = provider.models.length;
+  var featured = provider.featured;
+
+  for (var i = 0; i < total; i++) {
+    var m = provider.models[i];
+    var isFeatured = i < featured;
+    var hiddenClass = isFeatured ? "" : " model-hidden";
+    var featuredClass = isFeatured ? " model-featured" : "";
+    html += '<li class="model-item' + hiddenClass + featuredClass + '">';
+    html += '<span><span class="model-name">' + m.name + '</span> <span class="model-id">' + m.id + '</span></span>';
+    if (m.note) html += '<span class="model-note" style="font-size:0.85rem;color:var(--text-muted);text-align:right;margin-left:1rem;">' + m.note + '</span>';
+    html += '</li>';
+  }
+
+  list.innerHTML = html;
+
+  if (total > featured) {
+    var expanded = false;
+    var btn = document.createElement("button");
+    btn.className = "show-more-btn";
+    var extra = total - featured;
+    btn.textContent = "Show all " + total + " models (" + extra + " more)";
+    btn.addEventListener("click", function() {
+      expanded = !expanded;
+      var items = list.querySelectorAll(".model-item");
+      for (var j = featured; j < items.length; j++) {
+        items[j].classList.toggle("model-hidden", !expanded);
+      }
+      btn.textContent = expanded ? "Show fewer" : "Show all " + total + " models (" + extra + " more)";
+    });
+    list.parentNode.appendChild(btn);
+  }
+}
+
+renderProvider("openai", MODELS.openai);
+renderProvider("anthropic", MODELS.anthropic);
+renderProvider("google", MODELS.google);
+renderProvider("opencode", MODELS.opencode);
+})();
+</script>
+</body>
+</html>
