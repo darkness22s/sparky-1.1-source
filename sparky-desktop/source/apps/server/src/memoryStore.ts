@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Semaphore from "effect/Semaphore";
 import {
   Memory,
   MemoryAddInput,
@@ -30,6 +31,7 @@ type StoredMemory = {
   importance: number;
   created_at: string;
   updated_at: string;
+  source?: string;
 };
 
 type MemoryFile = { readonly version: number; readonly memories: ReadonlyArray<StoredMemory> };
@@ -37,7 +39,7 @@ type MemoryFile = { readonly version: number; readonly memories: ReadonlyArray<S
 interface LoadedStore {
   readonly globalFile: string;
   readonly projectFile: string;
-  readonly memories: StoredMemory[];
+  memories: StoredMemory[];
 }
 
 export class MemoryStoreService extends Context.Service<
@@ -55,65 +57,78 @@ export class MemoryStoreService extends Context.Service<
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
   const store = yield* Effect.promise(() => loadStore(config.cwd));
+  const writeSemaphore = yield* Semaphore.make(1);
 
+  const reload = () => Effect.promise(() => reloadStore(store));
   const list = (input: MemoryListInput) =>
-    Effect.sync(() => ({ memories: search(store, input.query ?? "") }) satisfies MemoryListResult);
+    reload().pipe(Effect.map(() => ({ memories: search(store, input.query ?? "") })));
 
   const add = (input: MemoryAddInput) =>
-    Effect.tryPromise({
-      try: async () => {
-        const now = new Date().toISOString();
-        const memory: StoredMemory = {
-          id: randomUUID(),
-          scope: input.scope,
-          title: input.title,
-          content: input.content,
-          category: input.category ?? "general",
-          importance: input.importance ?? 3,
-          created_at: now,
-          updated_at: now,
-        };
-        validate(memory.title, memory.content);
-        store.memories.push(memory);
-        await persistStore(store, memory.scope);
-        return toContract(memory);
-      },
-      catch: (cause) => memoryError("add", cause),
-    });
+    writeSemaphore.withPermit(
+      Effect.tryPromise({
+        try: async () => {
+          await reloadStore(store);
+          const now = new Date().toISOString();
+          const memory: StoredMemory = {
+            id: randomUUID(),
+            scope: input.scope,
+            title: input.title,
+            content: input.content,
+            category: input.category ?? "general",
+            importance: input.importance ?? 3,
+            created_at: now,
+            updated_at: now,
+            source: input.source ?? "settings",
+          };
+          validate(memory.title, memory.content);
+          store.memories.push(memory);
+          await persistStore(store, memory.scope);
+          return toContract(memory);
+        },
+        catch: (cause) => memoryError("add", cause),
+      }),
+    );
 
   const update = (input: MemoryUpdateInput) =>
-    Effect.tryPromise({
-      try: async () => {
-        const index = store.memories.findIndex((memory) => memory.id === input.id);
-        if (index < 0) throw new Error(`Memory '${input.id}' was not found.`);
-        const existing = store.memories[index]!;
-        const next: StoredMemory = {
-          ...existing,
-          title: input.title,
-          content: input.content,
-          category: input.category ?? existing.category,
-          importance: input.importance ?? existing.importance,
-          updated_at: new Date().toISOString(),
-        };
-        validate(next.title, next.content);
-        store.memories[index] = next;
-        await persistStore(store, next.scope);
-        return toContract(next);
-      },
-      catch: (cause) => memoryError("update", cause),
-    });
+    writeSemaphore.withPermit(
+      Effect.tryPromise({
+        try: async () => {
+          await reloadStore(store);
+          const index = store.memories.findIndex((memory) => memory.id === input.id);
+          if (index < 0) throw new Error(`Memory '${input.id}' was not found.`);
+          const existing = store.memories[index]!;
+          const next: StoredMemory = {
+            ...existing,
+            title: input.title,
+            content: input.content,
+            category: input.category ?? existing.category,
+            importance: input.importance ?? existing.importance,
+            updated_at: new Date().toISOString(),
+            ...(input.source !== undefined ? { source: input.source } : {}),
+          };
+          validate(next.title, next.content);
+          store.memories[index] = next;
+          await persistStore(store, next.scope);
+          return toContract(next);
+        },
+        catch: (cause) => memoryError("update", cause),
+      }),
+    );
 
   const remove = (input: MemoryDeleteInput) =>
-    Effect.tryPromise({
-      try: async () => {
-        const index = store.memories.findIndex((memory) => memory.id === input.id);
-        if (index < 0) return { deleted: false };
-        const [deleted] = store.memories.splice(index, 1);
-        await persistStore(store, deleted!.scope);
-        return { deleted: true };
-      },
-      catch: (cause) => memoryError("delete", cause),
-    });
+    writeSemaphore.withPermit(
+      Effect.tryPromise({
+        try: async () => {
+          await reloadStore(store);
+          const index = store.memories.findIndex((memory) => memory.id === input.id);
+          if (index < 0) return { deleted: false };
+          const [deleted] = store.memories.splice(index, 1);
+          await persistStore(store, deleted!.scope);
+          return { deleted: true };
+        },
+        catch: (cause) => memoryError("delete", cause),
+      }),
+    );
 
   return { list, add, update, remove };
 });
@@ -123,8 +138,17 @@ export const layer = Layer.effect(MemoryStoreService, make);
 async function loadStore(cwd: string): Promise<LoadedStore> {
   const globalFile = NodePath.join(cwd, ".sparky", "global", MEMORY_FILE_NAME);
   const projectFile = NodePath.join(cwd, ".sparky", MEMORY_FILE_NAME);
-  const [global, project] = await Promise.all([readFile(globalFile), readFile(projectFile)]);
-  return { globalFile, projectFile, memories: [...global, ...project] };
+  const store = { globalFile, projectFile, memories: [] } satisfies LoadedStore;
+  return reloadStore(store);
+}
+
+async function reloadStore(store: LoadedStore): Promise<LoadedStore> {
+  const [global, project] = await Promise.all([
+    readFile(store.globalFile),
+    readFile(store.projectFile),
+  ]);
+  store.memories = [...global, ...project];
+  return store;
 }
 
 async function readFile(path: string): Promise<ReadonlyArray<StoredMemory>> {
@@ -147,7 +171,13 @@ async function persistStore(store: LoadedStore, scope: StoredMemory["scope"]): P
     `${JSON.stringify({ version: 1, memories }, null, 2)}\n`,
     "utf8",
   );
-  await NodeFS.rename(temporary, path);
+  try {
+    await NodeFS.rename(temporary, path);
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error;
+    await NodeFS.rm(path, { force: true });
+    await NodeFS.rename(temporary, path);
+  }
 }
 
 function search(store: LoadedStore, query: string): ReadonlyArray<Memory> {
@@ -185,6 +215,7 @@ function toContract(memory: StoredMemory): Memory {
     importance: memory.importance,
     createdAt: memory.created_at,
     updatedAt: memory.updated_at,
+    ...(memory.source ? { source: memory.source } : {}),
   };
 }
 
@@ -193,6 +224,15 @@ function memoryError(operation: string, cause: unknown): MemoryError {
     operation,
     message: cause instanceof Error ? cause.message : String(cause),
   });
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "EEXIST" || error.code === "EPERM" || error.code === "EISDIR")
+  );
 }
 
 function isNotFound(error: unknown): boolean {

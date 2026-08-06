@@ -69,7 +69,7 @@ export function MemorySettingsPanel() {
     const result = editing
       ? await updateMemory({
           environmentId,
-          input: { id: editing.id, ...draft },
+          input: { id: editing.id, ...draft, source: editing.source },
         })
       : await addMemory({
           environmentId,

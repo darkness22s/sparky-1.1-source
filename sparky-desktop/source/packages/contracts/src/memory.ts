@@ -9,7 +9,7 @@ export const Memory = Schema.Struct({
   title: Schema.String,
   content: Schema.String,
   category: Schema.String,
-  importance: Schema.Number,
+  importance: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
   createdAt: Schema.String,
   updatedAt: Schema.String,
   source: Schema.optional(Schema.String),
@@ -31,7 +31,8 @@ export const MemoryAddInput = Schema.Struct({
   title: Schema.String,
   content: Schema.String,
   category: Schema.optional(Schema.String),
-  importance: Schema.optional(Schema.Number),
+  importance: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 }))),
+  source: Schema.optional(Schema.String),
 });
 export type MemoryAddInput = typeof MemoryAddInput.Type;
 
@@ -40,7 +41,8 @@ export const MemoryUpdateInput = Schema.Struct({
   title: Schema.String,
   content: Schema.String,
   category: Schema.optional(Schema.String),
-  importance: Schema.optional(Schema.Number),
+  importance: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 }))),
+  source: Schema.optional(Schema.String),
 });
 export type MemoryUpdateInput = typeof MemoryUpdateInput.Type;
 
