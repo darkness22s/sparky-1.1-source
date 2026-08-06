@@ -103,8 +103,8 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/models': typeof SettingsModelsRoute
   '/settings/memory': typeof SettingsMemoryRoute
+  '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -117,8 +117,8 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/models': typeof SettingsModelsRoute
   '/settings/memory': typeof SettingsMemoryRoute
+  '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/': typeof ChatIndexRoute
@@ -134,8 +134,8 @@ export interface FileRoutesById {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/models': typeof SettingsModelsRoute
   '/settings/memory': typeof SettingsMemoryRoute
+  '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/_chat/': typeof ChatIndexRoute
@@ -152,8 +152,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/models'
     | '/settings/memory'
+    | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
     | '/$environmentId/$threadId'
@@ -166,8 +166,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/models'
     | '/settings/memory'
+    | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
     | '/'
@@ -182,8 +182,8 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/models'
     | '/settings/memory'
+    | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
     | '/_chat/'
@@ -240,18 +240,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsModelsRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/keybindings': {
-      id: '/settings/keybindings'
-      path: '/keybindings'
-      fullPath: '/settings/keybindings'
-      preLoaderRoute: typeof SettingsKeybindingsRouteImport
-      parentRoute: typeof SettingsRoute
-    }
     '/settings/memory': {
       id: '/settings/memory'
       path: '/memory'
       fullPath: '/settings/memory'
       preLoaderRoute: typeof SettingsMemoryRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/keybindings': {
+      id: '/settings/keybindings'
+      path: '/keybindings'
+      fullPath: '/settings/keybindings'
+      preLoaderRoute: typeof SettingsKeybindingsRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/instructions': {
