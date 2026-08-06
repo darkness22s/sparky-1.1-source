@@ -171,8 +171,12 @@ mod tests {
         ));
         let registry = ToolRegistry::with_memory_store(ToolOutputLimits::default(), store);
 
-        assert!(registry.get_for_mode(MEMORY_SEARCH_TOOL_NAME, true).is_some());
-        assert!(registry.get_for_mode(MEMORY_SEARCH_TOOL_NAME, false).is_some());
+        assert!(registry
+            .get_for_mode(MEMORY_SEARCH_TOOL_NAME, true)
+            .is_some());
+        assert!(registry
+            .get_for_mode(MEMORY_SEARCH_TOOL_NAME, false)
+            .is_some());
         assert!(registry.get_for_mode("memory_add", true).is_none());
         assert!(registry.get_for_mode("memory_add", false).is_some());
     }

@@ -676,7 +676,13 @@ impl AgentLoop {
             .with_append_prompt(self.options.append_system_prompt.clone())
             .with_plan_mode(plan_mode);
         let mut system_prompt = prompt_builder.build().await;
-        if let Some(memory_context) = self.options.memory_context.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(memory_context) = self
+            .options
+            .memory_context
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
             system_prompt.push_str("\n\n");
             system_prompt.push_str(memory_context);
         }
