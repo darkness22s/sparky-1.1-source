@@ -6,10 +6,10 @@ param(
 )
 
 $packageFiles = @(
-    't3code-main/t3code-main/apps/server/package.json',
-    't3code-main/t3code-main/apps/desktop/package.json',
-    't3code-main/t3code-main/apps/web/package.json',
-    't3code-main/t3code-main/packages/contracts/package.json'
+    'sparky-desktop/source/apps/server/package.json',
+    'sparky-desktop/source/apps/desktop/package.json',
+    'sparky-desktop/source/apps/web/package.json',
+    'sparky-desktop/source/packages/contracts/package.json'
 )
 
 $mismatches = [System.Collections.Generic.List[string]]::new()

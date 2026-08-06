@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-14
     defaults:
       run:
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-          cache-dependency-path: t3code-main/t3code-main/pnpm-lock.yaml
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -40,22 +40,22 @@ jobs:
         working-directory: .
 
       - run: pnpm install --frozen-lockfile
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           PUPPETEER_SKIP_DOWNLOAD: 'true'
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - run: pnpm build
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
 
       - run: pnpm dist:desktop:dmg:x64
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
-          # Repository variable: the deployed Convex site URL for sparky-analytics-admin.
+          # Repository variable: the deployed Convex site URL for sparky-analytics.
           SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/x64
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
@@ -91,7 +91,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
 
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-          cache-dependency-path: t3code-main/t3code-main/pnpm-lock.yaml
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -117,19 +117,19 @@ jobs:
         working-directory: .
 
       - run: pnpm install --frozen-lockfile
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           PUPPETEER_SKIP_DOWNLOAD: 'true'
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - run: pnpm build
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
 
       - run: pnpm dist:desktop:dmg:arm64
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
           SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/arm64
@@ -167,7 +167,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
 
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +182,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-          cache-dependency-path: t3code-main/t3code-main/pnpm-lock.yaml
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -191,19 +191,19 @@ jobs:
         working-directory: .
 
       - run: pnpm install --frozen-lockfile
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           PUPPETEER_SKIP_DOWNLOAD: 'true'
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - run: pnpm build
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
 
       - run: pnpm dist:desktop:win:x64
-        working-directory: t3code-main/t3code-main
+        working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
           SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/windows

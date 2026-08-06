@@ -2007,6 +2007,7 @@ dependencies = [
  "sparky_compaction",
  "sparky_config",
  "sparky_extensions",
+ "sparky_memory",
  "sparky_prompt",
  "sparky_session",
  "sparky_tools",
@@ -2054,6 +2055,7 @@ dependencies = [
  "sparky_compaction",
  "sparky_config",
  "sparky_extensions",
+ "sparky_memory",
  "sparky_prompt",
  "sparky_session",
  "sparky_tools",
@@ -2105,6 +2107,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sparky_memory"
+version = "1.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "sparky_prompt"
 version = "1.1.0"
 dependencies = [
@@ -2149,6 +2165,7 @@ dependencies = [
  "similar",
  "sparky_ai",
  "sparky_config",
+ "sparky_memory",
  "tempfile",
  "thiserror",
  "tokio",

@@ -3,6 +3,7 @@ use crate::edit::EditTool;
 use crate::find::FindTool;
 use crate::grep::GrepTool;
 use crate::ls::LsTool;
+use crate::memory::{MemoryTool, SharedMemoryStore, MEMORY_SEARCH_TOOL_NAME};
 use crate::plan::{AskUserTool, EndTaskTool, UpdatePlanTool, END_TASK_TOOL_NAME};
 use crate::read::ReadTool;
 use crate::tool::Tool;
@@ -24,12 +25,13 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    const PLAN_TOOL_NAMES: [&'static str; 8] = [
+    const PLAN_TOOL_NAMES: [&'static str; 9] = [
         "read",
         "ls",
         "grep",
         "find",
         "web_search",
+        MEMORY_SEARCH_TOOL_NAME,
         "ask_user",
         "update_plan",
         END_TASK_TOOL_NAME,
@@ -37,6 +39,15 @@ impl ToolRegistry {
 
     pub fn new() -> Self {
         Self::with_output_limits(ToolOutputLimits::default())
+    }
+
+    pub fn with_memory_store(limits: ToolOutputLimits, store: SharedMemoryStore) -> Self {
+        let mut reg = Self::with_output_limits(limits);
+        reg.register_builtin(Arc::new(MemoryTool::search(store.clone())));
+        reg.register_builtin(Arc::new(MemoryTool::add(store.clone())));
+        reg.register_builtin(Arc::new(MemoryTool::update(store.clone())));
+        reg.register_builtin(Arc::new(MemoryTool::delete(store)));
+        reg
     }
 
     pub fn with_output_limits(limits: ToolOutputLimits) -> Self {
@@ -148,5 +159,21 @@ mod tests {
         assert!(registry.get_for_mode("read", true).is_some());
         assert!(registry.get_for_mode("write", true).is_none());
         assert!(registry.get_for_mode("write", false).is_some());
+    }
+
+    #[tokio::test]
+    async fn memory_search_is_available_in_build_and_plan_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = std::sync::Arc::new(tokio::sync::Mutex::new(
+            sparky_memory::MemoryStore::load(dir.path().to_str().unwrap(), None)
+                .await
+                .unwrap(),
+        ));
+        let registry = ToolRegistry::with_memory_store(ToolOutputLimits::default(), store);
+
+        assert!(registry.get_for_mode(MEMORY_SEARCH_TOOL_NAME, true).is_some());
+        assert!(registry.get_for_mode(MEMORY_SEARCH_TOOL_NAME, false).is_some());
+        assert!(registry.get_for_mode("memory_add", true).is_none());
+        assert!(registry.get_for_mode("memory_add", false).is_some());
     }
 }
