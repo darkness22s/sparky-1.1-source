@@ -78,6 +78,7 @@ import {
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
+import * as MemoryStore from "./memoryStore.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
@@ -305,6 +306,10 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetProcessDiagnostics, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetProcessResourceHistory, AuthOrchestrationReadScope],
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
+  [WS_METHODS.memoryList, AuthOrchestrationReadScope],
+  [WS_METHODS.memoryAdd, AuthOrchestrationOperateScope],
+  [WS_METHODS.memoryUpdate, AuthOrchestrationOperateScope],
+  [WS_METHODS.memoryDelete, AuthOrchestrationOperateScope],
   [WS_METHODS.cloudGetRelayClientStatus, AuthRelayWriteScope],
   [WS_METHODS.cloudInstallRelayClient, AuthRelayWriteScope],
   [WS_METHODS.sourceControlLookupRepository, AuthOrchestrationReadScope],
@@ -429,6 +434,7 @@ const makeWsRpcLayer = (
         yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const memoryStore = yield* MemoryStore.MemoryStoreService;
       const sourceControlDiscovery = yield* SourceControlDiscovery.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map((settings) => settings.automaticGitFetchInterval),
@@ -1514,6 +1520,22 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.memoryList]: (input) =>
+          observeRpcEffect(WS_METHODS.memoryList, memoryStore.list(input), {
+            "rpc.aggregate": "memory",
+          }),
+        [WS_METHODS.memoryAdd]: (input) =>
+          observeRpcEffect(WS_METHODS.memoryAdd, memoryStore.add(input), {
+            "rpc.aggregate": "memory",
+          }),
+        [WS_METHODS.memoryUpdate]: (input) =>
+          observeRpcEffect(WS_METHODS.memoryUpdate, memoryStore.update(input), {
+            "rpc.aggregate": "memory",
+          }),
+        [WS_METHODS.memoryDelete]: (input) =>
+          observeRpcEffect(WS_METHODS.memoryDelete, memoryStore.remove(input), {
+            "rpc.aggregate": "memory",
+          }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) =>
           observeRpcEffect(
             WS_METHODS.serverDiscoverSourceControl,
@@ -2086,6 +2108,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
         const sessions = yield* SessionStore.SessionStore;
+        const config = yield* ServerConfig.ServerConfig;
         const session = yield* serverAuth.authenticateWebSocketUpgrade(request).pipe(
           Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
             failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
@@ -2101,6 +2124,8 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             makeWsRpcLayer(session, previewAutomationBroker).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
+              Layer.provideMerge(ServerConfig.layer(config)),
+              Layer.provideMerge(MemoryStore.layer),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

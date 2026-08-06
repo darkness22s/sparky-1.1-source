@@ -343,5 +343,21 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
     }),
+    memoryList: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:memory:list",
+      tag: WS_METHODS.memoryList,
+    }),
+    memoryAdd: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:add",
+      tag: WS_METHODS.memoryAdd,
+    }),
+    memoryUpdate: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:update",
+      tag: WS_METHODS.memoryUpdate,
+    }),
+    memoryDelete: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:memory:delete",
+      tag: WS_METHODS.memoryDelete,
+    }),
   };
 }
