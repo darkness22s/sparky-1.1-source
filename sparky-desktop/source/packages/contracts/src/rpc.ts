@@ -131,6 +131,15 @@ import {
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
+import {
+  Memory,
+  MemoryAddInput,
+  MemoryDeleteInput,
+  MemoryError,
+  MemoryListInput,
+  MemoryListResult,
+  MemoryUpdateInput,
+} from "./memory.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -214,6 +223,10 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
+  memoryList: "memory.list",
+  memoryAdd: "memory.add",
+  memoryUpdate: "memory.update",
+  memoryDelete: "memory.delete",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -322,6 +335,30 @@ export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess,
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsMemoryListRpc = Rpc.make(WS_METHODS.memoryList, {
+  payload: MemoryListInput,
+  success: MemoryListResult,
+  error: Schema.Union([MemoryError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryAddRpc = Rpc.make(WS_METHODS.memoryAdd, {
+  payload: MemoryAddInput,
+  success: Memory,
+  error: Schema.Union([MemoryError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryUpdateRpc = Rpc.make(WS_METHODS.memoryUpdate, {
+  payload: MemoryUpdateInput,
+  success: Memory,
+  error: Schema.Union([MemoryError, EnvironmentAuthorizationError]),
+});
+
+export const WsMemoryDeleteRpc = Rpc.make(WS_METHODS.memoryDelete, {
+  payload: MemoryDeleteInput,
+  success: Schema.Struct({ deleted: Schema.Boolean }),
+  error: Schema.Union([MemoryError, EnvironmentAuthorizationError]),
 });
 
 export const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
@@ -702,6 +739,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerSignalProcessRpc,
+  WsMemoryListRpc,
+  WsMemoryAddRpc,
+  WsMemoryUpdateRpc,
+  WsMemoryDeleteRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,

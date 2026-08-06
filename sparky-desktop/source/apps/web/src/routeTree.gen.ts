@@ -15,6 +15,7 @@ import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsPersonalizeRouteImport } from './routes/settings.personalize'
 import { Route as SettingsModelsRouteImport } from './routes/settings.models'
+import { Route as SettingsMemoryRouteImport } from './routes/settings.memory'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsInstructionsRouteImport } from './routes/settings.instructions'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
@@ -50,6 +51,11 @@ const SettingsPersonalizeRoute = SettingsPersonalizeRouteImport.update({
 const SettingsModelsRoute = SettingsModelsRouteImport.update({
   id: '/models',
   path: '/models',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsMemoryRoute = SettingsMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
+  '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
+    | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
+    | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
+    | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
     | '/settings/source-control'
@@ -226,6 +238,13 @@ declare module '@tanstack/react-router' {
       path: '/models'
       fullPath: '/settings/models'
       preLoaderRoute: typeof SettingsModelsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/memory': {
+      id: '/settings/memory'
+      path: '/memory'
+      fullPath: '/settings/memory'
+      preLoaderRoute: typeof SettingsMemoryRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/keybindings': {
@@ -300,6 +319,7 @@ interface SettingsRouteChildren {
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsInstructionsRoute: typeof SettingsInstructionsRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
+  SettingsMemoryRoute: typeof SettingsMemoryRoute
   SettingsModelsRoute: typeof SettingsModelsRoute
   SettingsPersonalizeRoute: typeof SettingsPersonalizeRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
@@ -311,6 +331,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsInstructionsRoute: SettingsInstructionsRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
+  SettingsMemoryRoute: SettingsMemoryRoute,
   SettingsModelsRoute: SettingsModelsRoute,
   SettingsPersonalizeRoute: SettingsPersonalizeRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,

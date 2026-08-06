@@ -4,6 +4,7 @@ import {
   ArrowLeftIcon,
   BoxesIcon,
   SlidersHorizontalIcon,
+  BrainIcon,
   KeyboardIcon,
   Settings2Icon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ export type SettingsSectionPath =
   | "/settings/personalize"
   | "/settings/keybindings"
   | "/settings/models"
+  | "/settings/memory"
   | "/settings/archived";
 
 export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
@@ -36,6 +38,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { label: "Personalize", to: "/settings/personalize", icon: SlidersHorizontalIcon },
   { label: "Keybindings", to: "/settings/keybindings", icon: KeyboardIcon },
   { label: "Models", to: "/settings/models", icon: BoxesIcon },
+  { label: "Memory", to: "/settings/memory", icon: BrainIcon },
   { label: "Archive", to: "/settings/archived", icon: ArchiveIcon },
 ];
 
