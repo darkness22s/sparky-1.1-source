@@ -425,9 +425,11 @@ export function sparkyToolPresentation(
       ? "command_execution"
       : normalizedName === "write" || normalizedName === "edit"
         ? "file_change"
-        : isBrowserTool
-          ? "mcp_tool_call"
-          : "dynamic_tool_call";
+        : normalizedName === "web_search"
+          ? "web_search"
+          : isBrowserTool
+            ? "mcp_tool_call"
+            : "dynamic_tool_call";
   const kind =
     normalizedName === "bash"
       ? "execute"
@@ -446,6 +448,7 @@ export function sparkyToolPresentation(
     memory_search: "Search memory",
     memory_update: "Update memory",
     read: "Read file",
+    web_search: "Search the web",
     update_plan: "Update plan",
     write: "Write file",
     preview_status: "Get browser status",
