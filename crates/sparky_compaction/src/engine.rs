@@ -162,6 +162,7 @@ impl CompactionEngine {
                     AssistantMessageEvent::TextDelta(delta) => summary_text.push_str(&delta),
                     AssistantMessageEvent::Error(message) => anyhow::bail!(message),
                     AssistantMessageEvent::ThinkingDelta(_)
+                    | AssistantMessageEvent::ProviderState(_)
                     | AssistantMessageEvent::ToolCallDelta { .. } => {}
                     AssistantMessageEvent::Done { .. } => {
                         saw_completion = true;
