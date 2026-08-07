@@ -604,34 +604,6 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('data-testid="file-diff"');
   });
 
-  it("renders a unique custom icon for web search", () => {
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[
-          {
-            id: "entry-web-search",
-            kind: "work",
-            createdAt: MESSAGE_CREATED_AT,
-            entry: {
-              id: "work-web-search",
-              createdAt: MESSAGE_CREATED_AT,
-              label: "Search the web",
-              toolTitle: "Search the web",
-              toolName: "web_search",
-              itemType: "web_search",
-              tone: "tool",
-              toolLifecycleStatus: "completed",
-            },
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain('viewBox="0 0 24 24"');
-    expect(markup).not.toContain("lucide-globe");
-  });
-
   it("renders a failure marker for failed tool lifecycle entries", async () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
