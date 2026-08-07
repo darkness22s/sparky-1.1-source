@@ -2,6 +2,7 @@ use crate::tool::{truncate_output, Tool, ToolExecutionResult};
 use async_trait::async_trait;
 use regex::Regex;
 use serde_json::json;
+use url::Url;
 
 pub struct WebSearchTool;
 
@@ -16,7 +17,7 @@ impl Tool for WebSearchTool {
     }
 
     fn description(&self) -> &str {
-        "Search the web via DuckDuckGo. Use this to find documentation, solutions, API references, or any current information. Results include titles, snippets, and URLs."
+        "Search the web for documentation, solutions, API references, or other current information. Results include titles, snippets, and URLs."
     }
 
     fn parameters(&self) -> serde_json::Value {
@@ -70,7 +71,9 @@ impl Tool for WebSearchTool {
                     Ok(ToolExecutionResult::success(output))
                 }
             }
-            Err(e) => Ok(ToolExecutionResult::error(format!("Search failed: {}", e))),
+            Err(_) => Ok(ToolExecutionResult::error(
+                "Search failed: unable to fetch current results.",
+            )),
         }
     }
 }
@@ -80,6 +83,103 @@ struct SearchResult {
     title: String,
     snippet: String,
     url: String,
+}
+
+fn normalize_result_url(raw_url: &str) -> Option<String> {
+    let trimmed = raw_url.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let absolute = if trimmed.starts_with("//") {
+        format!("https:{trimmed}")
+    } else if trimmed.starts_with('/') {
+        format!("https://duckduckgo.com{trimmed}")
+    } else {
+        trimmed.to_string()
+    };
+
+    let parsed = Url::parse(&absolute).ok()?;
+    if parsed.host_str() == Some("duckduckgo.com") && parsed.path() == "/l/" {
+        if let Some(target) = parsed
+            .query_pairs()
+            .find_map(|(key, value)| (key == "uddg").then(|| value.into_owned()))
+        {
+            return Url::parse(&target).ok().map(|url| url.to_string());
+        }
+    }
+
+    Some(absolute)
+}
+
+fn push_result(
+    results: &mut Vec<SearchResult>,
+    seen_urls: &mut std::collections::HashSet<String>,
+    title: String,
+    snippet: String,
+    raw_url: &str,
+    max_results: usize,
+) {
+    if results.len() >= max_results {
+        return;
+    }
+    let Some(url) = normalize_result_url(raw_url) else {
+        return;
+    };
+    if !seen_urls.insert(url.clone()) {
+        return;
+    }
+    results.push(SearchResult {
+        title,
+        snippet,
+        url,
+    });
+}
+
+fn clean_html_fragment(fragment: &str, tag_re: &Regex) -> String {
+    let without_tags = tag_re.replace_all(fragment, "");
+    decode_html_entities(&without_tags)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn parse_html_results(body: &str, max_results: usize) -> Vec<SearchResult> {
+    let result_re = Regex::new(
+        r##"(?s)<a[^>]*class="[^"]*\bresult__a\b[^"]*"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"##,
+    )
+    .expect("web search result regex must compile");
+    let snippet_re = Regex::new(
+        r##"(?s)<a[^>]*class="[^"]*\bresult__snippet\b[^"]*"[^>]*href="[^"]*"[^>]*>(.*?)</a>"##,
+    )
+    .expect("web search snippet regex must compile");
+    let tag_re = Regex::new(r"<[^>]+>").expect("web search HTML tag regex must compile");
+    let urls: Vec<String> = result_re
+        .captures_iter(body)
+        .map(|capture| capture[1].to_string())
+        .collect();
+    let titles: Vec<String> = result_re
+        .captures_iter(body)
+        .map(|capture| clean_html_fragment(&capture[2], &tag_re))
+        .collect();
+    let snippets: Vec<String> = snippet_re
+        .captures_iter(body)
+        .map(|capture| clean_html_fragment(&capture[1], &tag_re))
+        .collect();
+
+    let mut results = Vec::new();
+    let mut seen_urls = std::collections::HashSet::new();
+    for (index, url) in urls.iter().enumerate() {
+        push_result(
+            &mut results,
+            &mut seen_urls,
+            titles.get(index).cloned().unwrap_or_default(),
+            snippets.get(index).cloned().unwrap_or_default(),
+            url,
+            max_results,
+        );
+    }
+    results
 }
 
 async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Vec<SearchResult>> {
@@ -95,20 +195,29 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
     );
 
     let mut all_results: Vec<SearchResult> = Vec::new();
+    let mut seen_urls = std::collections::HashSet::new();
+    let mut saw_successful_response = false;
 
     if let Ok(resp) = client.get(&api_url).send().await {
-        if let Ok(body) = resp.text().await {
-            if let Ok(ddg_response) = serde_json::from_str::<serde_json::Value>(&body) {
+        if resp.status().is_success() {
+            if let Ok(body) = resp.text().await {
+                if !body.trim().is_empty() {
+                    saw_successful_response = true;
+                }
+                if let Ok(ddg_response) = serde_json::from_str::<serde_json::Value>(&body) {
                 // Extract abstract
                 if let Some(abstract_text) = ddg_response["AbstractText"].as_str() {
                     if !abstract_text.is_empty() {
                         let url = ddg_response["AbstractURL"].as_str().unwrap_or("");
                         let source = ddg_response["AbstractSource"].as_str().unwrap_or("");
-                        all_results.push(SearchResult {
-                            title: format!("{} - {}", source, truncate(abstract_text, 80)),
-                            snippet: abstract_text.to_string(),
-                            url: url.to_string(),
-                        });
+                        push_result(
+                            &mut all_results,
+                            &mut seen_urls,
+                            format!("{} - {}", source, truncate(abstract_text, 80)),
+                            abstract_text.to_string(),
+                            url,
+                            max_results,
+                        );
                     }
                 }
 
@@ -120,12 +229,15 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
                         }
                         if let Some(text) = topic["Text"].as_str() {
                             let url = topic["FirstURL"].as_str().unwrap_or("");
-                            if !text.is_empty() && !url.is_empty() {
-                                all_results.push(SearchResult {
-                                    title: truncate(text, 80).to_string(),
-                                    snippet: text.to_string(),
-                                    url: url.to_string(),
-                                });
+                            if !text.is_empty() {
+                                push_result(
+                                    &mut all_results,
+                                    &mut seen_urls,
+                                    truncate(text, 80).to_string(),
+                                    text.to_string(),
+                                    url,
+                                    max_results,
+                                );
                             }
                         }
                         // Check nested topics
@@ -136,12 +248,15 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
                                 }
                                 if let Some(text) = sub["Text"].as_str() {
                                     let url = sub["FirstURL"].as_str().unwrap_or("");
-                                    if !text.is_empty() && !url.is_empty() {
-                                        all_results.push(SearchResult {
-                                            title: truncate(text, 80).to_string(),
-                                            snippet: text.to_string(),
-                                            url: url.to_string(),
-                                        });
+                                    if !text.is_empty() {
+                                        push_result(
+                                            &mut all_results,
+                                            &mut seen_urls,
+                                            truncate(text, 80).to_string(),
+                                            text.to_string(),
+                                            url,
+                                            max_results,
+                                        );
                                     }
                                 }
                             }
@@ -157,12 +272,15 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
                         }
                         let text = result["Text"].as_str().unwrap_or("");
                         let url = result["FirstURL"].as_str().unwrap_or("");
-                        if !text.is_empty() && !url.is_empty() {
-                            all_results.push(SearchResult {
-                                title: truncate(text, 80).to_string(),
-                                snippet: text.to_string(),
-                                url: url.to_string(),
-                            });
+                        if !text.is_empty() {
+                            push_result(
+                                &mut all_results,
+                                &mut seen_urls,
+                                truncate(text, 80).to_string(),
+                                text.to_string(),
+                                url,
+                                max_results,
+                            );
                         }
                     }
                 }
@@ -176,55 +294,7 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
 
         if let Ok(resp) = client.get(&html_url).send().await {
             if let Ok(body) = resp.text().await {
-                // Parse HTML results using regex
-                let re = Regex::new(
-                    r##"<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>"##,
-                )
-                .unwrap_or_else(|_| Regex::new("").unwrap());
-
-                let snippet_re =
-                    Regex::new(r##"<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*href="[^"]*"[^>]*>([^<]*)</a>"##)
-                        .unwrap_or_else(|_| Regex::new("").unwrap());
-
-                let urls: Vec<String> = re.captures_iter(&body).map(|c| c[1].to_string()).collect();
-                let titles: Vec<String> =
-                    re.captures_iter(&body).map(|c| c[2].to_string()).collect();
-                let snippets: Vec<String> = snippet_re
-                    .captures_iter(&body)
-                    .map(|c| c[1].to_string())
-                    .collect();
-
-                // Deduplicate by URL
-                let mut seen_urls = std::collections::HashSet::new();
-                for (i, url) in urls.iter().enumerate() {
-                    if all_results.len() >= max_results {
-                        break;
-                    }
-                    if url.is_empty() || url.starts_with("//") {
-                        continue;
-                    }
-                    let clean_url = if url.starts_with("/") {
-                        format!("https://duckduckgo.com{}", url)
-                    } else {
-                        url.to_string()
-                    };
-                    if seen_urls.contains(&clean_url) {
-                        continue;
-                    }
-                    seen_urls.insert(clean_url.clone());
-
-                    let title = titles.get(i).cloned().unwrap_or_default();
-                    let snippet = snippets.get(i).cloned().unwrap_or_default();
-
-                    let decoded_title = decode_html_entities(&title);
-                    let decoded_snippet = decode_html_entities(&snippet);
-
-                    all_results.push(SearchResult {
-                        title: decoded_title,
-                        snippet: decoded_snippet,
-                        url: clean_url,
-                    });
-                }
+                all_results.extend(parse_html_results(&body, max_results - all_results.len()));
             }
         }
     }
@@ -279,4 +349,67 @@ fn decode_html_entities(s: &str) -> String {
         .replace("&#x27;", "'")
         .replace("&#x2F;", "/")
         .replace("&nbsp;", " ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_protocol_relative_result_links() {
+        assert_eq!(
+            normalize_result_url("//example.com/docs"),
+            Some("https://example.com/docs".to_string())
+        );
+    }
+
+    #[test]
+    fn unwraps_provider_redirect_links() {
+        assert_eq!(
+            normalize_result_url(
+                "//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fdocs&rut=test"
+            ),
+            Some("https://example.com/docs".to_string())
+        );
+    }
+
+    #[test]
+    fn parses_current_html_result_markup() {
+        let results = parse_html_results(
+            r#"
+            <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fdocs">Example <em>docs</em></a>
+            <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fdocs">A &amp; useful <b>snippet</b>.</a>
+            "#,
+            5,
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Example docs");
+        assert_eq!(results[0].snippet, "A & useful snippet.");
+        assert_eq!(results[0].url, "https://example.com/docs");
+    }
+    #[test]
+    fn deduplicates_normalized_result_links() {
+        let mut results = Vec::new();
+        let mut seen_urls = std::collections::HashSet::new();
+        push_result(
+            &mut results,
+            &mut seen_urls,
+            "Example".to_string(),
+            "First".to_string(),
+            "//example.com/docs",
+            5,
+        );
+        push_result(
+            &mut results,
+            &mut seen_urls,
+            "Example again".to_string(),
+            "Second".to_string(),
+            "https://example.com/docs",
+            5,
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].url, "https://example.com/docs");
+    }
 }

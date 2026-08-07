@@ -20,6 +20,7 @@ walkdir.workspace = true
 glob.workspace = true
 similar.workspace = true
 reqwest.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 tempfile = "3.8"

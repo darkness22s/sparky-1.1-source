@@ -273,6 +273,14 @@ describe("sparkyToolPresentation", () => {
     });
   });
 
+  it("preserves a dedicated lifecycle type for web search", () => {
+    expect(sparkyToolPresentation("web_search", { query: "Rust serde" })).toMatchObject({
+      itemType: "web_search",
+      title: "Search the web",
+      data: { toolName: "web_search", rawInput: { query: "Rust serde" } },
+    });
+  });
+
   it("humanizes memory tool names while preserving their wire names", () => {
     expect(sparkyToolPresentation("memory_search", { query: "preferences" })).toMatchObject({
       itemType: "dynamic_tool_call",
