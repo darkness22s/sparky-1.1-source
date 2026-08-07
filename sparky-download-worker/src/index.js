@@ -12,6 +12,8 @@ const PLATFORM_ALIASES = new Map([
   ["macx64", "macos-x64"],
   ["macosintel", "macos-x64"],
   ["macos-x64", "macos-x64"],
+  ["linux", "linux-x64"],
+  ["linux-x64", "linux-x64"],
 ]);
 
 function publicHeaders() {
@@ -48,6 +50,7 @@ function releaseConfig(env) {
   const windowsBaseUrl = requiredHttpsUrl(env.AWS_WINDOWS_BASE_URL || `${baseUrl}/windows`, "AWS_WINDOWS_BASE_URL");
   const macArm64BaseUrl = env.AWS_MAC_ARM64_BASE_URL ? requiredHttpsUrl(env.AWS_MAC_ARM64_BASE_URL, "AWS_MAC_ARM64_BASE_URL") : null;
   const macX64BaseUrl = env.AWS_MAC_X64_BASE_URL ? requiredHttpsUrl(env.AWS_MAC_X64_BASE_URL, "AWS_MAC_X64_BASE_URL") : null;
+  const linuxBaseUrl = env.AWS_LINUX_BASE_URL ? requiredHttpsUrl(env.AWS_LINUX_BASE_URL, "AWS_LINUX_BASE_URL") : null;
   const files = [
     { name: "Sparky-x64.exe", platform: "windows-x64", size: windowsSize, contentType: "application/x-msdownload", sha256: env.RELEASE_WINDOWS_SHA256?.trim() || null, url: `${windowsBaseUrl}/Sparky.exe` },
     { name: "Sparky-x64.exe.blockmap", platform: "windows-x64", size: null, contentType: "application/octet-stream", sha256: null, url: `${baseUrl}/Sparky-x64.exe.blockmap` },
@@ -55,6 +58,10 @@ function releaseConfig(env) {
   ];
   if (macArm64BaseUrl) files.push({ name: "Sparky-arm64.dmg", platform: "macos-arm64", size: Number(env.RELEASE_MAC_ARM64_SIZE) || null, contentType: "application/x-apple-diskimage", sha256: env.RELEASE_MAC_ARM64_SHA256?.trim() || null, url: `${macArm64BaseUrl}/Sparky.dmg` });
   if (macX64BaseUrl) files.push({ name: "Sparky-x64.dmg", platform: "macos-x64", size: Number(env.RELEASE_MAC_X64_SIZE) || null, contentType: "application/x-apple-diskimage", sha256: env.RELEASE_MAC_X64_SHA256?.trim() || null, url: `${macX64BaseUrl}/Sparky.dmg` });
+  if (env.RELEASE_LINUX_SIZE?.trim()) files.push(
+    { name: "Sparky-x64.AppImage", platform: "linux-x64", size: Number(env.RELEASE_LINUX_SIZE) || null, contentType: "application/octet-stream", sha256: env.RELEASE_LINUX_SHA256?.trim() || null, url: `${linuxBaseUrl}/Sparky-x64.AppImage` },
+    { name: "Sparky-x64.AppImage.asc", platform: "linux-x64", size: Number(env.RELEASE_LINUX_ASC_SIZE) || null, contentType: "application/pgp-signature", sha256: env.RELEASE_LINUX_ASC_SHA256?.trim() || null, url: `${linuxBaseUrl}/Sparky-x64.AppImage.asc` },
+  );
   return { schemaVersion: 0, id: version, version, name: `Sparky ${version}`, channel: "release", changelog: env.RELEASE_CHANGELOG?.trim() || "", publishedAt: env.RELEASE_PUBLISHED_AT?.trim() || null, files };
 }
 
@@ -75,6 +82,12 @@ function githubReleaseConfig(env, baseUrl) {
     file("Sparky-x64.exe.blockmap", "windows-x64", Number(env.RELEASE_WINDOWS_BLOCKMAP_SIZE), "application/octet-stream", env.RELEASE_WINDOWS_BLOCKMAP_SHA256),
     file("latest.yml", "windows-x64", Number(env.RELEASE_WINDOWS_YML_SIZE), "text/yaml", env.RELEASE_WINDOWS_YML_SHA256),
   ];
+  if (env.RELEASE_LINUX_SIZE?.trim()) {
+    files.push(
+      file("Sparky-x64.AppImage", "linux-x64", Number(env.RELEASE_LINUX_SIZE), "application/octet-stream", env.RELEASE_LINUX_SHA256),
+      file("Sparky-x64.AppImage.asc", "linux-x64", Number(env.RELEASE_LINUX_ASC_SIZE), "application/pgp-signature", env.RELEASE_LINUX_ASC_SHA256),
+    );
+  }
   if (env.RELEASE_MAC_ARM64_SIZE?.trim()) {
     const manifestName = env.RELEASE_MAC_ARM64_YML_NAME?.trim() || "latest-mac.yml";
     files.push(
@@ -137,7 +150,7 @@ function publicManifest(release) {
     channel: release.channel ?? "release",
     changelog: release.changelog ?? "",
     publishedAt: release.publishedAt ?? null,
-    files: release.files.filter((file) => /\.(?:exe|dmg)$/iu.test(file.name)).map(({ name, platform, size, contentType, sha256 }) => ({ name, platform, size, contentType, sha256: sha256 ?? null })),
+    files: release.files.filter((file) => /\.(?:exe|dmg|AppImage|asc)$/iu.test(file.name)).map(({ name, platform, size, contentType, sha256 }) => ({ name, platform, size, contentType, sha256: sha256 ?? null })),
   };
 }
 
@@ -146,11 +159,12 @@ function requestedPlatform(request, url) {
   if (explicit) return PLATFORM_ALIASES.get(explicit) ?? explicit;
   const userAgent = (request.headers.get("User-Agent") || "").toLowerCase();
   if (userAgent.includes("mac") || userAgent.includes("darwin")) return "macos-arm64";
+  if (userAgent.includes("linux") && !userAgent.includes("android")) return "linux-x64";
   return "windows-x64";
 }
 
 function findInstaller(release, platform) {
-  return release.files.find((file) => file.platform === platform && (file.name.endsWith(".exe") || file.name.endsWith(".dmg")));
+  return release.files.find((file) => file.platform === platform && (file.name.endsWith(".exe") || file.name.endsWith(".dmg") || file.name.endsWith(".AppImage")));
 }
 
 function updateRequest(path) {
@@ -167,6 +181,7 @@ function updateRequest(path) {
   if (decoded[0] === "windows" && decoded[1] === "x64" && decoded.length === 3) {
     return { platform: "windows-x64", name: decoded[2] };
   }
+  if (decoded[0] === "linux" && decoded.length === 2 && (decoded[1].endsWith(".AppImage") || decoded[1].endsWith(".asc"))) return { platform: "linux-x64", name: decoded[1] };
   if (decoded[0] === "macos" && decoded.length === 3 && (decoded[1] === "arm64" || decoded[1] === "x64")) {
     return { platform: `macos-${decoded[1]}`, name: decoded[2] };
   }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f6f8ff" />
-    <meta name="description" content="Download Sparky for Windows or macOS." />
+    <meta name="description" content="Download Sparky for Windows, macOS, or Linux." />
     <title>Download Sparky</title>
     <link rel="icon" href="logo.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -65,11 +65,18 @@
             <p>For Macs with Intel processors.</p>
             <a class="pill pill-dark" href="https://sparky.llc/get?platform=macosintel">Download Sparky.dmg</a>
           </article>
+          <article class="download-card" id="platform-linux">
+            <span class="platform-kicker">Linux</span>
+            <h3>AppImage for x64</h3>
+            <p>For 64 bit Linux computers. Download, make executable, and run.</p>
+            <a class="pill pill-dark" href="https://sparky.llc/get?platform=linux">Download Sparky.AppImage</a>
+          </article>
         </div>
         <p class="download-release-meta">Version <strong id="release-version">0.0.28</strong> <span aria-hidden="true">|</span> <a href="changelog.html">What is new</a></p>
         <div class="download-notes">
           <p><strong>Windows:</strong> Until Sparky is code signed, SmartScreen may ask you to choose More info and Run anyway.</p>
           <p><strong>macOS:</strong> Until Sparky is notarized, right click Sparky.dmg, choose Open, then choose Open again.</p>
+          <p><strong>Linux:</strong> Download the AppImage, make it executable with <code>chmod +x Sparky-x64.AppImage</code>, then launch it.</p>
         </div>
       </section>
     </main>
@@ -84,9 +91,12 @@
     <script>
       (() => {
         const isMac = /Macintosh|Mac OS X|MacIntel|Darwin/i.test(navigator.userAgent);
+        const isLinux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
         const detected = isMac
           ? { name: "macOS", label: "Download for macOS", url: "https://sparky.llc/get?platform=macos", card: "platform-mac" }
-          : { name: "Windows", label: "Download for Windows", url: "https://sparky.llc/get?platform=windows", card: "platform-windows" };
+          : isLinux
+            ? { name: "Linux", label: "Download for Linux", url: "https://sparky.llc/get?platform=linux", card: "platform-linux" }
+            : { name: "Windows", label: "Download for Windows", url: "https://sparky.llc/get?platform=windows", card: "platform-windows" };
 
         document.getElementById("detected-system").textContent = detected.name;
         document.getElementById("primary-download-label").textContent = detected.label;

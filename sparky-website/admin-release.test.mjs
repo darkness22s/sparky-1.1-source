@@ -13,11 +13,11 @@ test("Analytics exposes one all-platform Update action", () => {
   assert.match(script, /activateWorkspace\("releases-workspace"\)/u);
 });
 
-test("stable releases require Windows, Apple Silicon, and Intel bundles", () => {
-  for (const id of ["release-files-windows", "release-files-mac-arm64", "release-files-mac-x64"]) {
+test("stable releases require Windows, Apple Silicon, Intel, and Linux bundles", () => {
+  for (const id of ["release-files-windows", "release-files-mac-arm64", "release-files-mac-x64", "release-files-linux"]) {
     assert.match(html, new RegExp(`id="${id}"`, "u"));
   }
-  for (const platform of ["windows-x64", "macos-arm64", "macos-x64"]) {
+  for (const platform of ["windows-x64", "macos-arm64", "macos-x64", "linux-x64"]) {
     assert.match(script, new RegExp(`"${platform}"`, "u"));
   }
   assert.match(script, /awsReleases:createUploadUrl/u);

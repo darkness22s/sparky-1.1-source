@@ -6,9 +6,12 @@
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const isMac = /Macintosh|Mac OS X|MacIntel|Darwin/i.test(navigator.userAgent);
+  const isLinux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
   const detectedDownload = isMac
     ? { label: "Download for macOS", url: "https://sparky.llc/get?platform=macos" }
-    : { label: "Download for Windows", url: "https://sparky.llc/get?platform=windows" };
+    : isLinux
+      ? { label: "Download for Linux", url: "https://sparky.llc/get?platform=linux" }
+      : { label: "Download for Windows", url: "https://sparky.llc/get?platform=windows" };
   $$('[data-system-download]').forEach((link) => {
     link.href = detectedDownload.url;
     const label = $('[data-download-label]', link);
