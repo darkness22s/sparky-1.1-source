@@ -13,13 +13,14 @@ const ADMIN_EMAIL = "soliamanmagbari@gmail.com";
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_CHANGELOG_LENGTH = 50_000;
 const VERSION = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u;
-const ALLOWED_FILE = /\.(?:exe|dmg|AppImage|zip|blockmap|ya?ml)$/u;
+const ALLOWED_FILE = /\.(?:exe|dmg|AppImage|asc|zip|blockmap|ya?ml)$/u;
 const channelValidator = v.union(v.literal("release"), v.literal("beta"));
 const statusValidator = v.union(v.literal("draft"), v.literal("published"));
 export const platformValidator = v.union(
   v.literal("windows-x64"),
   v.literal("macos-arm64"),
   v.literal("macos-x64"),
+  v.literal("linux-x64"),
 );
 const fileInputValidator = v.object({
   name: v.string(),
@@ -83,7 +84,7 @@ function validateMetadata(
     name: string;
     size: number;
     contentType: string;
-    platform?: "windows-x64" | "macos-arm64" | "macos-x64";
+    platform?: "windows-x64" | "macos-arm64" | "macos-x64" | "linux-x64";
     sha256?: string;
   }>,
   channel: "release" | "beta",
@@ -117,7 +118,8 @@ function validateMetadata(
     const windows = grouped.get("windows-x64") ?? new Set<string>();
     const arm64 = grouped.get("macos-arm64") ?? new Set<string>();
     const x64 = grouped.get("macos-x64") ?? new Set<string>();
-    for (const [label, group] of [["Windows x64", windows], ["Mac Apple Silicon", arm64], ["Mac Intel", x64]] as const) {
+    const linux = grouped.get("linux-x64") ?? new Set<string>();
+    for (const [label, group] of [["Windows x64", windows], ["Mac Apple Silicon", arm64], ["Mac Intel", x64], ["Linux x64", linux]] as const) {
       if (group.size === 0) throw new Error(`${label} files are required for a stable release.`);
     }
     if (![...windows].some((name) => name.endsWith(".exe")) || !windows.has("latest.yml")) {
@@ -127,6 +129,9 @@ function validateMetadata(
       if (![...group].some((name) => name.endsWith(".dmg")) || !group.has("latest-mac.yml")) {
         throw new Error(`${label} requires its .dmg installer and latest-mac.yml.`);
       }
+    }
+    if (![...linux].some((name) => name.endsWith(".AppImage")) || !linux.has("Sparky-x64.AppImage.asc")) {
+      throw new Error("Linux x64 needs its .AppImage installer and detached signature.");
     }
   } else if (channel === "release" && !files.some((file) => file.name === "latest.yml")) {
     throw new Error("Stable releases require latest.yml for desktop updates.");
@@ -146,7 +151,7 @@ function publicRelease(release: {
     name: string;
     size: number;
     contentType: string;
-    platform?: "windows-x64" | "macos-arm64" | "macos-x64";
+    platform?: "windows-x64" | "macos-arm64" | "macos-x64" | "linux-x64";
     sha256?: string;
   }>;
 }) {
@@ -381,18 +386,17 @@ export const updateMetadata = internalQuery({
     const release = await pointedRelease(ctx, args.channel);
     if (!release) return null;
 
+    const platform = args.platform;
+    if (platform === "linux-x64") return null;
+    const installerExtension = platform === "windows-x64" ? ".exe" : ".dmg";
     const feedName = args.channel === "beta"
-      ? args.platform === "windows-x64" ? "nightly.yml" : "nightly-mac.yml"
-      : args.platform === "windows-x64" ? "latest.yml" : "latest-mac.yml";
-    const installerExtension = args.platform === "windows-x64" ? ".exe" : ".dmg";
+      ? platform === "windows-x64" ? "nightly.yml" : "nightly-mac.yml"
+      : platform === "windows-x64" ? "latest.yml" : "latest-mac.yml";
     const feed = release.files.find(
       (file) => file.platform === args.platform && file.name === feedName && file.uploaded,
     );
     const installer = release.files.find(
-      (file) =>
-        file.platform === args.platform &&
-        file.name.endsWith(installerExtension) &&
-        file.uploaded,
+      (file) => file.platform === args.platform && file.name.endsWith(installerExtension) && file.uploaded,
     );
     const feedUrl = feed ? publicAssetUrl(feed) : null;
     const installerUrl = installer ? publicAssetUrl(installer) : null;

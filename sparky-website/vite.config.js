@@ -25,7 +25,7 @@ const pageSeo = {
   "download.html": {
     title: "Download Sparky - Desktop coding agent",
     description:
-      "Download Sparky for Windows or macOS and keep your coding work local, visible, and reviewable.",
+      "Download Sparky for Windows, macOS, or Linux and keep your coding work local, visible, and reviewable.",
   },
   "changelog.html": {
     title: "Sparky Changelog - Product updates",
@@ -172,7 +172,7 @@ const seoPlugin = () => ({
                 url: `${siteUrl}/`,
                 description: seo.description,
                 applicationCategory: "DeveloperApplication",
-                operatingSystem: "Windows, macOS",
+                operatingSystem: "Windows, macOS, Linux",
                 publisher: { "@id": `${siteUrl}/#organization` },
               },
             ],

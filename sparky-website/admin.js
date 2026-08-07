@@ -60,6 +60,7 @@ function platformLabel(platform) {
     "windows-x64": "Windows x64",
     "macos-arm64": "macOS Apple Silicon",
     "macos-x64": "macOS Intel",
+    "linux-x64": "Linux x64",
     unknown: "Unknown platform",
   })[platform] || platform;
 }
@@ -283,6 +284,7 @@ function platformFiles() {
     ["windows-x64", [...document.getElementById("release-files-windows").files]],
     ["macos-arm64", [...document.getElementById("release-files-mac-arm64").files]],
     ["macos-x64", [...document.getElementById("release-files-mac-x64").files]],
+    ["linux-x64", [...document.getElementById("release-files-linux").files]],
   ].flatMap(([platform, files]) => files.map((file) => ({ platform, file })));
 }
 
@@ -309,6 +311,10 @@ function validateReleaseForm() {
       throw new Error(`${label} needs its .dmg installer and latest-mac.yml.`);
     }
   }
+  const linux = namesFor("linux-x64");
+  if (![...linux].some((name) => name.endsWith(".AppImage")) || !linux.has("Sparky-x64.AppImage.asc")) {
+    throw new Error("Linux x64 needs its .AppImage installer and detached signature.");
+  }
 
   return {
     tag: tag.startsWith("v") ? tag : `v${tag}`,
@@ -324,7 +330,7 @@ async function createDraftAndUpload() {
   setReleaseError();
   try {
     const form = validateReleaseForm();
-    const platformSummary = "Windows x64, Mac Apple Silicon, and Mac Intel";
+    const platformSummary = "Windows x64, Mac Apple Silicon, Mac Intel, and Linux x64";
     if (!window.confirm(`Publish ${form.tag} to ${platformSummary}? Every current installer and update feed will switch after AWS verifies the uploads.`)) return;
     setReleaseBusy(true);
     const totalBytes = form.files.reduce((total, entry) => total + entry.file.size, 0);
@@ -368,7 +374,7 @@ async function createDraftAndUpload() {
     }
     setReleaseProgress(97, "Verifying AWS objects and switching release feeds...");
     const published = await convexCall("action", "awsReleases:publish", { id: release.id });
-    setReleaseProgress(100, `${published.version} is live for all three desktop platforms.`);
+    setReleaseProgress(100, `${published.version} is live for all four desktop platforms.`);
     await Promise.all([loadReleases(), loadPublishedRelease()]);
   } catch (error) {
     setReleaseError(error instanceof Error ? error.message : "Unable to publish the release update.");
