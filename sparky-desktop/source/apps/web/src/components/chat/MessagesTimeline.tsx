@@ -1808,7 +1808,6 @@ type WorkEntryIconName =
   | "eye"
   | "globe"
   | "code-2"
-  | "search-web"
   | "hammer"
   | "keyboard"
   | "list-checks"
@@ -1833,28 +1832,6 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <EyeIcon className={className} aria-hidden />;
     case "globe":
       return <GlobeIcon className={className} aria-hidden />;
-    case "search-web":
-      return (
-        <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M4.75 9.75a5 5 0 1 0 10 0 5 5 0 0 0-10 0Z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-          />
-          <path
-            d="m13.4 13.4 5.85 5.85"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-          />
-          <path
-            d="M9.75 6.9v5.7M6.9 9.75h5.7"
-            stroke="currentColor"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
     case "code-2":
       return <Code2Icon className={className} aria-hidden />;
     case "hammer":
@@ -1980,7 +1957,7 @@ function workEntryIconName(workEntry: TimelineWorkEntry): WorkEntryIconName {
   if (workEntry.itemType === "file_change" || (workEntry.changedFiles?.length ?? 0) > 0) {
     return "square-pen";
   }
-  if (workEntry.itemType === "web_search") return "search-web";
+  if (workEntry.itemType === "web_search") return "globe";
   if (workEntry.itemType === "image_view") return "eye";
 
   const toolName = workEntry.toolName?.trim().toLowerCase();
