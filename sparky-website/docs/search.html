@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search - Sparky Docs</title>
+    <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=14">
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+<aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
+<li><a href="terminal.html">Terminal Commands</a></li>
+<li><a href="search.html" class="active">Search</a></li>
+<li><a href="git.html">Git Operations</a></li>
+<li><a href="preview.html">Preview Websites</a></li>
+<li><a href="web-search.html">Web Search</a></li>
+</ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">TOOLS</div>
+        <h1>Search</h1>
+        <p>Find functions, variables, or any text pattern across your entire codebase.</p>
+      </div>
+
+<h2 id="how-it-works">How it works</h2>
+<p>Sparky has two search modes: <strong>content search</strong> (grep) finds text inside files, and <strong>file search</strong> (find) locates files by name.</p>
+
+<h2 id="content-search">Content search (grep)</h2>
+<p>Search for any text pattern inside your files. Uses regex for powerful matching.</p>
+<div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Example prompts</span></div><div class="docs-code-body"><span class="cmd">"Find all places that call the old API"</span><br>
+<span class="cmd">"Search for handleLogin in all TypeScript files"</span><br>
+<span class="cmd">"Where do we define DATABASE_URL?"</span></div></div>
+
+<h2 id="file-search">File search (find)</h2>
+<p>Locate files by name, extension, or path pattern.</p>
+<div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Example prompts</span></div><div class="docs-code-body"><span class="cmd">"Find all .py files in src"</span><br>
+<span class="cmd">"Where is the package.json?"</span><br>
+<span class="cmd">"List all test files"</span></div></div>
+
+<h2 id="tips">Tips</h2>
+<ul>
+<li>Prefix with language name for better results</li>
+<li>Use regex for complex searches</li>
+<li>Combine with read: "Find the auth middleware and show me"</li>
+</ul>
+
+<div class="docs-next"><h3>Next steps</h3><ul>
+<li><a href="read-edit.html">Read & Edit Files</a> — modify found files</li>
+<li><a href="terminal.html">Terminal Commands</a> — run commands</li>
+<li><a href="web-search.html">Web Search</a> — search the internet</li>
+</ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list"><li><a href="#how-it-works">How it works</a></li>
+<li><a href="#content-search">Content search</a></li>
+<li><a href="#file-search">File search</a></li>
+<li><a href="#tips">Tips</a></li>
+</ul>
+    </aside>
+  </div>
+<footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+</body>
+</html>

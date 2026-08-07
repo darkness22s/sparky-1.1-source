@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overview - Sparky Docs</title>
+    <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=14">
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+<aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
+<li><a href="terminal.html">Terminal Commands</a></li>
+<li><a href="search.html">Search</a></li>
+<li><a href="git.html">Git Operations</a></li>
+<li><a href="preview.html">Preview Websites</a></li>
+<li><a href="web-search.html">Web Search</a></li>
+</ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">GETTING STARTED</div>
+        <h1>Overview</h1>
+        <p>Sparky is a desktop AI coding assistant that reads your code, makes changes, runs commands, and searches your project — using the AI model you already have.</p>
+      </div>
+
+<section class="docs-start-grid" aria-label="Choose a documentation path">
+  <a href="getting-started.html"><span>01</span><strong>Install and connect</strong><small>Download Sparky, add a provider, and open your first project.</small></a>
+  <a href="prompts.html"><span>02</span><strong>Give a useful task</strong><small>Write prompts that include intent, constraints, and a clear verification step.</small></a>
+  <a href="troubleshooting.html"><span>03</span><strong>Fix a blocker</strong><small>Resolve provider, terminal, project, and permission problems quickly.</small></a>
+</section>
+
+<h2 id="what-is-sparky">What is Sparky?</h2>
+<p>Sparky is a desktop application that acts as an AI pair programmer. It reads your codebase, understands the structure, and can make changes, run commands, search code — all through natural language.</p>
+<p>Unlike cloud-based tools, Sparky runs on your machine. Your code is only sent to the AI provider you choose.</p>
+
+<h2 id="how-it-works">How it works</h2>
+<ol>
+<li><strong>Point Sparky at a project</strong> — it reads the structure</li>
+<li><strong>Tell it what you need</strong> — in plain English</li>
+<li><strong>Review the result</strong> — keep or revert</li>
+</ol>
+
+<h2 id="sidebar-surfaces">The Sidebar Panel</h2>
+<p>Open supporting tools beside the active thread. Each surface keeps the current project and task in view:</p>
+<div class="docs-surface-list">
+  <div><strong>Browser</strong><span>Open a local app or URL and inspect the result.</span></div>
+  <div><strong>Terminal</strong><span>Run tests, builds, package commands, and one-off scripts.</span></div>
+  <div><strong>Files</strong><span>Browse the project tree and read the exact files involved.</span></div>
+  <div><strong>Diff</strong><span>Review working-tree or thread changes before you commit.</span></div>
+</div>
+
+<h2 id="providers">Supported AI providers</h2>
+<table class="docs-table"><tr><th>Provider</th><th>Models</th><th>Get your API key</th></tr>
+<tr><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic</a></td><td>Latest Claude models</td><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></td></tr>
+<tr><td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI</a></td><td>Latest GPT models</td><td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a></td></tr>
+<tr><td><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google</a></td><td>Latest Gemini models</td><td><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a></td></tr>
+<tr><td><a href="https://opencode.ai/" target="_blank" rel="noopener">OpenCode Zen</a></td><td>Zen models</td><td><a href="https://opencode.ai/" target="_blank" rel="noopener">opencode.ai</a></td></tr></table>
+
+<div class="docs-next"><h3>Next steps</h3><ul>
+<li><a href="getting-started.html">Quickstart</a> — get up and running</li>
+<li><a href="read-edit.html">Read & Edit Files</a> — understand the tools</li>
+<li><a href="prompts.html">Writing Prompts</a> — write effective prompts</li>
+</ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list"><li><a href="#what-is-sparky">What is Sparky?</a></li>
+<li><a href="#how-it-works">How it works</a></li>
+<li><a href="#sidebar-surfaces">Sidebar Panel</a></li>
+<li><a href="#providers">Supported AI providers</a></li>
+</ul>
+    </aside>
+  </div>
+<footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+</body>
+</html>

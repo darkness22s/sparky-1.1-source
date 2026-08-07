@@ -1,0 +1,239 @@
+name: Build Sparky Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-x64:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: sparky-desktop/source
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: x86_64-apple-darwin
+
+      - run: cargo build --release -p sparky_cli
+        working-directory: .
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: sparky-desktop/source
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - run: pnpm build
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+
+      - run: pnpm dist:desktop:dmg:x64
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+          # Repository variable: the deployed Convex site URL for sparky-analytics.
+          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/x64
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Upload DMG to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-x64.dmg --clobber
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-x64.dmg.blockmap --clobber
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-x64.zip --clobber
+          mv release/latest-mac.yml release/latest-mac-x64.yml
+          gh release upload "${GITHUB_REF_NAME}" release/latest-mac-x64.yml --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload DMG to temp release (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          RELEASE_TAG="preview-${GITHUB_RUN_ID}-x64"
+          gh release create "$RELEASE_TAG" release/Sparky-x64.dmg --title "Sparky macOS x64 (preview)" --notes "Preview build from workflow #${GITHUB_RUN_ID}" --prerelease || true
+          gh release upload "$RELEASE_TAG" release/Sparky-x64.dmg --clobber || true
+          gh release upload "$RELEASE_TAG" release/Sparky-x64.dmg.blockmap --clobber || true
+          gh release upload "$RELEASE_TAG" release/Sparky-x64.zip --clobber || true
+          mv release/latest-mac.yml release/latest-mac-x64.yml
+          gh release upload "$RELEASE_TAG" release/latest-mac-x64.yml --clobber || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build-macos-arm64:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: sparky-desktop/source
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: aarch64-apple-darwin
+
+      - run: cargo build --release -p sparky_cli
+        working-directory: .
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: sparky-desktop/source
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - run: pnpm build
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+
+      - run: pnpm dist:desktop:dmg:arm64
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/arm64
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Upload DMG to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-arm64.dmg --clobber
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-arm64.dmg.blockmap --clobber
+          gh release upload "${GITHUB_REF_NAME}" release/Sparky-arm64.zip --clobber
+          mv release/latest-mac.yml release/latest-mac-arm64.yml
+          gh release upload "${GITHUB_REF_NAME}" release/latest-mac-arm64.yml --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload DMG to temp release (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          RELEASE_TAG="preview-${GITHUB_RUN_ID}-arm64"
+          gh release create "$RELEASE_TAG" release/Sparky-arm64.dmg --title "Sparky macOS arm64 (preview)" --notes "Preview build from workflow #${GITHUB_RUN_ID}" --prerelease || true
+          gh release upload "$RELEASE_TAG" release/Sparky-arm64.dmg --clobber || true
+          gh release upload "$RELEASE_TAG" release/Sparky-arm64.dmg.blockmap --clobber || true
+          gh release upload "$RELEASE_TAG" release/Sparky-arm64.zip --clobber || true
+          mv release/latest-mac.yml release/latest-mac-arm64.yml
+          gh release upload "$RELEASE_TAG" release/latest-mac-arm64.yml --clobber || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: sparky-desktop/source
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: sparky-desktop/source/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - run: cargo build --release -p sparky_cli
+        working-directory: .
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: sparky-desktop/source
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - run: pnpm build
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+
+      - run: pnpm dist:desktop:win:x64
+        working-directory: sparky-desktop/source
+        env:
+          NODE_ENV: production
+          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/windows
+
+      - name: Upload EXE to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          gh release upload "$env:GITHUB_REF_NAME" release/Sparky-x64.exe --clobber
+          gh release upload "$env:GITHUB_REF_NAME" release/Sparky-x64.exe.blockmap --clobber
+          gh release upload "$env:GITHUB_REF_NAME" release/latest.yml --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload EXE to temp release (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $RELEASE_TAG = "preview-${env:GITHUB_RUN_ID}-win"
+          gh release create "$RELEASE_TAG" release/Sparky-x64.exe --title "Sparky Windows (preview)" --notes "Preview build from workflow #${env:GITHUB_RUN_ID}" --prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  release:
+    needs: [build-macos-x64, build-macos-arm64, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Finalize release
+        run: |
+          gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+        env:
+          GH_TOKEN: ${{ github.token }}

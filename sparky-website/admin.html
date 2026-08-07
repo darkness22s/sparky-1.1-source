@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Sparky Admin</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="admin.css" />
+    <link rel="stylesheet" href="admin-releases.css" />
+  </head>
+  <body>
+    <main id="auth-view" class="auth-page">
+      <a class="brand brand-auth" href="index.html"><span class="brand-mark"></span><span>Sparky</span></a>
+      <div class="auth-copy">
+        <span class="eyebrow">PRIVATE WORKSPACE</span>
+        <h1>Product control,<br />without the noise.</h1>
+        <p>This dashboard is invitation-only and restricted to the Sparky administrator.</p>
+      </div>
+      <div id="sign-in"></div>
+    </main>
+
+    <main id="blocked-view" class="blocked-page" hidden>
+      <span class="brand-mark"></span><span class="eyebrow">ACCESS DENIED</span>
+      <h1>This workspace is private.</h1>
+      <p>Your account is signed in, but it is not approved for Sparky Admin.</p>
+      <button class="button" data-sign-out>Sign out</button>
+    </main>
+
+    <main id="dashboard" class="dashboard-shell" hidden>
+      <div class="admin-layout">
+        <aside class="sidebar" aria-label="Sparky Admin navigation">
+          <a class="brand sidebar-brand" href="admin.html"><span class="brand-mark"></span><span>Sparky</span></a>
+          <div class="sidebar-section"><span class="sidebar-label">WORKSPACE</span><button class="sidebar-link active" type="button" data-workspace="analytics-workspace"><span class="sidebar-icon">◈</span>Overview</button><button class="sidebar-link" type="button" data-workspace="releases-workspace"><span class="sidebar-icon">↗</span>Releases</button></div>
+          <div class="sidebar-section"><span class="sidebar-label">SIGNALS</span><span class="sidebar-note">Anonymous product telemetry, enriched at the edge.</span></div>
+          <div class="sidebar-footer"><span class="status-dot"></span><span>Live workspace</span></div>
+        </aside>
+        <div class="dashboard-content">
+          <header class="topbar">
+            <div class="breadcrumb"><span>Dashboard</span><b>/</b><strong id="workspace-title">Overview</strong></div>
+            <div class="topbar-actions">
+              <button class="release-shortcut" type="button" data-open-releases>Update all apps</button>
+              <div class="account"><span><b>Live workspace</b><small id="account-email"></small></span><div id="user-button"></div></div>
+            </div>
+          </header>
+
+      <nav class="workspace-tabs" aria-label="Admin workspace">
+        <button class="workspace-tab active" type="button" data-workspace="analytics-workspace">Analytics</button>
+        <button class="workspace-tab" type="button" data-workspace="releases-workspace">Releases &amp; changelog</button>
+      </nav>
+
+      <div id="analytics-workspace" class="workspace-view">
+        <section class="hero-row"><div><span class="eyebrow"><i></i> LIVE PRODUCT SIGNALS</span><h1>Good afternoon.</h1><p>See what happened, where it happened, and how confident the signal is.</p></div><div class="hero-actions"><button id="analytics-update-button" class="release-shortcut" type="button">Update all apps</button><div class="date-chip">Rolling 30 days <span class="pulse-mark"></span></div></div></section>
+        <section id="metric-grid" class="metric-grid"></section>
+        <section class="analytics-grid analytics-grid-primary">
+          <article class="panel chart-panel"><div class="panel-heading"><div><span class="eyebrow">SIGNAL HISTORY</span><h2 id="chart-title">Traffic over time</h2><p class="panel-subtitle">Daily activity, with confirmed router requests separated from intent.</p></div><div class="chart-controls" role="group" aria-label="Chart metric"><button type="button" class="chart-control active" data-chart-mode="traffic">Traffic</button><button type="button" class="chart-control" data-chart-mode="downloads">Downloads</button></div></div><div id="chart" class="chart"></div></article>
+          <article class="panel funnel-panel"><div class="panel-heading"><div><span class="eyebrow">DOWNLOAD QUALITY</span><h2>Intent → request</h2></div><span class="confidence-badge">Evidence</span></div><div id="download-funnel" class="download-funnel"></div><div class="funnel-footnote">A request means the Sparky download router returned a valid installer redirect. It does not claim the file finished downloading.</div></article>
+        </section>
+        <section class="analytics-grid analytics-grid-secondary">
+          <article class="panel breakdown-panel"><div class="panel-heading"><div><span class="eyebrow">PLATFORM MIX</span><h2>Where downloads point</h2></div><span class="legend legend-purple"><i></i> Requests</span></div><div id="platform-breakdown" class="breakdown-list"></div></article>
+          <article class="panel breakdown-panel"><div class="panel-heading"><div><span class="eyebrow">ENVIRONMENT</span><h2>Observed visitor context</h2></div><span class="legend"><i></i> Visitors</span></div><div id="environment-breakdown" class="breakdown-list"></div></article>
+          <article class="panel activity-panel"><div class="panel-heading"><div><span class="eyebrow">ACTIVITY</span><h2>Latest evidence</h2></div><span class="live-dot">Live</span></div><div id="activity-list" class="activity-list"></div></article>
+        </section>
+        <section class="precision-banner"><span class="precision-icon">✓</span><div><strong>What this dashboard can prove</strong><p>Anonymous IDs connect events within a browser profile. The edge router confirms request outcomes, platform, release, file, country, and normalized environment. No IP addresses or names are stored.</p></div><span class="precision-status">Privacy-aware</span></section>
+      </div>
+
+      <div id="releases-workspace" class="workspace-view" hidden>
+        <section class="release-hero">
+          <div>
+            <span class="eyebrow"><i></i> MANUAL RELEASE CONTROL</span>
+            <h1>Ship only when you say so.</h1>
+            <p>Uploads stay as private Sparky drafts. Nothing reaches the website or existing users until you press Publish.</p>
+          </div>
+          <div id="published-release" class="published-release">Loading published release&hellip;</div>
+        </section>
+
+        <section class="release-grid">
+          <article class="panel release-panel">
+            <div class="panel-heading"><div><span class="eyebrow">NEW BUILD</span><h2>Update every desktop build</h2></div><span class="manual-badge">AWS release</span></div>
+            <div class="storage-note"><strong>Direct to AWS</strong><span>Your signed-in admin account authorizes short-lived uploads. Installer bytes never pass through the browser app or Convex storage.</span></div>
+            <div class="field-row">
+              <label class="field"><span>Version tag</span><input id="release-tag" type="text" placeholder="v0.0.30" /></label>
+              <label class="field"><span>Release name</span><input id="release-name" type="text" placeholder="Sparky v0.0.30" /></label>
+              <label class="field"><span>Channel</span><select id="release-channel"><option value="release">Release</option><option value="beta">Beta</option></select></label>
+            </div>
+            <label class="field"><span>Changelog</span><textarea id="release-changelog" rows="8" placeholder="- Added...&#10;- Fixed..."></textarea></label>
+            <div class="platform-files" aria-label="Release files by platform">
+              <label class="field file-field platform-file"><span>Windows x64</span><input id="release-files-windows" type="file" multiple accept=".exe,.blockmap,.yml,.yaml" /><small>Sparky-x64.exe, its blockmap, and latest.yml.</small></label>
+              <label class="field file-field platform-file"><span>Mac Apple Silicon</span><input id="release-files-mac-arm64" type="file" multiple accept=".dmg,.zip,.blockmap,.yml,.yaml" /><small>ARM64 DMG plus latest-mac.yml and updater files.</small></label>
+              <label class="field file-field platform-file"><span>Mac Intel</span><input id="release-files-mac-x64" type="file" multiple accept=".dmg,.zip,.blockmap,.yml,.yaml" /><small>x64 DMG plus latest-mac.yml and updater files.</small></label>
+            </div>
+            <div id="release-progress" class="release-progress" hidden><div><span></span></div><p></p></div>
+            <div id="release-error" class="form-message error" role="alert" hidden></div>
+            <div class="release-actions">
+              <button id="upload-release" class="button button-publish" type="button">Update all platforms</button>
+            </div>
+            <p class="publish-warning">A Release is published only after AWS confirms every selected object. The website and architecture-specific desktop updater feeds switch together; a Beta never replaces the stable download.</p>
+          </article>
+
+          <article class="panel releases-panel">
+            <div class="panel-heading"><div><span class="eyebrow">RELEASES</span><h2>Changelog &amp; status</h2></div><button id="refresh-releases" class="text-button" type="button">Refresh</button></div>
+            <div id="release-list" class="release-list"><div class="empty-activity">Loading releases&hellip;</div></div>
+          </article>
+        </section>
+      </div>
+        </div>
+    </main>
+
+    <main id="error-view" class="blocked-page" hidden><span class="brand-mark"></span><h1>Admin is not configured.</h1><p id="error-message"></p></main>
+    <script type="module" src="admin.js"></script>
+  </body>
+</html>

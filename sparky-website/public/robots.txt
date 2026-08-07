@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /404.html
+
+Sitemap: https://sparky.llc/sitemap.xml
