@@ -40,6 +40,7 @@ impl CodexProvider {
                     ContentPart::Thinking { thinking, .. } => {
                         parts.push(json!({ "type": "input_text", "text": thinking }));
                     }
+                    ContentPart::ProviderState { .. } => {}
                 }
             }
             if parts.len() == 1 && parts[0]["type"] == "input_text" {
@@ -59,6 +60,13 @@ impl CodexProvider {
                     input.push(json!({ "role": "user", "content": input_content(message) }))
                 }
                 Role::Assistant => {
+                    for part in &message.content {
+                        if let ContentPart::ProviderState { provider, data } = part {
+                            if provider == "openai-codex" {
+                                input.push(data.clone());
+                            }
+                        }
+                    }
                     if !message.text().is_empty() {
                         input.push(json!({ "role": "assistant", "content": message.text() }));
                     }
@@ -249,7 +257,9 @@ impl LlmProvider for CodexProvider {
                     }
                 }
                 AssistantMessageEvent::Error(message) => anyhow::bail!(message),
-                AssistantMessageEvent::ThinkingDelta(_) | AssistantMessageEvent::Done { .. } => {}
+                AssistantMessageEvent::ThinkingDelta(_)
+                | AssistantMessageEvent::ProviderState(_)
+                | AssistantMessageEvent::Done { .. } => {}
             }
         }
         let mut message = Message::assistant(text, (!calls.is_empty()).then_some(calls));
@@ -307,6 +317,27 @@ impl LlmProvider for CodexProvider {
                         "response.reasoning_summary_text.delta" => {
                             if let Some(delta) = event["delta"].as_str() {
                                 let _ = tx.send(AssistantMessageEvent::ThinkingDelta(delta.into()));
+                            }
+                        }
+                        "response.output_item.done" if event["item"]["type"] == "reasoning" => {
+                            if let Some(encrypted_content) =
+                                event["item"]["encrypted_content"].as_str()
+                            {
+                                let reasoning_item = json!({
+                                    "type": "reasoning",
+                                    "id": event["item"]["id"],
+                                    "encrypted_content": encrypted_content,
+                                    "summary": event["item"]["summary"]
+                                        .as_array()
+                                        .cloned()
+                                        .unwrap_or_default(),
+                                });
+                                let _ = tx.send(AssistantMessageEvent::ProviderState(
+                                    ContentPart::ProviderState {
+                                        provider: "openai-codex".into(),
+                                        data: reasoning_item,
+                                    },
+                                ));
                             }
                         }
                         "response.output_item.added"
@@ -415,6 +446,45 @@ mod tests {
         assert!(body.get("max_output_tokens").is_none());
         assert_eq!(body["stream"], true);
         assert_eq!(body["reasoning"]["effort"], "high");
+    }
+
+    #[test]
+    fn replays_encrypted_reasoning_before_the_follow_up() {
+        let messages = vec![
+            Message::user("The continuity phrase is amber-orchid."),
+            Message {
+                role: Role::Assistant,
+                content: vec![
+                    ContentPart::Text {
+                        text: "I will remember amber-orchid.".into(),
+                    },
+                    ContentPart::ProviderState {
+                        provider: "openai-codex".into(),
+                        data: json!({
+                            "type": "reasoning",
+                            "id": "reasoning-1",
+                            "encrypted_content": "opaque-state",
+                            "summary": [],
+                        }),
+                    },
+                ],
+                tool_calls: None,
+                tool_result: None,
+                timestamp: None,
+                provider: Some("openai-codex".into()),
+                model: Some("gpt-5.6-sol".into()),
+            },
+            Message::user("What was the continuity phrase?"),
+        ];
+
+        let body = CodexProvider::request_body(&messages, &CompletionOptions::default(), false);
+
+        assert_eq!(body["store"], false);
+        assert_eq!(body["input"][0]["role"], "user");
+        assert_eq!(body["input"][1]["type"], "reasoning");
+        assert_eq!(body["input"][1]["encrypted_content"], "opaque-state");
+        assert_eq!(body["input"][2]["role"], "assistant");
+        assert_eq!(body["input"][3]["role"], "user");
     }
 
     #[test]

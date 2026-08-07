@@ -25,6 +25,7 @@ pub fn openai_messages(messages: &[Message]) -> Vec<Value> {
                     ContentPart::Thinking { thinking, .. } => {
                         Some(json!({ "type": "text", "text": thinking }))
                     }
+                    ContentPart::ProviderState { .. } => None,
                 })
                 .collect(),
         )
@@ -150,6 +151,7 @@ pub fn anthropic_messages(messages: &[Message]) -> (String, Vec<Value>) {
                         ContentPart::Thinking { thinking, .. } => {
                             content.push(json!({ "type": "text", "text": thinking }));
                         }
+                        ContentPart::ProviderState { .. } => {}
                     }
                 }
                 formatted.push(json!({ "role": "user", "content": content }));
@@ -219,13 +221,15 @@ pub fn gemini_messages(messages: &[Message]) -> (Option<Value>, Vec<Value>) {
                 "parts": message
                     .content
                     .iter()
-                    .map(|part| match part {
-                        ContentPart::Text { text } | ContentPart::Thinking { thinking: text, .. } => {
-                            json!({ "text": text })
+                    .filter_map(|part| match part {
+                        ContentPart::Text { text }
+                        | ContentPart::Thinking { thinking: text, .. } => {
+                            Some(json!({ "text": text }))
                         }
-                        ContentPart::Image { data, mime_type } => json!({
+                        ContentPart::Image { data, mime_type } => Some(json!({
                             "inline_data": { "mime_type": mime_type, "data": data }
-                        }),
+                        })),
+                        ContentPart::ProviderState { .. } => None,
                     })
                     .collect::<Vec<_>>(),
             })),

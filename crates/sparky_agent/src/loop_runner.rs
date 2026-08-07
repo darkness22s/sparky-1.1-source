@@ -364,6 +364,15 @@ mod tests {
                 assert!(transcript.contains("amber-orchid"));
                 return Ok(Box::pin(stream::iter(vec![
                     AssistantMessageEvent::TextDelta("I will remember amber-orchid.".to_string()),
+                    AssistantMessageEvent::ProviderState(ContentPart::ProviderState {
+                        provider: "openai-codex".to_string(),
+                        data: serde_json::json!({
+                            "type": "reasoning",
+                            "id": "reasoning-1",
+                            "encrypted_content": "opaque-state",
+                            "summary": [],
+                        }),
+                    }),
                     AssistantMessageEvent::Done { usage: None },
                 ])));
             }
@@ -372,6 +381,16 @@ mod tests {
             assert!(transcript.contains("The continuity phrase is amber-orchid."));
             assert!(transcript.contains("I will remember amber-orchid."));
             assert!(transcript.contains("What was the continuity phrase?"));
+            assert!(messages.iter().any(|message| {
+                message.content.iter().any(|part| {
+                    matches!(
+                        part,
+                        ContentPart::ProviderState { provider, data }
+                            if provider == "openai-codex"
+                                && data["encrypted_content"] == "opaque-state"
+                    )
+                })
+            }));
             self.saw_persisted_history
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             Ok(Box::pin(stream::iter(vec![
@@ -982,7 +1001,7 @@ impl AgentLoop {
             };
 
             let mut context_recovery_attempted = false;
-            let (text_output, tool_call_parts, attempt_usage) = 'completion: loop {
+            let (text_output, tool_call_parts, provider_state, attempt_usage) = 'completion: loop {
                 if let Some(context_window) = self.options.context_window_tokens {
                     self.compaction
                         .compact(
@@ -1018,6 +1037,7 @@ impl AgentLoop {
 
                 let mut text_output = String::new();
                 let mut tool_call_parts: Vec<(String, String, String)> = Vec::new();
+                let mut provider_state = Vec::new();
                 let mut attempt_usage = UsageStats {
                     prompt_tokens: 0,
                     completion_tokens: 0,
@@ -1067,6 +1087,9 @@ impl AgentLoop {
                             saw_completion = true;
                             break;
                         }
+                        AssistantMessageEvent::ProviderState(state) => {
+                            provider_state.push(state);
+                        }
                         AssistantMessageEvent::ThinkingDelta(_) => {}
                         AssistantMessageEvent::Done { usage: None } => {
                             saw_completion = true;
@@ -1079,7 +1102,7 @@ impl AgentLoop {
                         "LLM stream ended before a completion event; refusing to treat partial output as a completed turn"
                     );
                 }
-                break (text_output, tool_call_parts, attempt_usage);
+                break (text_output, tool_call_parts, provider_state, attempt_usage);
             };
             self.record_usage(&mut cumulative_usage, &attempt_usage);
 
@@ -1124,6 +1147,7 @@ impl AgentLoop {
             );
             assistant_msg.provider = Some(self.provider.provider_name().to_string());
             assistant_msg.model = Some(self.options.model_name.clone());
+            assistant_msg.content.extend(provider_state);
 
             let tool_calls = assistant_msg.tool_calls.clone().unwrap_or_default();
             let end_task_call_index = tool_calls.iter().position(|call| {

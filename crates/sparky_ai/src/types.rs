@@ -21,6 +21,12 @@ pub enum ContentPart {
         #[serde(skip_serializing_if = "Option::is_none")]
         signature: Option<String>,
     },
+    /// Opaque provider state that must be replayed to continue a stateless
+    /// reasoning conversation. It is persisted but never rendered to users.
+    ProviderState {
+        provider: String,
+        data: serde_json::Value,
+    },
     Image {
         data: String,
         mime_type: String,
@@ -158,6 +164,9 @@ impl Message {
                     characters = characters.saturating_add(data.len());
                     characters = characters.saturating_add(1_024);
                 }
+                ContentPart::ProviderState { data, .. } => {
+                    characters = characters.saturating_add(data.to_string().len());
+                }
             }
         }
         if self.content.is_empty() {
@@ -213,6 +222,7 @@ pub enum AssistantMessageEvent {
         name: String,
         arguments_delta: String,
     },
+    ProviderState(ContentPart),
     Done {
         usage: Option<UsageStats>,
     },
