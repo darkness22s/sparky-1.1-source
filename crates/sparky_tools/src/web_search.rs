@@ -196,14 +196,10 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
 
     let mut all_results: Vec<SearchResult> = Vec::new();
     let mut seen_urls = std::collections::HashSet::new();
-    let mut saw_successful_response = false;
 
     if let Ok(resp) = client.get(&api_url).send().await {
         if resp.status().is_success() {
             if let Ok(body) = resp.text().await {
-                if !body.trim().is_empty() {
-                    saw_successful_response = true;
-                }
                 if let Ok(ddg_response) = serde_json::from_str::<serde_json::Value>(&body) {
                 // Extract abstract
                 if let Some(abstract_text) = ddg_response["AbstractText"].as_str() {
