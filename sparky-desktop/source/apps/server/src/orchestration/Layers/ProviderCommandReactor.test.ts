@@ -1734,12 +1734,75 @@ describe("ProviderCommandReactor", () => {
     });
     await waitFor(async () => {
       const snapshot = await harness.readModel();
-      return snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.session
-        ?.status === "interrupted";
+      return (
+        snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.session
+          ?.status === "interrupted"
+      );
     });
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.session?.activeTurnId).toBeNull();
+  });
+
+  it("settles the UI and finalizes streamed text without waiting for provider interrupt", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const turnId = asTurnId("turn-slow-interrupt");
+    const messageId = asMessageId("assistant-slow-interrupt");
+    harness.interruptTurn.mockImplementation(() => Effect.never as never);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-slow-interrupt"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: turnId,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-delta-slow-interrupt"),
+        threadId: ThreadId.make("thread-1"),
+        messageId,
+        delta: "Text before Stop",
+        turnId,
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.interrupt",
+        commandId: CommandId.make("cmd-turn-slow-interrupt"),
+        threadId: ThreadId.make("thread-1"),
+        turnId,
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+
+    await waitFor(async () => {
+      const snapshot = await harness.readModel();
+      const thread = snapshot.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      return thread?.session?.status === "interrupted";
+    }, 750);
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.session?.activeTurnId).toBeNull();
+    expect(thread?.messages.find((entry) => entry.id === messageId)).toMatchObject({
+      text: "Text before Stop",
+      streaming: false,
+    });
   });
 
   it("settles an interrupted turn and records a failure when provider interrupt fails", async () => {

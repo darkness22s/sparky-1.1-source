@@ -1417,6 +1417,19 @@ const make = Effect.gen(function* () {
         (eventTurnId === undefined ||
           thread.latestTurn === null ||
           sameId(eventTurnId, thread.latestTurn.turnId));
+      // Stop is locally authoritative. A provider may still have queued text
+      // after its interrupt RPC returns or times out; never let that output
+      // revive or extend the assistant message the user already stopped.
+      const shouldApplyTurnOutput =
+        !STRICT_PROVIDER_LIFECYCLE_GUARD ||
+        (!conflictsWithActiveTurn &&
+          !(
+            activeTurnId === null &&
+            (thread.session?.status === "interrupted" || thread.session?.status === "stopped") &&
+            (eventTurnId === undefined ||
+              thread.latestTurn === null ||
+              sameId(eventTurnId, thread.latestTurn.turnId))
+          ));
 
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
@@ -1573,11 +1586,15 @@ const make = Effect.gen(function* () {
       }
 
       const assistantDelta =
-        event.type === "content.delta" && event.payload.streamKind === "assistant_text"
+        shouldApplyTurnOutput &&
+        event.type === "content.delta" &&
+        event.payload.streamKind === "assistant_text"
           ? event.payload.delta
           : undefined;
       const proposedPlanDelta =
-        event.type === "turn.proposed.delta" ? event.payload.delta : undefined;
+        shouldApplyTurnOutput && event.type === "turn.proposed.delta"
+          ? event.payload.delta
+          : undefined;
 
       if (assistantDelta && assistantDelta.length > 0) {
         const turnId = toTurnId(event.turnId);
@@ -1621,7 +1638,8 @@ const make = Effect.gen(function* () {
       }
 
       const pauseForUserTurnId =
-        event.type === "request.opened" || event.type === "user-input.requested"
+        shouldApplyTurnOutput &&
+        (event.type === "request.opened" || event.type === "user-input.requested")
           ? toTurnId(event.turnId)
           : undefined;
       if (pauseForUserTurnId) {
@@ -1671,7 +1689,9 @@ const make = Effect.gen(function* () {
       }
 
       const assistantCompletion =
-        event.type === "item.completed" && event.payload.itemType === "assistant_message"
+        shouldApplyTurnOutput &&
+        event.type === "item.completed" &&
+        event.payload.itemType === "assistant_message"
           ? {
               messageId: MessageId.make(
                 `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
@@ -1680,7 +1700,7 @@ const make = Effect.gen(function* () {
             }
           : undefined;
       const proposedPlanCompletion =
-        event.type === "turn.proposed.completed"
+        shouldApplyTurnOutput && event.type === "turn.proposed.completed"
           ? {
               planId: proposedPlanIdFromEvent(event, thread.id),
               turnId: toTurnId(event.turnId),

@@ -432,6 +432,100 @@ describe("ProviderRuntimeIngestion", () => {
     );
   });
 
+  it("ignores assistant output that arrives after local turn interruption", async () => {
+    const harness = await createHarness();
+    const threadId = asThreadId("thread-1");
+    const turnId = asTurnId("turn-local-stop");
+    const itemId = asItemId("item-local-stop");
+    const messageId = asMessageId("assistant:item-local-stop");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-local-stop-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      turnId,
+    });
+    await waitForThread(harness.readModel, (thread) => thread.session?.activeTurnId === turnId);
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-local-stop-before-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId,
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId,
+      itemId,
+      payload: { streamKind: "assistant_text", delta: "Text before Stop" },
+    });
+    await waitForThread(harness.readModel, (thread) =>
+      thread.messages.some((message) => message.id === messageId),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-local-stop-session"),
+        threadId,
+        session: {
+          threadId,
+          status: "interrupted",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "2026-01-01T00:00:02.000Z",
+        },
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-local-stop-message-complete"),
+        threadId,
+        messageId,
+        turnId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-local-stop-late-delta"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId,
+      createdAt: "2026-01-01T00:00:03.000Z",
+      turnId,
+      itemId,
+      payload: { streamKind: "assistant_text", delta: " should never appear" },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-local-stop-late-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId,
+      createdAt: "2026-01-01T00:00:04.000Z",
+      turnId,
+      itemId,
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+        detail: "A late replacement should also be ignored",
+      },
+    });
+    await harness.drain();
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.session?.status).toBe("interrupted");
+    expect(thread?.messages.find((message) => message.id === messageId)).toMatchObject({
+      text: "Text before Stop",
+      streaming: false,
+    });
+  });
+
   it("does not resurrect a settled turn from a late running session event", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
