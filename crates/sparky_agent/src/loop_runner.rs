@@ -119,6 +119,13 @@ mod tests {
             Ok(Box::pin(stream::iter(vec![
                 AssistantMessageEvent::TextDelta("Hel".to_string()),
                 AssistantMessageEvent::TextDelta("lo".to_string()),
+                AssistantMessageEvent::ProviderState(ContentPart::ProviderState {
+                    provider: "openai-codex".to_string(),
+                    data: serde_json::json!({
+                        "type": "reasoning",
+                        "encrypted_content": "opaque-state",
+                    }),
+                }),
                 AssistantMessageEvent::Done { usage: None },
             ])))
         }
@@ -368,6 +375,16 @@ mod tests {
 
         assert_eq!(deltas, vec!["Hel", "lo"]);
         assert_eq!(response, "Hello");
+        assert!(session.build_context_messages().iter().any(|message| {
+            message.content.iter().any(|part| {
+                matches!(
+                    part,
+                    ContentPart::ProviderState { provider, data }
+                        if provider == "openai-codex"
+                            && data["encrypted_content"] == "opaque-state"
+                )
+            })
+        }));
         remove_temporary_workspace(workspace).await;
     }
 
@@ -766,6 +783,7 @@ impl AgentLoop {
 
             let mut text_output = String::new();
             let mut tool_call_parts: Vec<(String, String, String)> = Vec::new();
+            let mut provider_state = Vec::new();
             while let Some(event) = event_stream.next().await {
                 on_event(&event);
                 match event {
@@ -793,6 +811,7 @@ impl AgentLoop {
                     AssistantMessageEvent::Done { usage: Some(usage) } => {
                         self.record_usage(&mut cumulative_usage, &usage);
                     }
+                    AssistantMessageEvent::ProviderState(state) => provider_state.push(state),
                     AssistantMessageEvent::ThinkingDelta(_)
                     | AssistantMessageEvent::Done { usage: None } => {}
                 }
@@ -857,6 +876,7 @@ impl AgentLoop {
                     });
                 }
             }
+            assistant_msg.content.extend(provider_state);
 
             if !text_output.trim().is_empty() {
                 final_response.push_str(&text_output);
@@ -996,6 +1016,7 @@ impl AgentLoop {
                 .stream(&context_messages, &completion_options)
                 .await?;
             let mut closing_response = String::new();
+            let mut closing_provider_state = Vec::new();
             while let Some(event) = event_stream.next().await {
                 on_event(&event);
                 match event {
@@ -1003,6 +1024,9 @@ impl AgentLoop {
                     AssistantMessageEvent::Error(message) => anyhow::bail!(message),
                     AssistantMessageEvent::Done { usage: Some(usage) } => {
                         self.record_usage(&mut cumulative_usage, &usage);
+                    }
+                    AssistantMessageEvent::ProviderState(state) => {
+                        closing_provider_state.push(state)
                     }
                     AssistantMessageEvent::ThinkingDelta(_)
                     | AssistantMessageEvent::ToolCallDelta { .. }
@@ -1014,9 +1038,9 @@ impl AgentLoop {
                 on_event(&AssistantMessageEvent::TextDelta(closing_response.clone()));
             }
             final_response.push_str(&closing_response);
-            session
-                .append_message(Message::assistant(closing_response, None))
-                .await?;
+            let mut closing_message = Message::assistant(closing_response, None);
+            closing_message.content.extend(closing_provider_state);
+            session.append_message(closing_message).await?;
             self.event_bus.emit(&SparkyEvent::TurnEnd {
                 turn_index: turn_count,
             });

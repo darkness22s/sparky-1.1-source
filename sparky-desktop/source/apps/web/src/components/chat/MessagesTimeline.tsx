@@ -59,6 +59,7 @@ import {
   GlobeIcon,
   HammerIcon,
   KeyboardIcon,
+  LoaderCircleIcon,
   ListChecksIcon,
   MessageCircleIcon,
   MousePointerClickIcon,
@@ -2076,6 +2077,18 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
       ? null
       : rawPreview;
   const displayText = preview ? `${heading} - ${preview}` : heading;
+  const lifecycleLabel =
+    workEntry.toolLifecycleStatus === "inProgress"
+      ? "Running"
+      : workEntry.toolLifecycleStatus === "completed"
+        ? "Completed"
+        : workEntry.toolLifecycleStatus === "failed"
+          ? "Failed"
+          : workEntry.toolLifecycleStatus === "stopped"
+            ? "Stopped"
+            : workEntry.toolLifecycleStatus === "declined"
+              ? "Declined"
+              : null;
   const showDiffStats =
     workEntry.diffStats !== undefined &&
     (workEntry.diffStats.additions > 0 || workEntry.diffStats.deletions > 0);
@@ -2101,7 +2114,9 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
       ? "font-medium text-destructive"
       : "font-medium text-foreground/82";
   const turnSettled = !activity.activeTurnInProgress;
-  const showNeutralIndicator = !turnSettled && workEntryIndicatesToolNeutralStatus(workEntry);
+  const showRunningIndicator = workEntry.toolLifecycleStatus === "inProgress";
+  const showNeutralIndicator =
+    !showRunningIndicator && !turnSettled && workEntryIndicatesToolNeutralStatus(workEntry);
   const showSuccessIndicator =
     workEntryIndicatesToolSuccess(workEntry) ||
     (turnSettled && workEntryIndicatesToolNeutralStatus(workEntry));
@@ -2151,6 +2166,22 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
                   className="shrink-0 text-[10px] leading-4"
                 />
               ) : null}
+              {lifecycleLabel ? (
+                <span
+                  className={cn(
+                    "shrink-0 text-[10px] leading-4",
+                    workEntry.toolLifecycleStatus === "inProgress"
+                      ? "text-muted-foreground/65"
+                      : workEntry.toolLifecycleStatus === "failed" ||
+                          workEntry.toolLifecycleStatus === "declined"
+                        ? "text-destructive/80"
+                        : "text-muted-foreground/55",
+                  )}
+                  aria-live={workEntry.toolLifecycleStatus === "inProgress" ? "polite" : undefined}
+                >
+                  {lifecycleLabel}
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-px text-muted-foreground/55">
@@ -2169,7 +2200,19 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
               ) : null}
             </span>
             <span className="flex size-4 shrink-0 items-center justify-center">
-              {showFailedIndicator ? (
+              {showRunningIndicator ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={<span className="flex size-4 items-center justify-center" />}
+                  >
+                    <LoaderCircleIcon
+                      className="block size-3 shrink-0 animate-spin opacity-70"
+                      aria-hidden
+                    />
+                  </TooltipTrigger>
+                  <TooltipPopup>Running</TooltipPopup>
+                </Tooltip>
+              ) : showFailedIndicator ? (
                 <Tooltip>
                   <TooltipTrigger
                     render={

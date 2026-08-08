@@ -1,4 +1,4 @@
-use sparky_ai::{Message, Role, ToolCall};
+use sparky_ai::{ContentPart, Message, Role, ToolCall};
 use sparky_session::{SessionEntry, SessionManager};
 use tempfile::tempdir;
 
@@ -62,6 +62,59 @@ async fn resumes_the_exact_session_with_its_message_history() {
     let after_follow_up = resumed.build_context_messages();
     assert_eq!(after_follow_up.len(), 3);
     assert_eq!(after_follow_up[2].text(), "Make that dashboard green");
+}
+
+#[tokio::test]
+async fn loads_existing_sessions_with_opaque_provider_state() {
+    let dir = tempdir().unwrap();
+    let cwd = dir.path().to_str().unwrap();
+    let session = SessionManager::create_new(cwd, None).await.unwrap();
+    let session_id = session.session_id().to_string();
+    let session_file = session.session_file().to_path_buf();
+    drop(session);
+
+    let mut contents = tokio::fs::read_to_string(&session_file).await.unwrap();
+    let entry = serde_json::json!({
+        "type": "message",
+        "id": uuid::Uuid::new_v4().to_string(),
+        "parent_id": null,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "message": {
+            "role": "assistant",
+            "content": [
+                { "type": "text", "text": "The visible reply." },
+                {
+                    "type": "provider_state",
+                    "provider": "openai-codex",
+                    "data": {
+                        "type": "reasoning",
+                        "id": "reasoning-1",
+                        "encrypted_content": "opaque-state",
+                        "summary": []
+                    }
+                }
+            ],
+            "timestamp": 1,
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol"
+        }
+    });
+    contents.push_str(&format!("{}\n", serde_json::to_string(&entry).unwrap()));
+    tokio::fs::write(&session_file, contents).await.unwrap();
+
+    let resumed = SessionManager::load(cwd, &session_id).await.unwrap();
+    let messages = resumed.build_context_messages();
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].text(), "The visible reply.");
+    assert!(messages[0].content.iter().any(|part| {
+        matches!(
+            part,
+            ContentPart::ProviderState { provider, data }
+                if provider == "openai-codex"
+                    && data["encrypted_content"] == "opaque-state"
+        )
+    }));
 }
 
 #[tokio::test]
