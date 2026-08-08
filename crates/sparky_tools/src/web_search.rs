@@ -284,6 +284,7 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
                         }
                     }
                 }
+                }
             }
         }
     }
