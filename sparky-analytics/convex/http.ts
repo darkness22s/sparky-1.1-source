@@ -16,11 +16,11 @@ const updateCors = {
   "Cache-Control": "no-store, max-age=0",
 };
 
-const updatePlatforms = new Set(["windows-x64", "macos-arm64", "macos-x64"]);
+const updatePlatforms = new Set(["windows-x64", "macos-arm64", "macos-x64", "linux-x64"]);
 
 function requestedUpdatePlatform(request: Request, fallback: string) {
   const value = new URL(request.url).searchParams.get("platform") ?? fallback;
-  return updatePlatforms.has(value) ? value as "windows-x64" | "macos-arm64" | "macos-x64" : null;
+  return updatePlatforms.has(value) ? value as "windows-x64" | "macos-arm64" | "macos-x64" | "linux-x64" : null;
 }
 
 async function updateMetadata(ctx: ActionCtx, request: Request, fallback: string) {
@@ -35,7 +35,7 @@ async function updateMetadata(ctx: ActionCtx, request: Request, fallback: string
 async function redirectToUpdateFeed(
   ctx: ActionCtx,
   request: Request,
-  platform: "windows-x64" | "macos-arm64" | "macos-x64",
+  platform: "windows-x64" | "macos-arm64" | "macos-x64" | "linux-x64",
   fallbackChannel: "release" | "beta" = "release",
 ) {
   const channel = new URL(request.url).searchParams.get("channel") === "beta" ? "beta" : fallbackChannel;
