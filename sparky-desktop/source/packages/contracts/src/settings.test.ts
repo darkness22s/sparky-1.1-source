@@ -31,6 +31,21 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings streaming text animation", () => {
+  it("defaults legacy settings to fade and lift", () => {
+    expect(decodeClientSettings({}).streamingTextAnimation).toBe("lift");
+  });
+
+  it("accepts both user-selectable animation modes", () => {
+    expect(decodeClientSettings({ streamingTextAnimation: "lift" }).streamingTextAnimation).toBe(
+      "lift",
+    );
+    expect(decodeClientSettings({ streamingTextAnimation: "words" }).streamingTextAnimation).toBe(
+      "words",
+    );
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults to an empty record so legacy configs without the key still decode", () => {
     expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});

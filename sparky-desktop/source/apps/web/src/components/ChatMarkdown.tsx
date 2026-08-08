@@ -10,6 +10,7 @@ import {
   WrapTextIcon,
 } from "lucide-react";
 import type { ScopedThreadRef, ServerProviderSkill } from "@sparky/contracts";
+import type { StreamingTextAnimation } from "@sparky/contracts/settings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -78,6 +79,10 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import {
+  remarkStreamingMarkdownAnimation,
+  STREAMING_TAIL_CLASS_NAME_PATTERN,
+} from "../streaming-markdown-animation";
+import {
   isBrowserPreviewFile,
   openFileInPreview,
   openUrlInPreview,
@@ -111,6 +116,8 @@ interface ChatMarkdownProps {
   threadRef?: ScopedThreadRef | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
+  streamingTailStart?: number | undefined;
+  streamingTextAnimation?: StreamingTextAnimation | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
@@ -158,6 +165,10 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta"],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ["className", STREAMING_TAIL_CLASS_NAME_PATTERN],
+    ],
   },
   protocols: {
     ...defaultSchema.protocols,
@@ -1253,6 +1264,8 @@ function ChatMarkdown({
   threadRef,
   onTaskListChange,
   isStreaming = false,
+  streamingTailStart,
+  streamingTextAnimation = "lift",
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
@@ -1272,6 +1285,21 @@ function ChatMarkdown({
     serverConfig?.availableEditors ?? [],
   );
   const diffThemeName = resolveDiffThemeName(resolvedTheme);
+  const remarkPlugins = useMemo<NonNullable<ReactMarkdownOptions["remarkPlugins"]>>(() => {
+    const basePlugins = lineBreaks
+      ? [...CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS]
+      : [...CHAT_MARKDOWN_REMARK_PLUGINS];
+    if (streamingTailStart === undefined || streamingTailStart >= text.length) {
+      return basePlugins;
+    }
+    return [
+      ...basePlugins,
+      [
+        remarkStreamingMarkdownAnimation,
+        { animation: streamingTextAnimation, tailStart: streamingTailStart },
+      ],
+    ];
+  }, [lineBreaks, streamingTailStart, streamingTextAnimation, text.length]);
   const markdownFileLinkMetaByHref = useMemo(() => {
     const metaByHref = new Map<
       string,
@@ -1563,9 +1591,7 @@ function ChatMarkdown({
       onCopy={handleCopy}
     >
       <ReactMarkdown
-        remarkPlugins={
-          lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS
-        }
+        remarkPlugins={remarkPlugins}
         rehypePlugins={CHAT_MARKDOWN_REHYPE_PLUGINS}
         components={markdownComponents}
         urlTransform={markdownUrlTransform}

@@ -110,6 +110,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": "24-hour",
 } as const;
 
+const STREAMING_TEXT_ANIMATION_OPTIONS = [
+  { value: "lift", label: "Fade + lift" },
+  { value: "words", label: "Word dissolve" },
+] as const;
+
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 
 function withoutProviderInstanceKey<V>(
@@ -401,6 +406,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
+      ...(settings.streamingTextAnimation !== DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation
+        ? ["Streaming text animation"]
+        : []),
       ...(Duration.toMillis(settings.automaticGitFetchInterval) !==
       Duration.toMillis(DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval)
         ? ["Automatic Git fetch interval"]
@@ -417,6 +425,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.streamingTextAnimation,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
       settings.wordWrap,
@@ -441,6 +450,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+      streamingTextAnimation: DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
@@ -643,6 +653,48 @@ export function GeneralSettingsPanel() {
               }
               aria-label="Stream assistant messages"
             />
+          }
+        />
+
+        <SettingsRow
+          title="Streaming text animation"
+          description="Choose how newly streamed words appear while existing text stays stable."
+          resetAction={
+            settings.streamingTextAnimation !== DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation ? (
+              <SettingResetButton
+                label="streaming text animation"
+                onClick={() =>
+                  updateSettings({
+                    streamingTextAnimation: DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.streamingTextAnimation}
+              onValueChange={(value) => {
+                if (value === "lift" || value === "words") {
+                  updateSettings({ streamingTextAnimation: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Streaming text animation">
+                <SelectValue>
+                  {STREAMING_TEXT_ANIMATION_OPTIONS.find(
+                    (option) => option.value === settings.streamingTextAnimation,
+                  )?.label ?? "Fade + lift"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {STREAMING_TEXT_ANIMATION_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
 

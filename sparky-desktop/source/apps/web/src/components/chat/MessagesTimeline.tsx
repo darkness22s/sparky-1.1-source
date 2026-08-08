@@ -114,6 +114,7 @@ import {
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@sparky/contracts/settings";
+import type { StreamingTextAnimation } from "@sparky/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
 
 import {
@@ -145,6 +146,7 @@ interface TimelineRowSharedState {
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  streamingTextAnimation: StreamingTextAnimation;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -188,6 +190,7 @@ interface MessagesTimelineProps {
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
+  streamingTextAnimation?: StreamingTextAnimation;
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
@@ -222,6 +225,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   markdownCwd,
   resolvedTheme,
   timestampFormat,
+  streamingTextAnimation = "lift",
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
   anchorMessageId,
@@ -436,6 +440,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      streamingTextAnimation,
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
@@ -450,6 +455,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       skills,
+      streamingTextAnimation,
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onImageExpand,
@@ -1027,44 +1033,20 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   const ctx = use(TimelineRowCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
   const displayedMessageText = usePacedStreamingText(messageText, row.message.streaming);
-  const markdownHostRef = useRef<HTMLDivElement>(null);
-  const previousDisplayedLengthRef = useRef(displayedMessageText.length);
-
-  useEffect(() => {
-    const previousLength = previousDisplayedLengthRef.current;
-    previousDisplayedLengthRef.current = displayedMessageText.length;
-    if (!row.message.streaming || displayedMessageText.length <= previousLength) {
-      return;
-    }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-
-    const activeBlock = markdownHostRef.current?.querySelector<HTMLElement>(
-      ".chat-markdown > :last-child",
-    );
-    if (!activeBlock || typeof activeBlock.animate !== "function") {
-      return;
-    }
-    const animation = activeBlock.animate([{ opacity: 0.58 }, { opacity: 1 }], {
-      duration: 180,
-      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-    });
-    return () => animation.cancel();
-  }, [displayedMessageText, row.message.streaming]);
+  const streamingTailStart = useStreamingTailStart(displayedMessageText, row.message.streaming);
 
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <div ref={markdownHostRef} data-streaming-markdown={row.message.streaming || undefined}>
-          <ChatMarkdown
-            text={displayedMessageText}
-            cwd={ctx.markdownCwd}
-            threadRef={ctx.threadRef ?? undefined}
-            isStreaming={Boolean(row.message.streaming)}
-            skills={ctx.skills}
-          />
-        </div>
+        <ChatMarkdown
+          text={displayedMessageText}
+          cwd={ctx.markdownCwd}
+          threadRef={ctx.threadRef ?? undefined}
+          isStreaming={Boolean(row.message.streaming)}
+          streamingTailStart={streamingTailStart}
+          streamingTextAnimation={ctx.streamingTextAnimation}
+          skills={ctx.skills}
+        />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
@@ -1135,6 +1117,22 @@ function usePacedStreamingText(text: string, isStreaming: boolean): string {
   );
 
   return isStreaming ? displayedText : text;
+}
+
+function useStreamingTailStart(text: string, isStreaming: boolean): number {
+  const previousTextRef = useRef(isStreaming ? "" : text);
+  const wasStreamingRef = useRef(isStreaming);
+  const previousText = previousTextRef.current;
+  const shouldAnimate = isStreaming || wasStreamingRef.current;
+  const tailStart =
+    shouldAnimate && text.startsWith(previousText) ? previousText.length : text.length;
+
+  useEffect(() => {
+    previousTextRef.current = text;
+    wasStreamingRef.current = isStreaming;
+  }, [isStreaming, text]);
+
+  return tailStart;
 }
 
 function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
