@@ -987,6 +987,42 @@ describe("deriveMessagesTimelineRows", () => {
     expect(assistantRow?.showAssistantCopyButton).toBe(false);
   });
 
+  it("keeps in-progress tool rows visible while suppressing neutral work", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "running-edit",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:01Z",
+          entry: {
+            id: "running-edit",
+            createdAt: "2026-01-01T00:00:01Z",
+            label: "Edit file",
+            tone: "tool",
+            toolLifecycleStatus: "inProgress",
+          },
+        },
+        {
+          id: "neutral-tool",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:02Z",
+          entry: {
+            id: "neutral-tool",
+            createdAt: "2026-01-01T00:00:02Z",
+            label: "Tool",
+            tone: "thinking",
+          },
+        },
+      ],
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["running-edit"]);
+  });
+
   it("models work log overflow expansion as inserted list rows", () => {
     const timelineEntries = [
       {

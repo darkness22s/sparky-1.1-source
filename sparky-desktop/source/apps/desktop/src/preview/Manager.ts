@@ -983,7 +983,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       Effect.flatMap((rawResponse) => {
         const response = rawResponse as CdpEvaluationResult;
         if (!response.exceptionDetails) {
-          return Effect.succeed(response.result?.value as A);
+          return Effect.succeed((returnByValue ? response.result?.value : response.result) as A);
         }
         const detail = previewAutomationEvaluationDetail(response.exceptionDetails);
         return Effect.fail(
@@ -1252,9 +1252,17 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.on("did-fail-load", failed as never);
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
         wc.setWindowOpenHandler(({ url }) => {
+          let normalizedUrl: string;
+          try {
+            normalizedUrl = normalizePreviewUrl(url);
+          } catch {
+            // Preview guests may only navigate to the same http(s)-only URL
+            // surface as explicit preview navigation.
+            return { action: "deny" };
+          }
           runFork(
             attemptPromise({ operation: "openPreviewWindow", tabId, webContentsId: wc.id }, () =>
-              wc.loadURL(url),
+              wc.loadURL(normalizedUrl),
             ).pipe(Effect.ignore),
           );
           return { action: "deny" };
@@ -1766,11 +1774,12 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   const stopRecording = Effect.fn("PreviewManager.stopRecording")(function* (tabId: string) {
     const recordingTabId = yield* Ref.get(recordingTabIdRef);
     if (Option.isNone(recordingTabId) || recordingTabId.value !== tabId) return;
-    const wc = yield* requireWebContents(tabId);
-    yield* withControlSession(tabId, wc, "recording.stop", (send) =>
-      send("Page.stopScreencast").pipe(Effect.asVoid),
-    );
-    yield* Ref.set(recordingTabIdRef, Option.none());
+    yield* Effect.gen(function* () {
+      const wc = yield* requireWebContents(tabId);
+      yield* withControlSession(tabId, wc, "recording.stop", (send) =>
+        send("Page.stopScreencast").pipe(Effect.asVoid),
+      );
+    }).pipe(Effect.ensuring(Ref.set(recordingTabIdRef, Option.none())));
   });
 
   const saveRecording = Effect.fn("PreviewManager.saveRecording")(function* (
@@ -2031,6 +2040,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     tabId: string,
     input: PreviewAutomationClickInput,
     send: SendCommand,
+    sendCleanup: SendCommand,
   ) {
     yield* prepareAutomationInput(send, true);
     const point = yield* resolveClickPoint(tabId, send, input);
@@ -2069,19 +2079,36 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       createdAt: clickCreatedAt,
     });
     yield* Effect.sleep(AGENT_CURSOR_CLICK_LEAD_MS);
-    yield* expectAgentInput(tabId, { kind: "pointer", ...point, button: 0 });
-    yield* send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      ...point,
-      button: "left",
-      clickCount: 1,
-    });
-    yield* send("Input.dispatchMouseEvent", {
+
+    const mouseReleased = {
       type: "mouseReleased",
       ...point,
       button: "left",
       clickCount: 1,
-    });
+    };
+    let pressAttempted = false;
+    yield* Effect.gen(function* () {
+      // Set this before dispatch: a control-epoch change can be detected after
+      // Chromium receives the press, and cleanup must still release the button.
+      pressAttempted = true;
+      yield* expectAgentInput(tabId, { kind: "pointer", ...point, button: 0 });
+      yield* send("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        ...point,
+        button: "left",
+        clickCount: 1,
+      });
+      yield* send("Input.dispatchMouseEvent", mouseReleased);
+      pressAttempted = false;
+    }).pipe(
+      Effect.ensuring(
+        Effect.suspend(() =>
+          pressAttempted
+            ? sendCleanup("Input.dispatchMouseEvent", mouseReleased).pipe(Effect.ignore)
+            : Effect.void,
+        ),
+      ),
+    );
   });
 
   const automationClick = Effect.fn("PreviewManager.automationClick")(function* (
@@ -2089,8 +2116,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     input: PreviewAutomationClickInput,
   ) {
     const wc = yield* requireWebContents(tabId);
-    yield* withControlSession(tabId, wc, "click", (send) =>
-      performAutomationClick(tabId, input, send),
+    yield* withControlSession(tabId, wc, "click", (send, sendCleanup) =>
+      performAutomationClick(tabId, input, send, sendCleanup),
     );
   });
 

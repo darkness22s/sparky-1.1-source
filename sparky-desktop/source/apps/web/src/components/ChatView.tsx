@@ -2263,7 +2263,9 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
   const activeProviderTurnId =
-    activeThread?.session?.status === "running" ? (activeThread.session.activeTurnId ?? null) : null;
+    activeThread?.session?.status === "running"
+      ? (activeThread.session.activeTurnId ?? null)
+      : null;
   const timelineCompletionEvidenceTurnId =
     activeProviderTurnId ?? (!latestTurnSettled ? (activeLatestTurn?.turnId ?? null) : null);
   const timelineHasCompletedAssistantTail = hasCompletedAssistantTail(
