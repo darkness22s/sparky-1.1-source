@@ -91,6 +91,7 @@ import {
   resolveTimelineMinimapIndexFromPointer,
   resolveTimelineMinimapInteractiveWidth,
   resolveTimelineMinimapTopPercent,
+  resolveStreamingMarkdownFlushDelay,
   type StableMessagesTimelineRowsState,
   type MessagesTimelineRow,
   TIMELINE_MINIMAP_MIN_ITEMS,
@@ -1025,17 +1026,45 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const displayedMessageText = usePacedStreamingText(messageText, row.message.streaming);
+  const markdownHostRef = useRef<HTMLDivElement>(null);
+  const previousDisplayedLengthRef = useRef(displayedMessageText.length);
+
+  useEffect(() => {
+    const previousLength = previousDisplayedLengthRef.current;
+    previousDisplayedLengthRef.current = displayedMessageText.length;
+    if (!row.message.streaming || displayedMessageText.length <= previousLength) {
+      return;
+    }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const activeBlock = markdownHostRef.current?.querySelector<HTMLElement>(
+      ".chat-markdown > :last-child",
+    );
+    if (!activeBlock || typeof activeBlock.animate !== "function") {
+      return;
+    }
+    const animation = activeBlock.animate([{ opacity: 0.58 }, { opacity: 1 }], {
+      duration: 180,
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+    });
+    return () => animation.cancel();
+  }, [displayedMessageText, row.message.streaming]);
 
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <ChatMarkdown
-          text={messageText}
-          cwd={ctx.markdownCwd}
-          threadRef={ctx.threadRef ?? undefined}
-          isStreaming={Boolean(row.message.streaming)}
-          skills={ctx.skills}
-        />
+        <div ref={markdownHostRef} data-streaming-markdown={row.message.streaming || undefined}>
+          <ChatMarkdown
+            text={displayedMessageText}
+            cwd={ctx.markdownCwd}
+            threadRef={ctx.threadRef ?? undefined}
+            isStreaming={Boolean(row.message.streaming)}
+            skills={ctx.skills}
+          />
+        </div>
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
@@ -1062,6 +1091,50 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
       </div>
     </>
   );
+}
+
+function usePacedStreamingText(text: string, isStreaming: boolean): string {
+  const [displayedText, setDisplayedText] = useState(text);
+  const latestTextRef = useRef(text);
+  const displayedTextRef = useRef(text);
+  const lastFlushAtRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
+  latestTextRef.current = text;
+
+  useEffect(() => {
+    if (!isStreaming) {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      displayedTextRef.current = text;
+      setDisplayedText(text);
+      return;
+    }
+    if (text === displayedTextRef.current || timerRef.current !== null) {
+      return;
+    }
+
+    const delay = resolveStreamingMarkdownFlushDelay(lastFlushAtRef.current, performance.now());
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      lastFlushAtRef.current = performance.now();
+      const nextText = latestTextRef.current;
+      displayedTextRef.current = nextText;
+      setDisplayedText(nextText);
+    }, delay);
+  }, [isStreaming, text]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+      }
+    },
+    [],
+  );
+
+  return isStreaming ? displayedText : text;
 }
 
 function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
@@ -2103,15 +2176,13 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const lifecycleLabel =
     workEntry.toolLifecycleStatus === "inProgress"
       ? "Running"
-      : workEntry.toolLifecycleStatus === "completed"
-        ? "Completed"
-        : workEntry.toolLifecycleStatus === "failed"
-          ? "Failed"
-          : workEntry.toolLifecycleStatus === "stopped"
-            ? "Stopped"
-            : workEntry.toolLifecycleStatus === "declined"
-              ? "Declined"
-              : null;
+      : workEntry.toolLifecycleStatus === "failed"
+        ? "Failed"
+        : workEntry.toolLifecycleStatus === "stopped"
+          ? "Stopped"
+          : workEntry.toolLifecycleStatus === "declined"
+            ? "Declined"
+            : null;
   const showDiffStats =
     workEntry.diffStats !== undefined &&
     (workEntry.diffStats.additions > 0 || workEntry.diffStats.deletions > 0);

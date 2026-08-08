@@ -5,7 +5,20 @@ import {
   deriveMessagesTimelineRows,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
+  resolveStreamingMarkdownFlushDelay,
 } from "./MessagesTimeline.logic";
+
+describe("resolveStreamingMarkdownFlushDelay", () => {
+  it("paces markdown renders while allowing an overdue frame immediately", () => {
+    expect(resolveStreamingMarkdownFlushDelay(100, 112)).toBe(36);
+    expect(resolveStreamingMarkdownFlushDelay(100, 148)).toBe(0);
+    expect(resolveStreamingMarkdownFlushDelay(100, 200)).toBe(0);
+  });
+
+  it("falls back to one frame for invalid clocks", () => {
+    expect(resolveStreamingMarkdownFlushDelay(Number.NaN, 100)).toBe(48);
+  });
+});
 
 describe("computeMessageDurationStart", () => {
   it("returns message createdAt when there is no preceding user message", () => {
@@ -788,6 +801,39 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(rows.some((row) => row.kind === "working")).toBe(false);
     expect(rows.some((row) => row.kind === "message" && row.showAssistantMeta)).toBe(true);
+  });
+
+  it("hides the working row once visible assistant text is streaming", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "assistant-streaming-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:05Z",
+          message: {
+            id: "assistant-streaming" as never,
+            role: "assistant",
+            text: "Here is the answer so far",
+            turnId: "turn-1" as never,
+            createdAt: "2026-01-01T00:00:05Z",
+            updatedAt: "2026-01-01T00:00:06Z",
+            streaming: true,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-1" as never,
+        state: "running",
+        startedAt: "2026-01-01T00:00:00Z",
+        completedAt: null,
+      },
+      isWorking: true,
+      activeTurnStartedAt: "2026-01-01T00:00:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["assistant-streaming-entry"]);
   });
 
   it("does not fold the active in-progress turn", () => {
