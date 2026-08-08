@@ -364,6 +364,33 @@ const make = Effect.gen(function* () {
       },
       createdAt: input.createdAt,
     });
+
+    // Provider control can time out or race with already-buffered runtime
+    // events. Finalize every projected assistant segment after publishing the
+    // terminal session state so the composer and message tail stop
+    // immediately, without waiting for a provider turn.completed event.
+    const settledThread = yield* resolveThread(input.thread.id);
+    const streamingAssistantMessages =
+      settledThread?.messages.filter(
+        (message) => message.role === "assistant" && message.streaming,
+      ) ?? [];
+    yield* Effect.forEach(
+      streamingAssistantMessages,
+      (message) =>
+        serverCommandId("provider-control-assistant-complete").pipe(
+          Effect.flatMap((commandId) =>
+            orchestrationEngine.dispatch({
+              type: "thread.message.assistant.complete",
+              commandId,
+              threadId: input.thread.id,
+              messageId: message.id,
+              ...(message.turnId !== null ? { turnId: message.turnId } : {}),
+              createdAt: input.createdAt,
+            }),
+          ),
+        ),
+      { concurrency: 1 },
+    ).pipe(Effect.asVoid);
   });
 
   const setThreadSessionErrorOnTurnStartFailure = Effect.fnUntraced(function* (input: {
@@ -1067,18 +1094,34 @@ const make = Effect.gen(function* () {
     // Orchestration turn ids are not provider turn ids, so interrupt by
     // session. Always settle the local lifecycle even when the provider RPC
     // cannot return (for example, a dead app-server child).
-    const failureDetail = yield* runProviderControl(
-      providerService.interruptTurn({ threadId: event.payload.threadId }),
+    const turnId = event.payload.turnId ?? thread.session?.activeTurnId ?? null;
+    const [failureDetail] = yield* Effect.all(
+      [
+        runProviderControl(providerService.interruptTurn({ threadId: event.payload.threadId })),
+        settleProviderControl({
+          thread,
+          status: "interrupted",
+          createdAt: event.payload.createdAt,
+          failureDetail: null,
+          activityKind: "provider.turn.interrupt.failed",
+          activitySummary: "Provider turn interrupt failed",
+          turnId,
+        }),
+      ],
+      { concurrency: "unbounded" },
     );
-    yield* settleProviderControl({
-      thread,
-      status: "interrupted",
-      createdAt: event.payload.createdAt,
-      failureDetail,
-      activityKind: "provider.turn.interrupt.failed",
-      activitySummary: "Provider turn interrupt failed",
-      turnId: event.payload.turnId ?? thread.session?.activeTurnId ?? null,
-    });
+
+    if (failureDetail !== null) {
+      yield* settleProviderControl({
+        thread,
+        status: "interrupted",
+        createdAt: event.payload.createdAt,
+        failureDetail,
+        activityKind: "provider.turn.interrupt.failed",
+        activitySummary: "Provider turn interrupt failed",
+        turnId,
+      });
+    }
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
