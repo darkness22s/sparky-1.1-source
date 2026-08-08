@@ -1996,7 +1996,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_agent"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_ai"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2041,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_cli"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_compaction"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2087,11 +2087,11 @@ dependencies = [
 
 [[package]]
 name = "sparky_config"
-version = "1.1.0"
+version = "1.1.2"
 
 [[package]]
 name = "sparky_extensions"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_memory"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2123,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_prompt"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "ignore",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_session"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2154,7 +2154,7 @@ dependencies = [
 
 [[package]]
 name = "sparky_tools"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "async-trait",

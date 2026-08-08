@@ -86,8 +86,8 @@ test("dynamic AWS manifests require complete HTTPS file metadata", () => {
 
 test("GitHub release manifests keep Intel and Apple Silicon feeds distinct", () => {
   const manifest = releaseConfig({
-    RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.0",
-    RELEASE_VERSION: "1.1.0",
+    RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2",
+    RELEASE_VERSION: "1.1.2",
     RELEASE_WINDOWS_SIZE: "10",
     RELEASE_WINDOWS_BLOCKMAP_SIZE: "11",
     RELEASE_WINDOWS_YML_SIZE: "12",
@@ -107,9 +107,9 @@ test("GitHub release manifests keep Intel and Apple Silicon feeds distinct", () 
 
 test("a versioned public release overrides stale external manifest bindings", async () => {
   const response = await handleRequest(new Request("https://sparky.llc/get/updates/macos/x64/latest-mac-x64.yml"), {
-    RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.0",
+    RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2",
     RELEASE_MANIFEST_URL: "https://stale.example.test/manifest.json",
-    RELEASE_VERSION: "1.1.0",
+    RELEASE_VERSION: "1.1.2",
     RELEASE_MAC_X64_ZIP_SIZE: "10",
     RELEASE_MAC_X64_SIZE: "11",
     RELEASE_MAC_X64_BLOCKMAP_SIZE: "12",
@@ -117,7 +117,7 @@ test("a versioned public release overrides stale external manifest bindings", as
     RELEASE_MAC_X64_YML_SIZE: "13",
   });
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.0/latest-mac-x64.yml");
+  assert.equal(response.headers.get("location"), "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2/latest-mac-x64.yml");
 });
 
 test("beta never replaces the stable launch build", async () => {

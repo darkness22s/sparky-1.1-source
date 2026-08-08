@@ -8,8 +8,8 @@ enabled = true
 head_sampling_rate = 1
 
 [vars]
-RELEASE_PUBLIC_BASE_URL = "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.0"
-RELEASE_VERSION = "1.1.0"
+RELEASE_PUBLIC_BASE_URL = "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2"
+RELEASE_VERSION = "1.1.2"
 RELEASE_PUBLISHED_AT = "2026-08-04T21:28:30.685Z"
 RELEASE_CHANGELOG = """
 Sparky 1.1
