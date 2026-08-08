@@ -230,6 +230,36 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it.each([
+    ["lift", "chat-streaming-tail-lift"],
+    ["words", "chat-streaming-tail-word"],
+  ] as const)("renders newly streamed words with the %s animation", (animation, className) => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        streamingTextAnimation={animation}
+        timelineEntries={[
+          {
+            id: "entry-streaming-assistant",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: MessageId.make("message-streaming-assistant"),
+              role: "assistant",
+              text: "Fresh streamed words",
+              turnId: TurnId.make("turn-streaming-assistant"),
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: true,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain(className);
+  });
+
   it("assigns distinct semantic icons to filesystem and search tools", () => {
     const tools = [
       { name: "ls", iconClass: "lucide-folder" },
