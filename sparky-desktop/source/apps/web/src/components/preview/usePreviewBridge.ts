@@ -21,6 +21,7 @@ import { previewBridge } from "./previewBridge";
  */
 export function usePreviewBridge(input: { threadRef: ScopedThreadRef; tabId: string }): void {
   const { threadRef, tabId } = input;
+  const { environmentId, threadId } = threadRef;
   const clearBrowserPointer = useBrowserPointerStore((state) => state.clear);
   const reportStatus = useAtomCommand(previewEnvironment.reportStatus, "preview status report");
   const bridge = previewBridge;
@@ -41,9 +42,9 @@ export function usePreviewBridge(input: { threadRef: ScopedThreadRef; tabId: str
         clearBrowserPointer(tabId);
       }
       lastDesktopNavStatus.current = state.navStatus;
-      applyPreviewDesktopState(threadRef, tabId, projectDesktopState(state));
+      applyPreviewDesktopState({ environmentId, threadId }, tabId, projectDesktopState(state));
       const reported = buildReportInput({
-        threadId: threadRef.threadId,
+        threadId,
         tabId,
         state,
         lastReportedUrl: lastReportedUrl.current,
@@ -53,12 +54,23 @@ export function usePreviewBridge(input: { threadRef: ScopedThreadRef; tabId: str
       lastReportedUrl.current = reported.lastReportedUrl;
       lastReportedKind.current = reported.lastReportedKind;
       void reportStatus({
-        environmentId: threadRef.environmentId,
+        environmentId,
         input: reported.input,
+      }).then((result) => {
+        if (
+          result._tag === "Failure" &&
+          lastReportedUrl.current === reported.lastReportedUrl &&
+          lastReportedKind.current === reported.lastReportedKind
+        ) {
+          // Allow the next desktop state event to retry a transient status RPC
+          // instead of permanently suppressing this navigation state.
+          lastReportedUrl.current = null;
+          lastReportedKind.current = null;
+        }
       });
     });
     return unsubscribe;
-  }, [bridge, clearBrowserPointer, reportStatus, tabId, threadRef]);
+  }, [bridge, clearBrowserPointer, environmentId, reportStatus, tabId, threadId]);
 }
 
 function shouldClearBrowserPointer(

@@ -51,6 +51,11 @@ import {
   EyeIcon,
   Code2Icon,
   FileDiffIcon,
+  FileIcon,
+  FilePenLineIcon,
+  FilePlus2Icon,
+  FolderIcon,
+  FolderSearchIcon,
   GlobeIcon,
   HammerIcon,
   KeyboardIcon,
@@ -60,6 +65,7 @@ import {
   MousePointerClickIcon,
   PaintbrushIcon,
   MinusIcon,
+  SearchIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -1156,7 +1162,11 @@ const WorkGroupSection = memo(function WorkGroupSection({
 }) {
   const { workspaceRoot } = use(TimelineRowCtx);
   const nonEmptyEntries = useMemo(
-    () => groupedEntries.filter((entry) => !workEntryIndicatesToolNeutralStatus(entry)),
+    () =>
+      groupedEntries.filter(
+        (entry) =>
+          !workEntryIndicatesToolNeutralStatus(entry) || entry.toolLifecycleStatus === "inProgress",
+      ),
     [groupedEntries],
   );
   const onlyToolEntries = nonEmptyEntries.every((entry) => workLogEntryIsToolLike(entry));
@@ -1806,6 +1816,12 @@ type WorkEntryIconName =
   | "check"
   | "circle-alert"
   | "eye"
+  | "file"
+  | "file-pen-line"
+  | "file-plus-2"
+  | "folder"
+  | "folder-search"
+  | "search"
   | "globe"
   | "code-2"
   | "search-web"
@@ -1831,6 +1847,18 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <CircleAlertIcon className={className} aria-hidden />;
     case "eye":
       return <EyeIcon className={className} aria-hidden />;
+    case "file":
+      return <FileIcon className={className} aria-hidden />;
+    case "file-pen-line":
+      return <FilePenLineIcon className={className} aria-hidden />;
+    case "file-plus-2":
+      return <FilePlus2Icon className={className} aria-hidden />;
+    case "folder":
+      return <FolderIcon className={className} aria-hidden />;
+    case "folder-search":
+      return <FolderSearchIcon className={className} aria-hidden />;
+    case "search":
+      return <SearchIcon className={className} aria-hidden />;
     case "globe":
       return <GlobeIcon className={className} aria-hidden />;
     case "search-web":
@@ -1963,6 +1991,28 @@ function buildToolCallExpandedBody(
   return blocks.length > 0 ? blocks.join("\n\n") : null;
 }
 
+export function resolveWorkEntryToolIconName(
+  toolName: string | undefined,
+): WorkEntryIconName | undefined {
+  switch (toolName?.trim().toLowerCase()) {
+    case "ls":
+    case "list_files":
+      return "folder";
+    case "read":
+      return "file";
+    case "grep":
+      return "search";
+    case "find":
+      return "folder-search";
+    case "write":
+      return "file-plus-2";
+    case "edit":
+      return "file-pen-line";
+    default:
+      return undefined;
+  }
+}
+
 function workEntryIconName(workEntry: TimelineWorkEntry): WorkEntryIconName {
   if (
     workEntry.sourceActivityKind === "user-input.requested" ||
@@ -1970,6 +2020,8 @@ function workEntryIconName(workEntry: TimelineWorkEntry): WorkEntryIconName {
   ) {
     return "message-circle";
   }
+  const toolIconName = resolveWorkEntryToolIconName(workEntry.toolName);
+  if (toolIconName) return toolIconName;
   if (workEntry.requestKind === "command") return "terminal";
   if (workEntry.requestKind === "file-read") return "eye";
   if (workEntry.requestKind === "file-change") return "square-pen";
