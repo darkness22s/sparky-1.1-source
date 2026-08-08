@@ -138,7 +138,7 @@ import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
-import { ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
+import { ChevronDownIcon, WifiOffIcon } from "lucide-react";
 import { cn, randomHex } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -259,12 +259,6 @@ import { RightPanelSheet } from "./RightPanelSheet";
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
 import { Button } from "./ui/button";
-import {
-  buildVersionMismatchDismissalKey,
-  dismissVersionMismatch,
-  isVersionMismatchDismissed,
-  resolveServerConfigVersionMismatch,
-} from "../versionSkew";
 import { useAssetUrls } from "../assets/assetUrls";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
@@ -1569,7 +1563,6 @@ function ChatViewContent(props: ChatViewProps) {
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   const activeEnvironment =
     activeThread == null ? null : (environmentById.get(activeThread.environmentId) ?? null);
-  const activeEnvironmentConnectionPhase = activeEnvironment?.connection.phase ?? "available";
   // Disabled: this banner flashes during normal startup and adds no value.
   const activeEnvironmentUnavailable = false;
   const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
@@ -1774,33 +1767,13 @@ function ChatViewContent(props: ChatViewProps) {
   const serverConfig = activeThread
     ? (activeEnvironment?.serverConfig ?? null)
     : (primaryEnvironment?.serverConfig ?? null);
-  const versionMismatch = resolveServerConfigVersionMismatch(serverConfig);
-  const versionMismatchDismissKey =
-    versionMismatch && activeThread
-      ? buildVersionMismatchDismissalKey(activeThread.environmentId, versionMismatch)
-      : null;
-  const [dismissedVersionMismatchKey, setDismissedVersionMismatchKey] = useState<string | null>(
-    null,
-  );
-  const versionMismatchDismissed =
-    versionMismatchDismissKey === dismissedVersionMismatchKey ||
-    isVersionMismatchDismissed(versionMismatchDismissKey);
-  const showVersionMismatchBanner =
-    versionMismatch !== null && versionMismatchDismissKey !== null && !versionMismatchDismissed;
-  const hasMultipleRegisteredEnvironments = environments.length > 1;
-  const versionMismatchServerLabel =
-    hasMultipleRegisteredEnvironments && activeThread
-      ? `${environmentById.get(activeThread.environmentId)?.label ?? serverConfig?.environment.label ?? activeThread.environmentId} server`
-      : "server";
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
-    if (activeEnvironmentUnavailableState) {
+    if (activeEnvironmentUnavailableState?.connection.phase === "error") {
       const connection = activeEnvironmentUnavailableState.connection;
-      const isReconnecting =
-        connection.phase === "connecting" || connection.phase === "reconnecting";
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
-        variant: connection.phase === "error" ? "error" : "warning",
+        variant: "error",
         icon: <WifiOffIcon />,
         title: `${activeEnvironmentUnavailableState.label}: ${connectionStatusText(connection)}`,
         description:
@@ -1810,14 +1783,13 @@ function ChatViewContent(props: ChatViewProps) {
           <>
             <Button
               size="xs"
-              disabled={isReconnecting}
               onClick={() =>
                 void handleReconnectActiveEnvironment(
                   activeEnvironmentUnavailableState.environmentId,
                 )
               }
             >
-              {isReconnecting ? "Reconnecting..." : "Reconnect"}
+              Reconnect
             </Button>
             <Button
               size="xs"
@@ -1830,35 +1802,8 @@ function ChatViewContent(props: ChatViewProps) {
         ),
       });
     }
-    if (showVersionMismatchBanner && versionMismatch && versionMismatchDismissKey) {
-      items.push({
-        id: `version-mismatch:${versionMismatchDismissKey}`,
-        variant: "warning",
-        icon: <TriangleAlertIcon />,
-        title: "Client and server versions differ",
-        description: (
-          <>
-            Client {versionMismatch.clientVersion} is connected to {versionMismatchServerLabel}{" "}
-            {versionMismatch.serverVersion}. Sync them if RPC calls or reconnects fail.
-          </>
-        ),
-        dismissLabel: "Dismiss version mismatch warning",
-        onDismiss: () => {
-          dismissVersionMismatch(versionMismatchDismissKey);
-          setDismissedVersionMismatchKey(versionMismatchDismissKey);
-        },
-      });
-    }
     return items;
-  }, [
-    activeEnvironmentUnavailableState,
-    handleReconnectActiveEnvironment,
-    navigate,
-    showVersionMismatchBanner,
-    versionMismatch,
-    versionMismatchDismissKey,
-    versionMismatchServerLabel,
-  ]);
+  }, [activeEnvironmentUnavailableState, handleReconnectActiveEnvironment, navigate]);
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
