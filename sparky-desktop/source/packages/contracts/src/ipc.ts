@@ -191,6 +191,12 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   displayName: Schema.String,
 });
 
+export const DesktopNotificationInputSchema = Schema.Struct({
+  title: Schema.String.check(Schema.isMaxLength(128)),
+  body: Schema.String.check(Schema.isMaxLength(4_096)),
+});
+export type DesktopNotificationInput = typeof DesktopNotificationInputSchema.Type;
+
 export interface DesktopRuntimeInfo {
   hostArch: DesktopRuntimeArch;
   appArch: DesktopRuntimeArch;
@@ -1005,6 +1011,7 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  showNotification: (input: DesktopNotificationInput) => Promise<void>;
   onMenuAction: (listener: (action: string) => void) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;

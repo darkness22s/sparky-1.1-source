@@ -8,7 +8,12 @@ import type * as Electron from "electron";
 import * as DesktopBackendManager from "../../backend/DesktopBackendManager.ts";
 import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as ElectronWindow from "../../electron/ElectronWindow.ts";
-import { getLocalEnvironmentBootstraps, getWindowFullscreenState } from "./window.ts";
+import * as ElectronNotification from "../../electron/ElectronNotification.ts";
+import {
+  getLocalEnvironmentBootstraps,
+  getWindowFullscreenState,
+  showNotification,
+} from "./window.ts";
 
 const readyWslConfig: DesktopBackendManager.DesktopBackendStartConfig = {
   executablePath: "wsl.exe",
@@ -141,6 +146,25 @@ describe("getWindowFullscreenState", () => {
       Effect.provide(
         Layer.mock(ElectronWindow.ElectronWindow)({
           currentMainOrFirst: Effect.succeed(Option.some(window)),
+        }),
+      ),
+    );
+  });
+});
+
+describe("showNotification", () => {
+  it.effect("forwards the validated notification payload to Electron", () => {
+    const received: Array<{ title: string; body: string }> = [];
+    return Effect.gen(function* () {
+      yield* showNotification.handler({ title: "Sparky", body: "Completed" });
+      assert.deepEqual(received, [{ title: "Sparky", body: "Completed" }]);
+    }).pipe(
+      Effect.provide(
+        Layer.succeed(ElectronNotification.ElectronNotification, {
+          show: (input) =>
+            Effect.sync(() => {
+              received.push(input);
+            }),
         }),
       ),
     );
