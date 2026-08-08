@@ -24,7 +24,13 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
 }: {
   status: ServerProvider | null;
 }) {
-  if (isDemoRenderer() || !status || status.status === "ready" || status.status === "disabled") {
+  if (
+    isDemoRenderer() ||
+    !status ||
+    status.status === "ready" ||
+    status.status === "disabled" ||
+    status.status === "warning"
+  ) {
     return null;
   }
 
