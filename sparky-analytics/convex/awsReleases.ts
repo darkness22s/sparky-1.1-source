@@ -17,9 +17,10 @@ const platformValidator = v.union(
   v.literal("windows-x64"),
   v.literal("macos-arm64"),
   v.literal("macos-x64"),
+  v.literal("linux-x64"),
 );
 
-type Platform = "windows-x64" | "macos-arm64" | "macos-x64";
+type Platform = "windows-x64" | "macos-arm64" | "macos-x64" | "linux-x64";
 type UploadDraftFile = {
   tag: string;
   channel: "release" | "beta";
@@ -89,7 +90,8 @@ function releaseVersion(tag: string) {
 function platformDirectory(platform: Platform) {
   if (platform === "windows-x64") return "windows";
   if (platform === "macos-arm64") return "macos/arm64";
-  return "macos/x64";
+  if (platform === "macos-x64") return "macos/x64";
+  return "linux";
 }
 
 function releaseKey(tag: string, platform: Platform, name: string) {

@@ -20,6 +20,7 @@ const releasePlatform = v.union(
   v.literal("windows-x64"),
   v.literal("macos-arm64"),
   v.literal("macos-x64"),
+  v.literal("linux-x64"),
 );
 const releaseChunk = v.object({
   storageId: v.id("_storage"),

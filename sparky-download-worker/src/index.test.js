@@ -8,6 +8,7 @@ const env = {
   AWS_WINDOWS_BASE_URL: "https://downloads.example.test/releases/0.0.28/windows/",
   AWS_MAC_ARM64_BASE_URL: "https://downloads.example.test/releases/0.0.28/macos/arm64/",
   AWS_MAC_X64_BASE_URL: "https://downloads.example.test/releases/0.0.28/macos/x64/",
+  AWS_LINUX_BASE_URL: "https://downloads.example.test/releases/0.0.28/linux/",
   RELEASE_VERSION: "0.0.28",
   RELEASE_PUBLISHED_AT: "2026-07-28T10:57:02.310Z",
   RELEASE_CHANGELOG: "Launch build",
@@ -17,6 +18,8 @@ const env = {
   RELEASE_MAC_ARM64_SHA256: "ARM64HASH",
   RELEASE_MAC_X64_SIZE: "214000000",
   RELEASE_MAC_X64_SHA256: "X64HASH",
+  RELEASE_LINUX_SIZE: "220000000",
+  RELEASE_LINUX_ASC_SIZE: "1024",
 };
 
 test("the public Windows download redirects to the AWS installer", async () => {
@@ -25,15 +28,15 @@ test("the public Windows download redirects to the AWS installer", async () => {
   assert.equal(response.headers.get("location"), "https://downloads.example.test/releases/0.0.28/windows/Sparky.exe");
 });
 
-test("unsupported systems default to Windows and macOS resolves to Apple Silicon", async () => {
+test("unsupported systems default to Windows, while Linux and macOS resolve to installers", async () => {
   assert.equal(requestedPlatform(new Request("https://sparky.llc/get"), new URL("https://sparky.llc/get")), "windows-x64");
-  assert.equal(requestedPlatform(new Request("https://sparky.llc/get", { headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64)" } }), new URL("https://sparky.llc/get")), "windows-x64");
+  assert.equal(requestedPlatform(new Request("https://sparky.llc/get", { headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64)" } }), new URL("https://sparky.llc/get")), "linux-x64");
   assert.equal(requestedPlatform(new Request("https://sparky.llc/get", { headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 15)" } }), new URL("https://sparky.llc/get")), "windows-x64");
 
   const arm = await handleRequest(new Request("https://sparky.llc/get?platform=macos"), env);
   assert.equal(arm.headers.get("location"), "https://downloads.example.test/releases/0.0.28/macos/arm64/Sparky.dmg");
-  const intel = await handleRequest(new Request("https://sparky.llc/get?platform=macosintel"), env);
-  assert.equal(intel.headers.get("location"), "https://downloads.example.test/releases/0.0.28/macos/x64/Sparky.dmg");
+  const linux = await handleRequest(new Request("https://sparky.llc/get?platform=linux"), env);
+  assert.equal(linux.headers.get("location"), "https://downloads.example.test/releases/0.0.28/linux/Sparky-x64.AppImage");
 });
 
 test("the manifest describes the local launch build", async () => {
@@ -43,8 +46,8 @@ test("the manifest describes the local launch build", async () => {
   assert.equal(body.files[0].name, "Sparky-x64.exe");
   assert.equal(body.files[0].size, 342384168);
   assert.equal(body.files[0].sha256, env.RELEASE_WINDOWS_SHA256);
-  assert.deepEqual(body.files.slice(1).map((file) => file.platform), ["macos-arm64", "macos-x64"]);
-  assert.deepEqual(body.files.slice(1).map((file) => file.sha256), [env.RELEASE_MAC_ARM64_SHA256, env.RELEASE_MAC_X64_SHA256]);
+  assert.deepEqual(body.files.slice(1).map((file) => file.platform), ["macos-arm64", "macos-x64", "linux-x64", "linux-x64"]);
+  assert.deepEqual(body.files.slice(1).map((file) => file.sha256), [env.RELEASE_MAC_ARM64_SHA256, env.RELEASE_MAC_X64_SHA256, null, null]);
 });
 
 test("the desktop updater resolves only known AWS release assets", async () => {
@@ -59,6 +62,8 @@ test("the desktop updater resolves only known AWS release assets", async () => {
 test("architecture-specific updater paths cannot cross platforms", () => {
   assert.deepEqual(updateRequest("/get/updates/windows/latest.yml"), { platform: "windows-x64", name: "latest.yml" });
   assert.deepEqual(updateRequest("/get/updates/windows/x64/latest.yml"), { platform: "windows-x64", name: "latest.yml" });
+  assert.deepEqual(updateRequest("/get/updates/linux/Sparky-x64.AppImage"), { platform: "linux-x64", name: "Sparky-x64.AppImage" });
+  assert.deepEqual(updateRequest("/get/updates/linux/Sparky-x64.AppImage.asc"), { platform: "linux-x64", name: "Sparky-x64.AppImage.asc" });
   assert.deepEqual(updateRequest("/get/updates/macos/arm64/latest-mac.yml"), { platform: "macos-arm64", name: "latest-mac.yml" });
   assert.deepEqual(updateRequest("/get/updates/macos/x64/Sparky-x64.zip"), { platform: "macos-x64", name: "Sparky-x64.zip" });
   assert.equal(updateRequest("/get/updates/macos/arm64/../secret"), null);
@@ -122,6 +127,7 @@ test("beta never replaces the stable launch build", async () => {
 
 test("invalid AWS release configuration fails closed", async () => {
   assert.throws(() => releaseConfig({ ...env, AWS_RELEASE_BASE_URL: "http://insecure.example" }), /configured with HTTPS/u);
+  assert.throws(() => releaseConfig({ ...env, AWS_LINUX_BASE_URL: undefined }), /AWS_LINUX_BASE_URL must be configured with HTTPS/u);
   const response = await worker.fetch(new Request("https://sparky.llc/get"), {});
   assert.equal(response.status, 502);
 });

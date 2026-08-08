@@ -74,8 +74,8 @@
     const requested = url.searchParams.get("platform");
     if (requested === "mac" || requested === "macos") return "macos-arm64";
     if (requested === "macosintel" || requested === "macx64") return "macos-x64";
-    if (requested === "windows" || requested === "win") return "windows-x64";
-    return /mac/i.test(context.os) ? "macos-arm64" : "windows-x64";
+    if (requested === "linux" || requested === "linux-x64") return "linux-x64";
+    return /mac/i.test(context.os) ? "macos-arm64" : /linux/i.test(context.os) ? "linux-x64" : "windows-x64";
   };
 
   const isInstallerRoute = (url) => url.pathname.replace(/\/+$/u, "") === "/get";
