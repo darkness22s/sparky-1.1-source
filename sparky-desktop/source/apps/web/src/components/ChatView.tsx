@@ -208,6 +208,11 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { hasCompletedAssistantTail } from "./chat/MessagesTimeline.logic";
+import {
+  buildAgentNotificationBody,
+  isAgentTurnCompletion,
+  resolveAssistantMessageForTurn,
+} from "./agentCompletionNotification";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
@@ -1954,6 +1959,64 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread?.session ?? null,
     localDispatchStartedAt,
   );
+  const notificationTurnStatesRef = useRef(
+    new Map<
+      string,
+      {
+        turnId: TurnId;
+        observedUnsettled: boolean;
+        settled: boolean;
+        notified: boolean;
+      }
+    >(),
+  );
+  useEffect(() => {
+    if (!isElectron || !activeThread || !activeLatestTurn) return;
+
+    const turnId = activeLatestTurn.turnId;
+    const turnKey = `${activeThread.environmentId}:${activeThread.id}:${String(turnId)}`;
+    const states = notificationTurnStatesRef.current;
+    let state = states.get(turnKey);
+    if (!state) {
+      state = {
+        turnId,
+        observedUnsettled: !latestTurnSettled,
+        settled: latestTurnSettled,
+        notified: false,
+      };
+      states.set(turnKey, state);
+      return;
+    }
+
+    const justCompleted = isAgentTurnCompletion({
+      previousTurnId: state.turnId,
+      previousSettled: state.settled,
+      currentTurnId: turnId,
+      currentSettled: latestTurnSettled,
+    });
+    const wasSettled = state.settled;
+    state.settled = latestTurnSettled;
+    if (!latestTurnSettled) {
+      state.observedUnsettled = true;
+      return;
+    }
+    const canAttemptNotification = justCompleted || (wasSettled && latestTurnSettled);
+    if (!state.observedUnsettled || state.notified || !canAttemptNotification) {
+      return;
+    }
+
+    const assistantMessage = resolveAssistantMessageForTurn(activeThread.messages, turnId);
+    const body = assistantMessage ? buildAgentNotificationBody(assistantMessage.text) : "";
+    if (!body) return;
+
+    const desktopBridge = window.desktopBridge;
+    if (!desktopBridge?.showNotification) return;
+    state.notified = true;
+    const title = desktopBridge.getAppBranding?.()?.displayName ?? "Sparky";
+    void desktopBridge.showNotification({ title, body }).catch((error: unknown) => {
+      console.error("Failed to show agent completion notification.", error);
+    });
+  }, [activeLatestTurn, activeThread, isElectron, latestTurnSettled]);
   useEffect(() => {
     attachmentPreviewHandoffByMessageIdRef.current = attachmentPreviewHandoffByMessageId;
   }, [attachmentPreviewHandoffByMessageId]);
@@ -2200,7 +2263,9 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
   const activeProviderTurnId =
-    activeThread?.session?.status === "running" ? (activeThread.session.activeTurnId ?? null) : null;
+    activeThread?.session?.status === "running"
+      ? (activeThread.session.activeTurnId ?? null)
+      : null;
   const timelineCompletionEvidenceTurnId =
     activeProviderTurnId ?? (!latestTurnSettled ? (activeLatestTurn?.turnId ?? null) : null);
   const timelineHasCompletedAssistantTail = hasCompletedAssistantTail(
