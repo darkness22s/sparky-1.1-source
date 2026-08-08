@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
-import { MessagesTimeline } from "./MessagesTimeline";
+import { MessagesTimeline, resolveWorkEntryToolIconName } from "./MessagesTimeline";
 import {
   resolveTimelineIsAtEnd,
   resolveTimelineMinimapHasPersistentGutter,
@@ -230,6 +230,84 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("assigns distinct semantic icons to filesystem and search tools", () => {
+    const tools = [
+      { name: "ls", iconClass: "lucide-folder" },
+      { name: "list_files", iconClass: "lucide-folder" },
+      { name: "read", iconClass: "lucide-file" },
+      { name: "grep", iconClass: "lucide-search" },
+      { name: "find", iconClass: "lucide-folder-search" },
+      { name: "write", iconClass: "lucide-file-plus-corner" },
+      { name: "edit", iconClass: "lucide-file-pen-line" },
+    ] as const;
+
+    const iconNames = tools.map(({ name }) => resolveWorkEntryToolIconName(name));
+    expect(iconNames).toEqual([
+      "folder",
+      "folder",
+      "file",
+      "search",
+      "folder-search",
+      "file-plus-2",
+      "file-pen-line",
+    ]);
+    expect(new Set(iconNames).size).toBe(6);
+
+    for (const { name, iconClass } of tools) {
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: `entry-${name}`,
+              kind: "work",
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: `work-${name}`,
+                createdAt: MESSAGE_CREATED_AT,
+                label: name,
+                tone: "tool",
+                toolName: name,
+                itemType: name === "write" || name === "edit" ? "file_change" : "dynamic_tool_call",
+              },
+            },
+          ]}
+        />,
+      );
+
+      expect(markup).toContain(iconClass);
+    }
+  });
+
+  it("renders live file-change stats while the tool is running", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-edit-running",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "work-edit-running",
+              createdAt: MESSAGE_CREATED_AT,
+              label: "Edit file",
+              tone: "tool",
+              toolName: "edit",
+              itemType: "file_change",
+              toolLifecycleStatus: "inProgress",
+              diffStats: { additions: 7, deletions: 3 },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Running");
+    expect(markup).toContain("+7");
+    expect(markup).toContain("-3");
+  });
+
   it("keeps assistant changed-files headers sticky below the thread header", async () => {
     const assistantMessageId = MessageId.make("message-assistant-with-files");
     const turnId = TurnId.make("turn-with-files");

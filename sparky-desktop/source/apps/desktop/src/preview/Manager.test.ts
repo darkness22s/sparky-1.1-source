@@ -216,6 +216,7 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         const loadURL = vi.fn(async () => undefined);
+        const setWindowOpenHandler = vi.fn();
         const listeners = new Map<string, (...args: never[]) => void>();
         fromId.mockReturnValue({
           id: 42,
@@ -234,7 +235,7 @@ describe("PreviewManager", () => {
           ipc: { on: vi.fn(), off: vi.fn() },
           send: webviewSend,
           navigationHistory: { canGoBack: () => false, canGoForward: () => false },
-          setWindowOpenHandler: vi.fn(),
+          setWindowOpenHandler,
           debugger: {
             isAttached: () => false,
             attach: vi.fn(),
@@ -260,6 +261,17 @@ describe("PreviewManager", () => {
 
         expect(loadURL).toHaveBeenCalledOnce();
         expect(loadURL).toHaveBeenCalledWith("http://localhost:3200/");
+
+        const windowOpenHandler = setWindowOpenHandler.mock.calls[0]?.[0] as
+          | ((details: { readonly url: string }) => { readonly action: "deny" })
+          | undefined;
+        expect(windowOpenHandler).toBeDefined();
+        if (!windowOpenHandler) return;
+        expect(windowOpenHandler({ url: "file:///etc/passwd" })).toEqual({ action: "deny" });
+        expect(loadURL).toHaveBeenCalledTimes(1);
+        expect(windowOpenHandler({ url: "https://example.com/next" })).toEqual({ action: "deny" });
+        yield* Effect.yieldNow;
+        expect(loadURL).toHaveBeenCalledWith("https://example.com/next");
       }),
     ),
   );
@@ -892,7 +904,8 @@ describe("PreviewManager", () => {
     withManager((manager) =>
       Effect.gen(function* () {
         let humanInput: ((_event: unknown, signal: unknown) => void) | undefined;
-        const sendCommand = vi.fn(async (method: string) => {
+        const dispatchedMouseEvents: string[] = [];
+        const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
           if (method === "Runtime.evaluate") {
             return {
               result: {
@@ -901,6 +914,7 @@ describe("PreviewManager", () => {
             };
           }
           if (method === "Input.dispatchMouseEvent") {
+            dispatchedMouseEvents.push(String(params?.type));
             humanInput?.({}, { kind: "pointer", x: 400, y: 300, button: 0 });
           }
           return undefined;
@@ -944,6 +958,7 @@ describe("PreviewManager", () => {
         yield* TestClock.adjust(200);
         const exit = yield* Fiber.await(click);
         expect(Exit.isFailure(exit)).toBe(true);
+        expect(dispatchedMouseEvents).toEqual(["mousePressed", "mouseReleased"]);
         if (Exit.isSuccess(exit)) return;
         const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
         expect(error).toMatchObject({

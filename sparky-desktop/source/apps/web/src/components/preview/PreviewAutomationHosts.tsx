@@ -221,7 +221,7 @@ const currentStatus = async (
   }
   const navStatus = snapshot?.navStatus;
   return {
-    available: Boolean(previewBridge?.automation),
+    available: false,
     visible,
     tabId,
     url: navStatus && navStatus._tag !== "Idle" ? navStatus.url : null,

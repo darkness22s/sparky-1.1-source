@@ -711,6 +711,30 @@ describe("deriveWorkLogEntries", () => {
     expect(entries.map((entry) => entry.id)).toEqual(["tool-complete"]);
   });
 
+  it("retains a started file write with live added-line counts before completion", () => {
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "write-start",
+        kind: "tool.started",
+        summary: "Write file started",
+        payload: {
+          itemType: "file_change",
+          status: "inProgress",
+          title: "Write file",
+          data: {
+            toolCallId: "call-write",
+            toolName: "write",
+            kind: "write",
+            rawInput: { path: "src/generated.ts", content: "one\ntwo\nthree\n" },
+          },
+        },
+      }),
+    ]);
+
+    expect(entry?.toolLifecycleStatus).toBe("inProgress");
+    expect(entry?.diffStats).toEqual({ additions: 3, deletions: 0 });
+  });
+
   it("omits task.started but shows task.progress and task.completed", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
