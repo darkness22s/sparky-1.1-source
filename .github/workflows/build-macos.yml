@@ -56,7 +56,7 @@ jobs:
         env:
           NODE_ENV: production
           # Repository variable: the deployed Convex site URL for sparky-analytics.
-          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/x64
+          SPARKY_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -132,7 +132,7 @@ jobs:
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
-          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/macos/arm64
+          SPARKY_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -189,6 +189,9 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
 
+      - name: Install Linux packaging tools
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       - run: cargo build --release -p sparky_cli
         working-directory: .
 
@@ -208,7 +211,7 @@ jobs:
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
-          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/linux
+          SPARKY_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
 
       - name: Verify Linux artifacts
         shell: bash
@@ -288,7 +291,7 @@ jobs:
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
-          SPARKY_UPDATE_URL: ${{ vars.SPARKY_UPDATE_SITE_URL }}/updates/windows
+          SPARKY_UPDATE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
 
       - name: Upload EXE to release
         if: startsWith(github.ref, 'refs/tags/v')
