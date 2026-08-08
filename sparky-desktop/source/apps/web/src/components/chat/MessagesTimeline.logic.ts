@@ -15,6 +15,14 @@ export const TIMELINE_MINIMAP_MIN_ITEMS = 2;
 export const TIMELINE_MINIMAP_MAX_HEIGHT_CSS = "calc(100vh - 18rem)";
 export const TIMELINE_CONTENT_MAX_WIDTH = 768;
 export const TIMELINE_MINIMAP_PERSISTENT_GUTTER = 48;
+export const STREAMING_MARKDOWN_FRAME_MS = 48;
+
+export function resolveStreamingMarkdownFlushDelay(lastFlushAt: number, now: number): number {
+  if (!Number.isFinite(lastFlushAt) || !Number.isFinite(now)) {
+    return STREAMING_MARKDOWN_FRAME_MS;
+  }
+  return Math.max(0, STREAMING_MARKDOWN_FRAME_MS - Math.max(0, now - lastFlushAt));
+}
 
 export interface TimelineEndState {
   readonly isAtEnd?: boolean;
@@ -457,6 +465,16 @@ export function deriveMessagesTimelineRows(input: {
   );
   const completedAssistantTail = hasCompletedAssistantTail(input.timelineEntries, unsettledTurnId);
   const effectiveUnsettledTurnId = completedAssistantTail ? null : unsettledTurnId;
+  const hasVisibleStreamingAssistant =
+    effectiveUnsettledTurnId !== null &&
+    input.timelineEntries.some(
+      (entry) =>
+        entry.kind === "message" &&
+        entry.message.role === "assistant" &&
+        entry.message.turnId === effectiveUnsettledTurnId &&
+        entry.message.streaming &&
+        (entry.message.text?.trim().length ?? 0) > 0,
+    );
   const foldsByAnchorEntryId = deriveTurnFolds({
     timelineEntries: input.timelineEntries,
     terminalAssistantMessageIds,
@@ -599,7 +617,7 @@ export function deriveMessagesTimelineRows(input: {
     });
   }
 
-  if (input.isWorking && !completedAssistantTail) {
+  if (input.isWorking && !completedAssistantTail && !hasVisibleStreamingAssistant) {
     nextRows.push({
       kind: "working",
       id: "working-indicator-row",

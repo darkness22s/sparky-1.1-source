@@ -708,6 +708,7 @@ describe("MessagesTimeline", () => {
 
     expect(markup).toContain('viewBox="0 0 24 24"');
     expect(markup).not.toContain("lucide-globe");
+    expect(markup).not.toContain("Completed");
   });
 
   it("renders a failure marker for failed tool lifecycle entries", async () => {
