@@ -836,6 +836,39 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows.map((row) => row.id)).toEqual(["assistant-streaming-entry"]);
   });
 
+  it("keeps the working row when only an older turn is still marked streaming", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "stale-streaming-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:05Z",
+          message: {
+            id: "stale-streaming" as never,
+            role: "assistant",
+            text: "Interrupted answer",
+            turnId: "turn-1" as never,
+            createdAt: "2026-01-01T00:00:05Z",
+            updatedAt: "2026-01-01T00:00:06Z",
+            streaming: true,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-2" as never,
+        state: "running",
+        startedAt: "2026-01-01T00:01:00Z",
+        completedAt: null,
+      },
+      isWorking: true,
+      activeTurnStartedAt: "2026-01-01T00:01:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["stale-streaming-entry", "working-indicator-row"]);
+  });
+
   it("does not fold the active in-progress turn", () => {
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [

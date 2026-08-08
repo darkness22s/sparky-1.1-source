@@ -464,14 +464,17 @@ export function deriveMessagesTimelineRows(input: {
     input.runningTurnId ?? null,
   );
   const completedAssistantTail = hasCompletedAssistantTail(input.timelineEntries, unsettledTurnId);
-  const hasVisibleStreamingAssistant = input.timelineEntries.some(
-    (entry) =>
-      entry.kind === "message" &&
-      entry.message.role === "assistant" &&
-      entry.message.streaming &&
-      (entry.message.text?.trim().length ?? 0) > 0,
-  );
   const effectiveUnsettledTurnId = completedAssistantTail ? null : unsettledTurnId;
+  const hasVisibleStreamingAssistant =
+    effectiveUnsettledTurnId !== null &&
+    input.timelineEntries.some(
+      (entry) =>
+        entry.kind === "message" &&
+        entry.message.role === "assistant" &&
+        entry.message.turnId === effectiveUnsettledTurnId &&
+        entry.message.streaming &&
+        (entry.message.text?.trim().length ?? 0) > 0,
+    );
   const foldsByAnchorEntryId = deriveTurnFolds({
     timelineEntries: input.timelineEntries,
     terminalAssistantMessageIds,
