@@ -87,7 +87,7 @@ jobs:
           file "$appimage" | tee release/appimage-file.txt
           file "$deb" | tee release/deb-file.txt
           dpkg-deb --info "$deb" | tee release/deb-control.txt
-          dpkg-deb --contents "$deb" | tee release/deb-contents.txt
+          dpkg-deb --contents "$deb" > release/deb-contents.txt
 
           rm -rf "$RUNNER_TEMP/sparky-appimage" "$RUNNER_TEMP/sparky-deb"
           mkdir -p "$RUNNER_TEMP/sparky-appimage" "$RUNNER_TEMP/sparky-deb"
@@ -103,8 +103,14 @@ jobs:
           test -x "$deb_agent"
           file "$appimage_agent" | tee release/appimage-agent-file.txt
           file "$deb_agent" | tee release/deb-agent-file.txt
-          "$appimage_agent" --version | tee release/appimage-agent-version.txt
-          "$deb_agent" --version | tee release/deb-agent-version.txt
+          "$appimage_agent" --help | tee release/appimage-agent-help.txt
+          "$deb_agent" --help | tee release/deb-agent-help.txt
+          test -s release/appimage-agent-help.txt
+          test -s release/deb-agent-help.txt
+          appimage_agent_sha="$(sha256sum "$appimage_agent" | awk '{print $1}')"
+          deb_agent_sha="$(sha256sum "$deb_agent" | awk '{print $1}')"
+          test "$appimage_agent_sha" = "$deb_agent_sha"
+          printf '%s  embedded-sparky-agent\n' "$appimage_agent_sha" | tee release/embedded-agent-sha256.txt
 
           sudo dpkg --install "$deb" || sudo apt-get install -f -y
           package_name="$(dpkg-deb --field "$deb" Package)"
