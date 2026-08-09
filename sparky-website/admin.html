@@ -25,7 +25,7 @@
 
     <main id="blocked-view" class="blocked-page" hidden>
       <span class="brand-mark"></span><span class="eyebrow">ACCESS DENIED</span>
-      <h1>This workspace is private.</h1>
+      <h2>This workspace is private.</h2>
       <p>Your account is signed in, but it is not approved for Sparky Admin.</p>
       <button class="button" data-sign-out>Sign out</button>
     </main>
@@ -53,7 +53,7 @@
       </nav>
 
       <div id="analytics-workspace" class="workspace-view">
-        <section class="hero-row"><div><span class="eyebrow"><i></i> LIVE PRODUCT SIGNALS</span><h1>Good afternoon.</h1><p>See what happened, where it happened, and how confident the signal is.</p></div><div class="hero-actions"><button id="analytics-update-button" class="release-shortcut" type="button">Update all apps</button><div class="date-chip">Rolling 30 days <span class="pulse-mark"></span></div></div></section>
+        <section class="hero-row"><div><span class="eyebrow"><i></i> LIVE PRODUCT SIGNALS</span><h2>Good afternoon.</h2><p>See what happened, where it happened, and how confident the signal is.</p></div><div class="hero-actions"><button id="analytics-update-button" class="release-shortcut" type="button">Update all apps</button><div class="date-chip">Rolling 30 days <span class="pulse-mark"></span></div></div></section>
         <section id="metric-grid" class="metric-grid"></section>
         <section class="analytics-grid analytics-grid-primary">
           <article class="panel chart-panel"><div class="panel-heading"><div><span class="eyebrow">SIGNAL HISTORY</span><h2 id="chart-title">Traffic over time</h2><p class="panel-subtitle">Daily activity, with confirmed router requests separated from intent.</p></div><div class="chart-controls" role="group" aria-label="Chart metric"><button type="button" class="chart-control active" data-chart-mode="traffic">Traffic</button><button type="button" class="chart-control" data-chart-mode="downloads">Downloads</button></div></div><div id="chart" class="chart"></div></article>
@@ -71,7 +71,7 @@
         <section class="release-hero">
           <div>
             <span class="eyebrow"><i></i> MANUAL RELEASE CONTROL</span>
-            <h1>Ship only when you say so.</h1>
+            <h2>Ship only when you say so.</h2>
             <p>Uploads stay as private Sparky drafts. Nothing reaches the website or existing users until you press Publish.</p>
           </div>
           <div id="published-release" class="published-release">Loading published release&hellip;</div>
@@ -110,7 +110,7 @@
         </div>
     </main>
 
-    <main id="error-view" class="blocked-page" hidden><span class="brand-mark"></span><h1>Admin is not configured.</h1><p id="error-message"></p></main>
+    <main id="error-view" class="blocked-page" hidden><span class="brand-mark"></span><h2>Admin is not configured.</h2><p id="error-message"></p></main>
     <script type="module" src="admin.js"></script>
   </body>
 </html>

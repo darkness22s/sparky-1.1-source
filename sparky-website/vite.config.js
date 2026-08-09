@@ -31,6 +31,14 @@ const pageSeo = {
     title: "Sparky Changelog - Product updates",
     description: "See the latest Sparky desktop coding agent releases, improvements, and fixes.",
   },
+  "404.html": {
+    title: "Page not found - Sparky",
+    description: "The Sparky page you requested could not be found. Return to the product, docs, or download page.",
+  },
+  "admin.html": {
+    title: "Sparky Admin - Private workspace",
+    description: "Private Sparky release and analytics administration.",
+  },
   "docs.html": {
     title: "Sparky Docs - Desktop coding agent guide",
     description:
@@ -179,6 +187,20 @@ const seoPlugin = () => ({
           }),
         });
       }
+
+      tags.push({
+        tag: "script",
+        attrs: { type: "application/ld+json" },
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "@id": `${canonicalUrl}#webpage`,
+          url: canonicalUrl,
+          name: seo.title,
+          description: seo.description,
+          isPartOf: { "@id": `${siteUrl}/#website` },
+        }),
+      });
 
       const htmlWithoutConflictingSeo = html
         .replace(/<title>[\s\S]*?<\/title>/i, "")
