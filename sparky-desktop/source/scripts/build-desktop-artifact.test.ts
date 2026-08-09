@@ -504,6 +504,27 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
+  it.effect("configures a native Debian package for Linux x64 builds", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "linux",
+        "deb",
+        "1.1.2",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      const linux = config.linux as Record<string, unknown>;
+      assert.equal(config.productName, "Sparky");
+      assert.equal(config.artifactName, "Sparky-${arch}.${ext}");
+      assert.deepStrictEqual(linux.target, ["deb"]);
+      assert.equal(linux.executableName, "t3code");
+      assert.equal(linux.category, "Development");
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   it("promotes target fff binaries to direct staged dependencies", () => {
     assert.deepStrictEqual(resolveFffNativeDependencies("mac", "arm64", "0.9.4"), {
       "@ff-labs/fff-bin-darwin-arm64": "0.9.4",

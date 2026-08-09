@@ -1694,6 +1694,23 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const stagedSparkyDir = path.join(stageResourcesDir, "sparky");
     yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
     yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, "sparky.exe"));
+  } else if (options.platform === "linux") {
+    const rustTarget = options.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu";
+    const targetedBinary = path.resolve(
+      repoRoot,
+      "../..",
+      "target",
+      rustTarget,
+      "release",
+      "sparky",
+    );
+    const hostBinary = path.resolve(repoRoot, "../..", "target", "release", "sparky");
+    const sparkyBinary = (yield* fs.exists(targetedBinary)) ? targetedBinary : hostBinary;
+    const stagedSparkyDir = path.join(stageResourcesDir, "sparky");
+    const stagedSparkyBinary = path.join(stagedSparkyDir, "sparky");
+    yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
+    yield* fs.copyFile(sparkyBinary, stagedSparkyBinary);
+    yield* fs.chmod(stagedSparkyBinary, 0o755);
   } else if (options.platform === "mac") {
     const rustTarget = options.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
     const targetedBinary = path.resolve(
