@@ -53,6 +53,8 @@ async fn plan_mode_uses_read_only_prompt_and_still_loads_context() {
 
     assert!(prompt.contains("Plan mode"));
     assert!(prompt.contains("Never call write, edit, bash"));
+    assert!(prompt.contains("memory_search"));
+    assert!(prompt.contains("Inspect user-provided images as task evidence"));
     assert!(prompt.contains("end_task"));
     assert!(prompt.contains("<project_context>"));
     assert!(prompt.contains("Prefer focused changes"));
@@ -62,6 +64,17 @@ async fn plan_mode_uses_read_only_prompt_and_still_loads_context() {
         .build()
         .await;
     assert!(build_prompt.contains("You are Sparky, an expert AI coding assistant"));
+    assert!(build_prompt
+        .contains("Treat user-provided screenshots and images as first-class task evidence"));
+    assert!(build_prompt.contains("**ask_user**"));
+    assert!(build_prompt.contains("**update_plan**"));
+    assert!(build_prompt.contains("**memory_search**"));
+    assert!(build_prompt.contains("only with explicit user approval"));
+    assert!(build_prompt.contains("Additional tools, including MCP integrations"));
+    assert!(build_prompt.contains("Batch independent read-only inspections"));
+    assert!(build_prompt.contains("call **preview_status** first"));
+    assert!(build_prompt.contains("warm, and collaborative"));
+    assert!(build_prompt.contains("preview_status"));
     assert!(build_prompt.contains("end_task"));
     assert!(!build_prompt.contains("You are Sparky in Plan mode"));
 }
