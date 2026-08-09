@@ -18,15 +18,6 @@
     if (label) label.textContent = detectedDownload.label;
   });
 
-  fetch("/get/manifest", { cache: "no-store" })
-    .then((response) => response.ok ? response.json() : null)
-    .then((release) => {
-      if (release?.launchState !== "launched" || !release.version) return;
-      const notice = $("#release-announcement");
-      if (notice) notice.hidden = false;
-    })
-    .catch(() => {});
-
   const header = $("#site-header");
   const progress = $(".scroll-progress span");
   const updateScroll = () => {
