@@ -637,6 +637,24 @@ export function writeSparkySessionBinding(cwd: string, threadId: string, session
   NodeFS.renameSync(temporaryFile, bindingFile);
 }
 
+export function captureSparkySessionIdentity(
+  state: { session: ProviderSession },
+  cwd: string,
+  threadId: ThreadId,
+  sessionId: string,
+): void {
+  state.session = {
+    ...state.session,
+    resumeCursor: {
+      threadId: String(threadId),
+      sparkySessionId: sessionId,
+      cwd,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+  writeSparkySessionBinding(cwd, String(threadId), sessionId);
+}
+
 function sparkySessionIdFromResumeCursor(value: unknown, threadId: string): string | undefined {
   if (!value || typeof value !== "object") return undefined;
   const cursor = value as { threadId?: unknown; sparkySessionId?: unknown };
@@ -1007,6 +1025,20 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           .filter((instructions) => instructions.length > 0)
           .join("\n\n");
         let sessionId = resolveSparkySessionId(cwd, String(threadId), state.session.resumeCursor);
+        const captureSessionIdentity = (nextSessionId: string) => {
+          sessionId = nextSessionId;
+          try {
+            captureSparkySessionIdentity(state, cwd, threadId, nextSessionId);
+          } catch (cause) {
+            Effect.runSync(
+              Effect.logWarning("failed to persist early Sparky thread session binding", {
+                threadId,
+                sessionId: nextSessionId,
+                cause,
+              }),
+            );
+          }
+        };
         const reconnectItemId = RuntimeItemId.make(`sparky-reconnect:${String(turnId)}`);
         let reconnectStarted = false;
         let successfulRetryCount = 0;
@@ -1112,10 +1144,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   attemptProducedOutput = true;
                   assistantSegments.pushDelta(delta);
                 },
-                onSessionId: (nextSessionId) => {
-                  if (isTurnCancelled()) return;
-                  sessionId = nextSessionId;
-                },
+                onSessionId: captureSessionIdentity,
                 onUsage: (usage) => {
                   if (isTurnCancelled()) return;
                   Effect.runSync(
@@ -1198,7 +1227,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               },
             });
             if (result.sessionId) {
-              sessionId = result.sessionId;
+              captureSessionIdentity(result.sessionId);
             }
             yield* logAdapterEvent(threadId, "process.succeeded", {
               attempt: attempt + 1,
@@ -1269,17 +1298,6 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           yield* publishReconnectCompleted(true, successfulRetryCount);
         }
         assistantSegments.finish(result.response);
-        if (result.sessionId) {
-          try {
-            writeSparkySessionBinding(cwd, String(threadId), result.sessionId);
-          } catch (cause) {
-            yield* Effect.logWarning("failed to persist Sparky thread session binding", {
-              threadId,
-              sessionId: result.sessionId,
-              cause,
-            });
-          }
-        }
 
         state.snapshot = {
           threadId,

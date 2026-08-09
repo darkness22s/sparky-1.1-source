@@ -3,6 +3,12 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  type ProviderSession,
+} from "@sparky/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -12,6 +18,7 @@ import {
   normalizeSparkyContextWindow,
   parseSparkyContextWindowTokens,
   resolveSparkyRuntimeContextWindow,
+  captureSparkySessionIdentity,
   isRetryableSparkyProcessError,
   readSparkySessionBinding,
   resolveSparkySessionId,
@@ -469,6 +476,60 @@ describe("Sparky session continuity", () => {
 
     expect(args.at(args.indexOf("--image-path") + 1)).toBe("C:\\state\\attachments\\image.png");
     expect(args.at(args.indexOf("--image-mime-type") + 1)).toBe("image/png");
+  });
+
+  it("persists the early session identity so an interrupted turn keeps its chat context", () => {
+    const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "sparky-interrupted-session-"));
+    const sessionId = "11111111-1111-4111-8111-111111111111";
+    const threadId = ThreadId.make("thread-interrupted");
+    const now = "2026-01-01T00:00:00.000Z";
+    const state: { session: ProviderSession } = {
+      session: {
+        provider: ProviderDriverKind.make("sparky"),
+        providerInstanceId: ProviderInstanceId.make("sparky"),
+        status: "running",
+        runtimeMode: "full-access",
+        threadId,
+        cwd,
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+    try {
+      const sessionsDirectory = NodePath.join(cwd, ".sparky", "sessions");
+      NodeFS.mkdirSync(sessionsDirectory, { recursive: true });
+      NodeFS.writeFileSync(
+        NodePath.join(sessionsDirectory, `${sessionId}.jsonl`),
+        "session created before provider work\n",
+      );
+
+      // The runtime publishes this identity before doing provider work. It must
+      // be durable even when interruption prevents a terminal result frame.
+      captureSparkySessionIdentity(state, cwd, threadId, sessionId);
+      state.session = { ...state.session, status: "ready", activeTurnId: undefined };
+
+      const resumedSessionId = resolveSparkySessionId(
+        cwd,
+        String(threadId),
+        state.session.resumeCursor,
+      );
+      const args = makeSparkyProcessArgs({
+        cwd,
+        prompt: "remember the message before I stopped you",
+        model: "openai/gpt-4o",
+        sessionId: resumedSessionId,
+      });
+
+      expect(state.session.resumeCursor).toEqual({
+        threadId: String(threadId),
+        sparkySessionId: sessionId,
+        cwd,
+      });
+      expect(readSparkySessionBinding(cwd, String(threadId))).toBe(sessionId);
+      expect(args.at(args.indexOf("--session") + 1)).toBe(sessionId);
+    } finally {
+      NodeFS.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   it("persists separate thread bindings and restores them after adapter restart", () => {
