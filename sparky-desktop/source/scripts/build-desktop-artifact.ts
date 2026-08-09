@@ -1450,6 +1450,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.linux = {
       target: [target],
       executableName: "t3code",
+      maintainer: "Sparky",
       icon: "icons",
       category: "Development",
       desktop: {
@@ -1804,6 +1805,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     packageManager: rootPackageJson.packageManager,
     description: "Sparky desktop coding agent",
     author: "Sparky",
+    homepage: "https://sparky.llc",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
       options.platform,

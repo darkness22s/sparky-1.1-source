@@ -521,6 +521,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.artifactName, "Sparky-${arch}.${ext}");
       assert.deepStrictEqual(linux.target, ["deb"]);
       assert.equal(linux.executableName, "t3code");
+      assert.equal(linux.maintainer, "Sparky");
       assert.equal(linux.category, "Development");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
