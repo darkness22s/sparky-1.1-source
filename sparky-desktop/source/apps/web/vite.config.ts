@@ -101,7 +101,10 @@ export default defineConfig(({ mode }) => {
         // whereas the previous version of the plugin parsed all files with a .ts extension.
         // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
         parserOpts: { plugins: ["typescript", "jsx"] },
-        presets: [reactCompilerPreset()],
+        // The interactive demo is shipped as a standalone browser bundle. Its
+        // runtime must not depend on compiler-only hook instrumentation, which
+        // can call React's internal memo cache outside a mounted dispatcher.
+        presets: demoBuild ? [] : [reactCompilerPreset()],
       }),
       tailwindcss(),
     ],

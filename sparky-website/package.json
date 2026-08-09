@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "npm run build && node --test admin-release.test.mjs",
+    "test": "npm run build && node --test admin-release.test.mjs site-quality.test.mjs",
     "demo:build": "pnpm --config.verify-deps-before-run=false --dir ../sparky-desktop/source --filter @t3tools/web build:demo",
     "demo:sync": "npm run demo:build && node scripts/sync-demo.mjs",
     "deploy": "npm run build && npm run deploy:apex && npm run deploy:www",
