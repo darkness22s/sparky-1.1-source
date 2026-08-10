@@ -40,7 +40,6 @@ interface SpeechRecognitionLike {
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
-  addEventListener: (type: "error", listener: (event: Event) => void) => void;
   start: () => void;
   stop: () => void;
   abort: () => void;
@@ -89,9 +88,9 @@ function VoiceWaveform({ level }: { level: number }) {
       className="flex h-5 w-[4.75rem] shrink-0 items-center justify-center gap-[3px] overflow-hidden text-destructive"
       aria-hidden="true"
     >
-      {DICTATION_WAVEFORM_SHAPE.map((barShape, index) => (
+      {DICTATION_WAVEFORM_SHAPE.map((_, index) => (
         <span
-          key={barShape}
+          key={index}
           className="w-px rounded-full bg-current transition-[height,opacity] duration-100 ease-out"
           style={{
             height: `${dictationWaveformHeight(level, index)}px`,
@@ -313,13 +312,12 @@ export function VoiceDictationControl({
         }
         interimTranscriptRef.current = nextInterimTranscript.trim();
       };
-      recognition.addEventListener("error", (event) => {
-        const errorEvent = event as SpeechRecognitionErrorEventLike;
+      recognition.onerror = (event) => {
         if (!isCurrentSession(sessionId)) return;
-        if (errorEvent.error === "no-speech" || errorEvent.error === "aborted") return;
+        if (event.error === "no-speech" || event.error === "aborted") return;
         shouldKeepListeningRef.current = false;
-        finishSession(sessionId, recognitionErrorMessage(errorEvent.error));
-      });
+        finishSession(sessionId, recognitionErrorMessage(event.error));
+      };
       recognition.onend = () => {
         if (recognitionRef.current !== recognition || sessionId !== sessionIdRef.current) return;
         recognitionRef.current = null;
