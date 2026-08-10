@@ -117,6 +117,8 @@ describe("buildProfileUsage", () => {
     expect(usage.totalChats).toBe(2);
     expect(usage.totalMessages).toBe(2);
     expect(usage.totalTokens).toBe(25);
+    expect(usage.peakDayTokens).toBe(15);
+    expect(usage.longestChatMinutes).toBe(0);
     expect(usage.tokensPerDay).toBe(13);
     expect(usage.days.find((day) => day.date === "2025-01-01")).toMatchObject({
       tokens: 10,

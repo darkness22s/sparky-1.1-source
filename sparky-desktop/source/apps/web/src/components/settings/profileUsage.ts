@@ -21,6 +21,8 @@ export interface ProfileUsageSummary {
   readonly totalChats: number;
   readonly totalMessages: number;
   readonly totalTokens: number;
+  readonly peakDayTokens: number;
+  readonly longestChatMinutes: number;
   readonly tokensPerDay: number;
   readonly activeDays: number;
   readonly currentStreak: number;
@@ -225,6 +227,7 @@ export function buildProfileUsage(
   let totalMessages = 0;
   let totalTokens = 0;
   let activeMinutes = 0;
+  let longestChatMinutes = 0;
   const overallModels = new Map<string, number>();
   const overallSkills = new Map<string, number>();
 
@@ -305,6 +308,7 @@ export function buildProfileUsage(
       const completedAt = new Date(thread.latestTurn.completedAt).getTime();
       if (completedDate && completedAt >= startedAt) {
         const minutes = (completedAt - startedAt) / 60_000;
+        longestChatMinutes = Math.max(longestChatMinutes, minutes);
         accumulatorFor(byDate, completedDate).activeMinutes += minutes;
       }
     }
@@ -367,10 +371,15 @@ export function buildProfileUsage(
 
   const modelList = sortedCounterValues(overallModels);
   const skillList = sortedCounterValues(overallSkills);
+  const peakDayTokens = Math.round(
+    Math.max(0, ...[...byDate.values()].map((accumulator) => accumulator.tokens)),
+  );
   return {
     totalChats,
     totalMessages,
     totalTokens: Math.round(totalTokens),
+    peakDayTokens,
+    longestChatMinutes: Math.round(longestChatMinutes),
     tokensPerDay: activeDays > 0 ? Math.round(totalTokens / activeDays) : 0,
     activeDays,
     currentStreak: streaks.current,

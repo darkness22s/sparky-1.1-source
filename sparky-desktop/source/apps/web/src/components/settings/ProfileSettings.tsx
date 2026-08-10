@@ -1,16 +1,5 @@
-import {
-  ActivityIcon,
-  CameraIcon,
-  CheckIcon,
-  Clock3Icon,
-  FlameIcon,
-  ImagePlusIcon,
-  MessageSquareIcon,
-  PencilIcon,
-  SparklesIcon,
-  UploadIcon,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { CameraIcon, CheckIcon, PencilIcon, UploadIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type { EnvironmentThreadShell } from "@sparky/client-runtime/state/models";
 import type { OrchestrationThread } from "@sparky/contracts";
 
@@ -19,7 +8,7 @@ import { useThreadShells, useThread } from "../../state/entities";
 import { cn } from "../../lib/utils";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
+import { SettingsPageContainer } from "./settingsLayout";
 import { ProfileAvatar } from "../profile/ProfileAvatar";
 import { buildProfileUsage, type ProfileUsageDay, type ProfileUsageSummary } from "./profileUsage";
 
@@ -35,6 +24,15 @@ function formatMinutes(value: number): string {
   const hours = Math.floor(value / 60);
   const minutes = Math.round(value % 60);
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
+function profileHandle(name: string): string {
+  const handle = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 24);
+  return `@${handle || "sparky"}`;
 }
 
 function readImageAsDataUrl(file: File): Promise<string> {
@@ -83,52 +81,23 @@ function UsageThreadObserver({
   return null;
 }
 
-function UsageDetails({ day }: { day: ProfileUsageDay }) {
-  return (
-    <div className="flex min-h-[208px] flex-col rounded-2xl border border-border/70 bg-muted/25 p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-            Selected day
-          </p>
-          <h3 className="mt-1 text-sm font-semibold text-foreground">{day.label}</h3>
-        </div>
-        <ActivityIcon className="size-4 text-primary" />
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-        <UsageDetail label="Tokens" value={formatCount(day.tokens)} />
-        <UsageDetail label="Chats" value={formatCount(day.chats)} />
-        <UsageDetail label="Messages" value={formatCount(day.messages)} />
-        <UsageDetail label="Active time" value={formatMinutes(day.activeMinutes)} />
-      </div>
-      <div className="mt-auto space-y-2 border-t border-border/60 pt-3 text-xs">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Most-used model</span>
-          <span className="max-w-[9rem] truncate text-right font-medium text-foreground">
-            {day.mostUsedModel ?? "No model activity"}
-          </span>
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          <span className="text-muted-foreground">Skills</span>
-          <span className="max-w-[9rem] text-right font-medium text-foreground">
-            {day.mostUsedSkills.length > 0 ? day.mostUsedSkills.join(", ") : "No skills recorded"}
-          </span>
-        </div>
-      </div>
-    </div>
+function heatmapLevel(day: ProfileUsageDay, maxTokens: number): string {
+  if (day.tokens <= 0) return "bg-muted/35";
+  const ratio = day.tokens / maxTokens;
+  if (ratio < 0.2) return "bg-sky-500/20";
+  if (ratio < 0.45) return "bg-sky-500/35";
+  if (ratio < 0.7) return "bg-sky-500/55";
+  return "bg-sky-400/85";
+}
+
+function monthLabel(date: string): string {
+  const [year = 1970, month = 1, day = 1] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, { month: "short" }).format(
+    new Date(year, month - 1, day),
   );
 }
 
-function UsageDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function UsageChart({ usage }: { usage: ProfileUsageSummary }) {
+function UsageHeatmap({ usage }: { usage: ProfileUsageSummary }) {
   const defaultDay = usage.days.findLast(
     (day) => day.tokens > 0 || day.chats > 0 || day.messages > 0,
   );
@@ -138,6 +107,9 @@ function UsageChart({ usage }: { usage: ProfileUsageSummary }) {
   const [hasInteracted, setHasInteracted] = useState(false);
   const selectedDay = usage.days.find((day) => day.date === selectedDate) ?? usage.days.at(-1);
   const maxTokens = Math.max(1, ...usage.days.map((day) => day.tokens));
+  const weeks = Array.from({ length: Math.ceil(usage.days.length / 7) }, (_, index) =>
+    usage.days.slice(index * 7, index * 7 + 7),
+  );
 
   useEffect(() => {
     if (!hasInteracted && defaultDay && defaultDay.date !== selectedDate) {
@@ -150,122 +122,182 @@ function UsageChart({ usage }: { usage: ProfileUsageSummary }) {
   }, [defaultDay?.date, hasInteracted, selectedDate, usage.days]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-      <div
-        className="rounded-2xl border border-border/70 bg-muted/15 p-4"
-        data-testid="profile-usage-chart"
-      >
-        <div className="flex h-48 items-end gap-1.5 sm:gap-2">
-          {usage.days.map((day, index) => {
-            const height = day.tokens > 0 ? Math.max(8, (day.tokens / maxTokens) * 100) : 3;
-            const isSelected = day.date === selectedDay?.date;
-            const showLabel = index % 5 === 0 || index === usage.days.length - 1;
-            return (
-              <button
-                aria-label={`${day.label}: ${formatCount(day.tokens)} tokens, ${day.chats} chats, ${day.messages} messages`}
-                className="group flex h-full min-w-0 flex-1 flex-col justify-end gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                key={day.date}
-                onFocus={() => {
-                  setHasInteracted(true);
-                  setSelectedDate(day.date);
-                }}
-                onMouseEnter={() => {
-                  setHasInteracted(true);
-                  setSelectedDate(day.date);
-                }}
-                type="button"
-              >
-                <span
-                  className={cn(
-                    "mx-auto block w-full min-w-1 rounded-t-md bg-primary/45 transition-[height,background-color,opacity] group-hover:bg-primary group-focus-visible:bg-primary",
-                    isSelected && "bg-primary",
-                  )}
-                  style={{ height: `${height}%` }}
-                />
-                <span className="h-3 w-full truncate text-[9px] text-muted-foreground/70">
-                  {showLabel ? day.label.split(" ")[0] : ""}
-                </span>
-              </button>
-            );
-          })}
+    <section className="mt-12" data-testid="profile-usage-chart">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">Token activity</h2>
+          <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            {selectedDay ? (
+              <>
+                <span>{selectedDay.label}</span>
+                <span aria-hidden="true">·</span>
+                <span>{formatCount(selectedDay.tokens)} tokens</span>
+                <span aria-hidden="true">·</span>
+                <span>{formatCount(selectedDay.chats)} chats</span>
+                <span aria-hidden="true">·</span>
+                <span>{formatMinutes(selectedDay.activeMinutes)} active</span>
+              </>
+            ) : (
+              <span>Last 12 months</span>
+            )}
+          </div>
         </div>
-        <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground/70">
-          <span>Last {usage.days.length} days</span>
-          <span>Tokens used</span>
+        <div className="flex items-center gap-4 text-sm">
+          <button className="font-medium text-foreground" type="button">
+            Daily
+          </button>
+          <span className="text-muted-foreground/65">Weekly</span>
+          <span className="text-muted-foreground/65">Cumulative</span>
         </div>
       </div>
-      {selectedDay ? <UsageDetails day={selectedDay} /> : null}
+
+      <div className="mt-4 overflow-x-auto pb-1">
+        <div className="min-w-[760px]">
+          <div
+            className="grid gap-x-1.5"
+            style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+          >
+            {weeks.map((week, weekIndex) => {
+              const previousWeek = weeks[weekIndex - 1];
+              const showMonth =
+                weekIndex === 0 ||
+                week[0]?.date.slice(0, 7) !== previousWeek?.[0]?.date.slice(0, 7);
+              return (
+                <div className="flex min-w-0 flex-col gap-1" key={week[0]?.date ?? weekIndex}>
+                  {Array.from({ length: 7 }, (_, dayIndex) => {
+                    const day = week[dayIndex];
+                    if (!day) {
+                      return (
+                        <span aria-hidden="true" className="aspect-square w-full" key={dayIndex} />
+                      );
+                    }
+                    const isSelected = day.date === selectedDay?.date;
+                    return (
+                      <button
+                        aria-label={`${day.label}: ${formatCount(day.tokens)} tokens, ${day.chats} chats, ${day.messages} messages`}
+                        className={cn(
+                          "aspect-square w-full rounded-[3px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                          heatmapLevel(day, maxTokens),
+                          isSelected && "ring-1 ring-sky-300/90",
+                        )}
+                        key={day.date}
+                        onFocus={() => {
+                          setHasInteracted(true);
+                          setSelectedDate(day.date);
+                        }}
+                        onMouseEnter={() => {
+                          setHasInteracted(true);
+                          setSelectedDate(day.date);
+                        }}
+                        title={`${day.label}: ${formatCount(day.tokens)} tokens`}
+                        type="button"
+                      />
+                    );
+                  })}
+                  <span className="mt-2 h-4 truncate text-[10px] text-muted-foreground/70">
+                    {showMonth && week[0] ? monthLabel(week[0].date) : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground/65">
+        <span className="me-1">Less</span>
+        <span className="size-3 rounded-[3px] bg-muted/35" />
+        <span className="size-3 rounded-[3px] bg-sky-500/20" />
+        <span className="size-3 rounded-[3px] bg-sky-500/35" />
+        <span className="size-3 rounded-[3px] bg-sky-500/55" />
+        <span className="size-3 rounded-[3px] bg-sky-400/85" />
+        <span className="ms-1">More</span>
+      </div>
+    </section>
+  );
+}
+
+function formatStreak(value: number): string {
+  return `${value} ${value === 1 ? "day" : "days"}`;
+}
+
+function ProfileUsageStats({ usage }: { usage: ProfileUsageSummary }) {
+  const stats = [
+    ["Lifetime tokens", formatCount(usage.totalTokens)],
+    ["Peak tokens", formatCount(usage.peakDayTokens)],
+    ["Longest chat", formatMinutes(usage.longestChatMinutes)],
+    ["Current streak", formatStreak(usage.currentStreak)],
+    ["Longest streak", formatStreak(usage.longestStreak)],
+  ] as const;
+
+  return (
+    <div
+      className="mt-12 grid grid-cols-2 overflow-hidden rounded-2xl border border-border/70 sm:grid-cols-5"
+      data-testid="profile-usage-stats"
+    >
+      {stats.map(([label, value], index) => (
+        <div
+          className={cn(
+            "px-3 py-3.5 text-center",
+            index > 0 && "sm:border-s sm:border-border/60",
+            index >= 2 && "border-t border-border/60 sm:border-t-0",
+            index % 2 === 1 && "border-s border-border/60",
+          )}
+          key={label}
+        >
+          <p className="text-[15px] font-medium tabular-nums text-foreground">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+        </div>
+      ))}
     </div>
   );
 }
 
-function ProfileUsageStats({ usage }: { usage: ProfileUsageSummary }) {
-  const cards = [
-    {
-      label: "Total chats",
-      value: formatCount(usage.totalChats),
-      detail: "Conversations in this workspace",
-      icon: MessageSquareIcon,
-    },
-    {
-      label: "Messages",
-      value: formatCount(usage.totalMessages),
-      detail: "User and assistant messages",
-      icon: PencilIcon,
-    },
-    {
-      label: "Total tokens",
-      value: formatCount(usage.totalTokens),
-      detail: "Observed or estimated usage",
-      icon: SparklesIcon,
-    },
-    {
-      label: "Tokens / day",
-      value: formatCount(usage.tokensPerDay),
-      detail: usage.activeDays > 0 ? `${usage.activeDays} active days` : "No active days yet",
-      icon: ActivityIcon,
-    },
+function ProfileInsightRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-border/45 py-2.5 last:border-b-0">
+      <dt className="min-w-0 truncate text-sm text-muted-foreground">{label}</dt>
+      <dd
+        className="max-w-[60%] truncate text-right text-sm font-medium text-foreground"
+        title={value}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function ProfileInsights({ usage }: { usage: ProfileUsageSummary }) {
+  const highlights = [
+    ["Most-used model", usage.mostUsedModel ?? "No model data yet"],
+    ["Most-used skill", usage.mostUsedSkill ?? "No skill data yet"],
+    ["Time in Sparky", formatMinutes(usage.activeMinutes)],
   ] as const;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(({ detail, icon: Icon, label, value }) => (
-        <div className="rounded-2xl border border-border/70 bg-card p-4" key={label}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <Icon className="size-4 text-muted-foreground/65" />
-          </div>
-          <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums text-foreground">
-            {value}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground/75">{detail}</p>
-        </div>
-      ))}
-      <div className="rounded-2xl border border-border/70 bg-card p-4 sm:col-span-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">Daily-use streaks</span>
-          <FlameIcon className="size-4 text-orange-500" />
-        </div>
-        <div className="mt-3 flex items-end gap-8">
-          <div>
-            <p className="text-2xl font-semibold tracking-tight tabular-nums text-foreground">
-              {usage.currentStreak}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground/75">Current streak</p>
-          </div>
-          <div>
-            <p className="text-2xl font-semibold tracking-tight tabular-nums text-foreground">
-              {usage.longestStreak}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground/75">Longest streak</p>
-          </div>
-          <div className="ms-auto hidden text-right text-[11px] text-muted-foreground/75 sm:block">
-            Keep chatting
-            <br />
-            to build your streak
-          </div>
-        </div>
-      </div>
+    <div className="mt-14 grid gap-10 border-t border-border/60 pt-8 sm:grid-cols-2 sm:gap-16">
+      <section>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">
+          Activity insights
+        </h2>
+        <dl className="mt-3">
+          <ProfileInsightRow label="Active days" value={formatCount(usage.activeDays)} />
+          <ProfileInsightRow label="Total chats" value={formatCount(usage.totalChats)} />
+          <ProfileInsightRow label="Messages" value={formatCount(usage.totalMessages)} />
+          <ProfileInsightRow
+            label="Tokens per active day"
+            value={formatCount(usage.tokensPerDay)}
+          />
+        </dl>
+      </section>
+      <section>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">Most used</h2>
+        <dl className="mt-3">
+          {highlights.map(([label, value]) => (
+            <ProfileInsightRow key={label} label={label} value={value} />
+          ))}
+        </dl>
+      </section>
     </div>
   );
 }
@@ -275,11 +307,12 @@ export function ProfileSettingsPanel() {
   const updateSettings = useUpdateClientSettings();
   const threadShells = useThreadShells();
   const [profileName, setProfileName] = useState(settings.profileName);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [threadDetails, setThreadDetails] = useState<Map<string, OrchestrationThread>>(
     () => new Map(),
   );
-  const [selectedChartDays] = useState(30);
+  const [selectedChartDays] = useState(364);
 
   useEffect(() => {
     setProfileName(settings.profileName);
@@ -302,12 +335,18 @@ export function ProfileSettingsPanel() {
   );
   const nameIsDirty = profileName.trim() !== settings.profileName;
   const loadedCount = loadedThreads.length;
+  const displayName = profileName.trim() || "Your profile";
 
   const saveProfileName = useCallback(() => {
     const nextName = profileName.trim() || "Your profile";
     setProfileName(nextName);
     updateSettings({ profileName: nextName });
   }, [profileName, updateSettings]);
+
+  const toggleEditingProfile = useCallback(() => {
+    if (isEditingProfile && nameIsDirty) saveProfileName();
+    setIsEditingProfile((current) => !current);
+  }, [isEditingProfile, nameIsDirty, saveProfileName]);
 
   const handleImageChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -336,51 +375,61 @@ export function ProfileSettingsPanel() {
           shell={shell}
         />
       ))}
-      <SettingsPageContainer className="max-w-5xl gap-7">
-        <section className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm/5">
-          <div className="h-24 bg-gradient-to-r from-indigo-500/20 via-violet-500/15 to-cyan-400/20" />
-          <div className="-mt-10 flex flex-col gap-5 px-5 pb-5 sm:flex-row sm:items-end sm:px-7">
-            <div className="relative shrink-0">
-              <label
-                className="group relative block cursor-pointer rounded-full focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
-                htmlFor="profile-image-upload"
-              >
-                <ProfileAvatar
-                  alt={settings.profileName}
-                  className="size-20 text-2xl ring-4 ring-card"
-                  image={settings.profileImage}
-                  name={settings.profileName}
-                  size="lg"
-                />
-                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                  {isUploadingImage ? (
-                    <UploadIcon className="size-5 animate-pulse" />
-                  ) : (
-                    <CameraIcon className="size-5" />
-                  )}
-                </span>
-              </label>
-              <input
-                accept="image/*"
-                className="sr-only"
-                id="profile-image-upload"
-                onChange={handleImageChange}
-                type="file"
+      <SettingsPageContainer className="max-w-none gap-0">
+        <div className="mx-auto w-full max-w-[960px] pb-10">
+          <div className="flex justify-end pt-1">
+            <Button
+              className="text-muted-foreground"
+              onClick={toggleEditingProfile}
+              size="sm"
+              variant="ghost"
+            >
+              <PencilIcon className="size-3.5" />
+              {isEditingProfile ? "Done" : "Edit"}
+            </Button>
+          </div>
+
+          <section className="pt-5 text-center sm:pt-8">
+            <label
+              className="group relative inline-flex cursor-pointer rounded-full focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
+              htmlFor="profile-image-upload"
+            >
+              <ProfileAvatar
+                alt={displayName}
+                className="size-24 text-3xl"
+                image={settings.profileImage}
+                name={displayName}
+                size="lg"
               />
-            </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
-                  Profile
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                  Make Sparky yours
-                </h1>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                {isUploadingImage ? (
+                  <UploadIcon className="size-4 animate-pulse" />
+                ) : (
+                  <CameraIcon className="size-4" />
+                )}
+                <span className="sr-only">Change profile photo</span>
+              </span>
+            </label>
+            <input
+              accept="image/*"
+              className="sr-only"
+              id="profile-image-upload"
+              onChange={handleImageChange}
+              type="file"
+            />
+            <h1 className="mt-5 text-3xl font-medium tracking-tight text-foreground sm:text-[30px]">
+              {displayName}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {profileHandle(displayName)} <span className="mx-1 text-muted-foreground/45">·</span>{" "}
+              Local profile
+            </p>
+
+            {isEditingProfile ? (
+              <div className="mx-auto mt-5 flex max-w-xl flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-4">
                 <Input
                   aria-label="Profile name"
-                  className="h-9 max-w-sm bg-background/70"
+                  className="h-8 max-w-64 bg-transparent text-center"
                   maxLength={80}
                   onChange={(event) => setProfileName(event.currentTarget.value)}
                   onKeyDown={(event) => {
@@ -391,7 +440,7 @@ export function ProfileSettingsPanel() {
                 />
                 <Button disabled={!nameIsDirty} onClick={saveProfileName} size="sm">
                   <CheckIcon className="size-3.5" />
-                  Save name
+                  Save
                 </Button>
                 {settings.profileImage ? (
                   <Button
@@ -402,70 +451,21 @@ export function ProfileSettingsPanel() {
                     Remove photo
                   </Button>
                 ) : null}
+                <p className="basis-full text-[11px] text-muted-foreground/70">
+                  Click the avatar to upload a new photo.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground/75">
-                Upload a photo or choose a name for the profile shown in your sidebar.
-              </p>
-            </div>
-          </div>
-        </section>
+            ) : null}
+          </section>
 
-        <SettingsSection
-          title="Usage overview"
-          icon={<ActivityIcon className="size-3.5 text-primary/75" />}
-          headerAction={
-            <span className="text-[11px] text-muted-foreground/70">
-              {threadShells.length > 0 && loadedCount < threadShells.length
-                ? "Syncing chats…"
-                : "All time"}
-            </span>
-          }
-        >
-          <div className="space-y-4 p-4 sm:p-5">
-            <ProfileUsageStats usage={usage} />
-            <div className="border-t border-border/60 pt-4">
-              <UsageChart usage={usage} />
-            </div>
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          title="Highlights"
-          icon={<SparklesIcon className="size-3.5 text-primary/75" />}
-        >
-          <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
-            <HighlightCard
-              icon={<SparklesIcon className="size-4" />}
-              label="Most-used model"
-              value={usage.mostUsedModel ?? "No model data yet"}
-            />
-            <HighlightCard
-              icon={<ImagePlusIcon className="size-4" />}
-              label="Most-used skill"
-              value={usage.mostUsedSkill ?? "No skill data yet"}
-            />
-            <HighlightCard
-              icon={<Clock3Icon className="size-4" />}
-              label="Time in Sparky"
-              value={formatMinutes(usage.activeMinutes)}
-            />
-          </div>
-        </SettingsSection>
+          <ProfileUsageStats usage={usage} />
+          <UsageHeatmap usage={usage} />
+          {threadShells.length > 0 && loadedCount < threadShells.length ? (
+            <p className="mt-2 text-right text-[11px] text-muted-foreground/65">Syncing chats…</p>
+          ) : null}
+          <ProfileInsights usage={usage} />
+        </div>
       </SettingsPageContainer>
     </>
-  );
-}
-
-function HighlightCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
-      <div className="flex items-center gap-2 text-primary">
-        {icon}
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <p className="mt-3 truncate text-sm font-semibold text-foreground" title={value}>
-        {value}
-      </p>
-    </div>
   );
 }
