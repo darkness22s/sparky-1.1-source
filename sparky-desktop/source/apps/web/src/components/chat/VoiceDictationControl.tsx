@@ -275,7 +275,7 @@ export function VoiceDictationControl({
       };
       sampleLevel();
     },
-    [isCurrentSession, reportError, stopAudioMonitor],
+    [isCurrentSession, stopAudioMonitor],
   );
 
   const startRecognition = useCallback(
