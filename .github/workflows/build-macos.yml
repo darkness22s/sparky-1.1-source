@@ -228,11 +228,10 @@ jobs:
         env:
           SPARKY_LINUX_GPG_PRIVATE_KEY: ${{ secrets.SPARKY_LINUX_GPG_PRIVATE_KEY }}
           SPARKY_LINUX_GPG_KEY_ID: ${{ secrets.SPARKY_LINUX_GPG_KEY_ID }}
-          SPARKY_LINUX_GPG_PASSPHRASE: ${{ secrets.SPARKY_LINUX_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          if [[ -z "$SPARKY_LINUX_GPG_PRIVATE_KEY" || -z "$SPARKY_LINUX_GPG_KEY_ID" || -z "$SPARKY_LINUX_GPG_PASSPHRASE" ]]; then
-            echo "Linux signing requires SPARKY_LINUX_GPG_PRIVATE_KEY, SPARKY_LINUX_GPG_KEY_ID, and SPARKY_LINUX_GPG_PASSPHRASE repository secrets." >&2
+          if [[ -z "$SPARKY_LINUX_GPG_PRIVATE_KEY" || -z "$SPARKY_LINUX_GPG_KEY_ID" ]]; then
+            echo "Linux signing requires SPARKY_LINUX_GPG_PRIVATE_KEY and SPARKY_LINUX_GPG_KEY_ID repository secrets." >&2
             exit 1
           fi
           key_path="$RUNNER_TEMP/sparky-linux-signing-key.asc"
@@ -245,9 +244,8 @@ jobs:
           mkdir -m 700 "$GNUPGHOME"
           gpg --batch --import "$key_path"
           appimage="release/Sparky-x64.AppImage"
-          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
-            --local-user "$SPARKY_LINUX_GPG_KEY_ID" --armor --detach-sign \
-            --output "$appimage.asc" "$appimage" <<< "$SPARKY_LINUX_GPG_PASSPHRASE"
+          gpg --batch --yes --local-user "$SPARKY_LINUX_GPG_KEY_ID" \
+            --armor --detach-sign --output "$appimage.asc" "$appimage"
           gpg --batch --verify "$appimage.asc" "$appimage"
           rm -f "$key_path"
 
