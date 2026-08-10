@@ -108,6 +108,8 @@ export const AutomationToolkitHandlersLive = AutomationToolkit.toLayer({
         runAt: input.runAt,
         timezone: input.timezone,
         modelSelection: null,
+        executionMode: "chat",
+        notificationsEnabled: true,
         runtimeMode: "full-access",
         interactionMode: "default",
       } satisfies AutomationCreateInput);

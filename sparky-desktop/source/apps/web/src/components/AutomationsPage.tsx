@@ -1,8 +1,19 @@
-import { Automation, AutomationCreateInput } from "@sparky/contracts";
+import {
+  Automation,
+  AutomationCreateInput,
+  type AutomationExecutionMode,
+  type ModelSelection,
+} from "@sparky/contracts";
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
+import {
+  buildProviderOptionSelectionsFromDescriptors,
+  getProviderOptionCurrentValue,
+  getProviderOptionDescriptors,
+} from "@sparky/shared/model";
 import {
   ActivityIcon,
   BellIcon,
+  BotIcon,
   CalendarClockIcon,
   CalendarDaysIcon,
   ChevronDownIcon,
@@ -19,15 +30,27 @@ import {
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
 
 import { useThreadShells, useProjects } from "../state/entities";
 import { fetchPrimaryEnvironment } from "../environments/primary/httpLayer";
 import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary/target";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { usePrimarySettings } from "../hooks/useSettings";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  sortProviderInstanceEntries,
+} from "../providerInstances";
+import { getAppModelOptionsForInstance } from "../modelSelection";
+import { getProviderModelCapabilities } from "../providerModels";
+import { primaryServerProvidersAtom } from "../state/server";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
+import { Switch } from "./ui/switch";
 import { SidebarInset } from "./ui/sidebar";
 import { Textarea } from "./ui/textarea";
 import { cn } from "~/lib/utils";
@@ -67,28 +90,53 @@ const scheduleVisuals = {
   weekly: { icon: Clock3Icon, tone: "amber" },
 } as const;
 
-const taskSuggestions = [
-  {
-    icon: BellIcon,
-    tone: "sky",
-    title: "Daily brief",
-    timing: "Weekdays at 8:00 AM",
-    prompt: "Summarize my recent work, open changes, and anything that needs my attention.",
-  },
-  {
-    icon: CalendarClockIcon,
-    tone: "violet",
-    title: "Weekly review",
-    timing: "Fridays at 4:00 PM",
-    prompt: "Review this week's work and turn it into a concise status update.",
-  },
-  {
-    icon: Clock3Icon,
-    tone: "emerald",
-    title: "Follow-up monitor",
-    timing: "Weekdays at 9:00 AM",
-    prompt: "Review recent activity and flag anything that needs a follow-up.",
-  },
+const taskSuggestionSets = [
+  [
+    {
+      icon: BellIcon,
+      tone: "sky",
+      title: "Morning pulse",
+      timing: "Weekdays at 8:30 AM",
+      prompt: "Check recent project activity and summarize the three things worth starting today.",
+    },
+    {
+      icon: CalendarClockIcon,
+      tone: "violet",
+      title: "Release lookout",
+      timing: "Every Friday",
+      prompt: "Review open changes and call out anything that could block the next release.",
+    },
+    {
+      icon: Clock3Icon,
+      tone: "emerald",
+      title: "Inbox sweep",
+      timing: "Every afternoon",
+      prompt: "Look for unfinished follow-ups in recent work and suggest a short next action.",
+    },
+  ],
+  [
+    {
+      icon: ActivityIcon,
+      tone: "emerald",
+      title: "Dependency check",
+      timing: "Every Monday",
+      prompt: "Inspect dependency updates and flag changes that deserve a closer look.",
+    },
+    {
+      icon: CalendarDaysIcon,
+      tone: "sky",
+      title: "Weekly digest",
+      timing: "Every Sunday",
+      prompt: "Turn the week's conversations and changes into a concise, useful digest.",
+    },
+    {
+      icon: BotIcon,
+      tone: "violet",
+      title: "Quiet monitor",
+      timing: "Daily at 6:00 PM",
+      prompt: "Watch for new issues or failed checks and report only actionable updates.",
+    },
+  ],
 ] as const;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -102,11 +150,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function AutomationsPage() {
+  const navigate = useNavigate();
   const threads = useThreadShells();
   const projects = useProjects();
+  const providers = useAtomValue(primaryServerProvidersAtom);
+  const settings = usePrimarySettings();
   const handleNewThread = useNewThreadHandler();
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState(threads[0]?.id ?? "");
+  const [selectedModelSelection, setSelectedModelSelection] = useState<ModelSelection | null>(
+    threads[0]?.modelSelection ?? null,
+  );
+  const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("chat");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [runAt, setRunAt] = useState(() => localDateTime(new Date(Date.now() + 60 * 60_000)));
@@ -117,9 +173,26 @@ export function AutomationsPage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [openActionId, setOpenActionId] = useState<Automation["id"] | null>(null);
+  const [quickViewAutomation, setQuickViewAutomation] = useState<Automation | null>(null);
+  const [suggestionSetIndex] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const previous = Number(window.sessionStorage.getItem("sparky-automation-suggestions") ?? "-1");
+    const next = (Number.isFinite(previous) ? previous + 1 : 0) % taskSuggestionSets.length;
+    window.sessionStorage.setItem("sparky-automation-suggestions", String(next));
+    return next;
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const taskSuggestions = taskSuggestionSets[suggestionSetIndex] ?? taskSuggestionSets[0];
+  const providerEntries = useMemo(
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+      ),
+    [providers, settings],
+  );
 
   useEffect(() => {
     if (!selectedThreadId && threads[0]) setSelectedThreadId(threads[0].id);
@@ -155,7 +228,7 @@ export function AutomationsPage() {
   const useSuggestion = (suggestion: (typeof taskSuggestions)[number]) => {
     setTitle(suggestion.title);
     setPrompt(suggestion.prompt);
-    setSchedule(suggestion.title === "Daily brief" ? "weekdays" : "weekly");
+    setSchedule(suggestion.timing.includes("Weekdays") ? "weekdays" : "weekly");
     setManualOpen(true);
   };
 
@@ -184,19 +257,76 @@ export function AutomationsPage() {
     [selectedThreadId, threads],
   );
 
+  useEffect(() => {
+    if (selectedThread) setSelectedModelSelection(selectedThread.modelSelection);
+  }, [selectedThread]);
+
+  const selectedModel = selectedModelSelection?.model ?? selectedThread?.modelSelection.model ?? "";
+  const selectedProviderInstanceId =
+    selectedModelSelection?.instanceId ?? selectedThread?.modelSelection.instanceId ?? "";
+  const selectedProviderEntry = providerEntries.find(
+    (entry) => entry.instanceId === selectedProviderInstanceId,
+  );
+  const selectedModelOptions = selectedProviderEntry
+    ? getAppModelOptionsForInstance(settings, selectedProviderEntry)
+    : [];
+  const selectedModelCapabilities = selectedProviderEntry
+    ? getProviderModelCapabilities(
+        selectedProviderEntry.models,
+        selectedModel,
+        selectedProviderEntry.driverKind,
+      )
+    : null;
+  const reasoningDescriptors = selectedModelCapabilities
+    ? getProviderOptionDescriptors({
+        caps: selectedModelCapabilities,
+        selections: selectedModelSelection?.options,
+      })
+    : [];
+  const reasoningDescriptor =
+    reasoningDescriptors.find(
+      (descriptor) => descriptor.type === "select" && descriptor.id === "reasoningEffort",
+    ) ?? reasoningDescriptors.find((descriptor) => descriptor.type === "select");
+  const updateSelectedModel = (instanceId: string, model: string) => {
+    const current = selectedModelSelection ?? selectedThread?.modelSelection;
+    if (!current) return;
+    setSelectedModelSelection({
+      ...current,
+      instanceId: instanceId as ModelSelection["instanceId"],
+      model,
+    });
+  };
+  const updateReasoning = (value: string) => {
+    if (!reasoningDescriptor || !selectedModelSelection) return;
+    const nextDescriptors = reasoningDescriptors.map((descriptor) =>
+      descriptor.id === reasoningDescriptor.id && descriptor.type === "select"
+        ? { ...descriptor, currentValue: value }
+        : descriptor,
+    );
+    const nextOptions = buildProviderOptionSelectionsFromDescriptors(nextDescriptors);
+    const { options: _currentOptions, ...selectionWithoutOptions } = selectedModelSelection;
+    setSelectedModelSelection({
+      ...selectionWithoutOptions,
+      ...(nextOptions ? { options: nextOptions } : {}),
+    });
+  };
+
   const create = async () => {
     if (!selectedThread || !title.trim() || !prompt.trim()) return;
     setSaving(true);
     try {
+      const modelSelection = selectedModelSelection ?? selectedThread.modelSelection;
       const payload: AutomationCreateInput = {
         threadId: selectedThread.id,
-        providerInstanceId: selectedThread.modelSelection.instanceId,
+        providerInstanceId: modelSelection.instanceId,
         title: title.trim(),
         prompt: prompt.trim(),
         schedule,
         runAt: new Date(runAt).toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        modelSelection: selectedThread.modelSelection,
+        modelSelection,
+        executionMode,
+        notificationsEnabled,
         runtimeMode: selectedThread.runtimeMode,
         interactionMode: selectedThread.interactionMode,
       };
@@ -232,6 +362,17 @@ export function AutomationsPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not update automation.");
     }
+  };
+
+  const openAutomation = async (automation: Automation) => {
+    if (automation.executionMode === "background") {
+      setQuickViewAutomation(automation);
+      return;
+    }
+    await navigate({
+      to: "/$environmentId/$threadId",
+      params: { environmentId: automation.environmentId, threadId: automation.threadId },
+    });
   };
 
   return (
@@ -369,7 +510,16 @@ export function AutomationsPage() {
                       return (
                         <article
                           key={automation.id}
-                          className="group flex items-start gap-3 px-2 py-5 transition-colors hover:bg-muted/35"
+                          className="group flex cursor-pointer items-start gap-3 px-2 py-5 transition-colors hover:bg-muted/35"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => void openAutomation(automation)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              void openAutomation(automation);
+                            }
+                          }}
                         >
                           <ScheduleIcon
                             className={cn(
@@ -385,7 +535,10 @@ export function AutomationsPage() {
                                 ? "border-primary hover:bg-primary/15"
                                 : "border-muted-foreground/60 hover:border-foreground",
                             )}
-                            onClick={() => void mutate(automation, "toggle")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void mutate(automation, "toggle");
+                            }}
                             aria-label={
                               automation.enabled
                                 ? `Pause ${automation.title}`
@@ -397,7 +550,12 @@ export function AutomationsPage() {
                               <h2 className="truncate text-sm font-medium md:text-base">
                                 {automation.title}
                               </h2>
-                              {automation.status === "failed" ? (
+                              {automation.status === "running" ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-sky-600 dark:text-sky-300">
+                                  <ActivityIcon className="size-3 animate-pulse" /> Currently
+                                  running
+                                </span>
+                              ) : automation.status === "failed" ? (
                                 <span className="text-xs text-destructive">Failed</span>
                               ) : automation.status === "completed" ? (
                                 <span className="text-xs text-muted-foreground">Completed</span>
@@ -408,13 +566,20 @@ export function AutomationsPage() {
                               <span aria-hidden="true">·</span>
                               <span>{formatNextRun(automation.nextRunAt)}</span>
                               <span aria-hidden="true">·</span>
-                              <span>Local scheduled task</span>
+                              <span>
+                                {automation.executionMode === "background"
+                                  ? "Background run"
+                                  : "Reusable chat"}
+                              </span>
                             </div>
                             <p className="mt-2 line-clamp-1 text-xs text-muted-foreground/80">
                               {automation.prompt}
                             </p>
                           </div>
-                          <div className="relative shrink-0">
+                          <div
+                            className="relative shrink-0"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <Button
                               size="icon-xs"
                               variant="ghost"
@@ -442,7 +607,10 @@ export function AutomationsPage() {
                                 <button
                                   type="button"
                                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start hover:bg-muted"
-                                  onClick={() => void mutate(automation, "toggle")}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void mutate(automation, "toggle");
+                                  }}
                                 >
                                   {automation.enabled ? (
                                     <PauseIcon className={cn("size-3.5", iconToneClasses.amber)} />
@@ -552,8 +720,27 @@ export function AutomationsPage() {
                     <p className="text-sm font-medium text-muted-foreground">Details</p>
                     <div className="divide-y divide-border/70 rounded-xl border border-border/70 bg-background/45">
                       <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                        <span>Runs on</span>
-                        <span className="text-muted-foreground">This device</span>
+                        <span>Mode</span>
+                        <Select
+                          value={executionMode}
+                          onValueChange={(value) => {
+                            if (value) setExecutionMode(value as AutomationExecutionMode);
+                          }}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-auto px-2"
+                            aria-label="Automation mode"
+                          >
+                            <SelectValue>
+                              {executionMode === "background" ? "Background" : "Reusable chat"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup align="end" alignItemWithTrigger={false}>
+                            <SelectItem value="chat">Reusable chat</SelectItem>
+                            <SelectItem value="background">Background</SelectItem>
+                          </SelectPopup>
+                        </Select>
                       </div>
                       <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                         <span>Runs in</span>
@@ -588,6 +775,108 @@ export function AutomationsPage() {
                           </SelectPopup>
                         </Select>
                       </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <p className="text-sm font-medium text-muted-foreground">Model</p>
+                    <div className="divide-y divide-border/70 rounded-xl border border-border/70 bg-background/45">
+                      <label className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                        <span>Provider</span>
+                        <Select
+                          value={selectedProviderInstanceId}
+                          onValueChange={(value) => {
+                            const entry = providerEntries.find(
+                              (candidate) => candidate.instanceId === value,
+                            );
+                            const model = entry
+                              ? getAppModelOptionsForInstance(settings, entry)[0]?.slug
+                              : undefined;
+                            if (value && model) updateSelectedModel(value, model);
+                          }}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-auto max-w-[60%] px-2"
+                            aria-label="Automation provider"
+                          >
+                            <SelectValue>
+                              {selectedProviderEntry?.displayName ?? "Choose provider"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup
+                            align="end"
+                            alignItemWithTrigger={false}
+                            popupClassName="min-w-48"
+                          >
+                            {providerEntries
+                              .filter((entry) => entry.enabled)
+                              .map((entry) => (
+                                <SelectItem key={entry.instanceId} value={entry.instanceId}>
+                                  {entry.displayName}
+                                </SelectItem>
+                              ))}
+                          </SelectPopup>
+                        </Select>
+                      </label>
+                      <label className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                        <span>Model</span>
+                        <Select
+                          value={selectedModel}
+                          onValueChange={(value) =>
+                            value && updateSelectedModel(selectedProviderInstanceId, value)
+                          }
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-auto max-w-[60%] px-2"
+                            aria-label="Automation model"
+                          >
+                            <SelectValue>{selectedModel || "Choose model"}</SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup
+                            align="end"
+                            alignItemWithTrigger={false}
+                            popupClassName="min-w-56"
+                          >
+                            {selectedModelOptions.map((model) => (
+                              <SelectItem key={model.slug} value={model.slug}>
+                                {model.name}
+                              </SelectItem>
+                            ))}
+                          </SelectPopup>
+                        </Select>
+                      </label>
+                      {reasoningDescriptor?.type === "select" ? (
+                        <label className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                          <span>Reasoning effort</span>
+                          <Select
+                            value={String(getProviderOptionCurrentValue(reasoningDescriptor) ?? "")}
+                            onValueChange={(value) => value && updateReasoning(value)}
+                          >
+                            <SelectTrigger
+                              size="sm"
+                              className="w-auto px-2"
+                              aria-label="Reasoning effort"
+                            >
+                              <SelectValue>
+                                {reasoningDescriptor.options.find(
+                                  (option) =>
+                                    option.id ===
+                                    getProviderOptionCurrentValue(reasoningDescriptor),
+                                )?.label ?? "Default"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectPopup align="end" alignItemWithTrigger={false}>
+                              {reasoningDescriptor.options.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                        </label>
+                      ) : null}
                     </div>
                   </div>
 
@@ -634,7 +923,14 @@ export function AutomationsPage() {
                       </label>
                       <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                         <span>Notifications</span>
-                        <span className="text-muted-foreground">Important updates</span>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          {notificationsEnabled ? "Enabled" : "Disabled"}
+                          <Switch
+                            checked={notificationsEnabled}
+                            onCheckedChange={setNotificationsEnabled}
+                            aria-label="Enable automation notifications"
+                          />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -653,6 +949,52 @@ export function AutomationsPage() {
           </div>
         </div>
       </main>
+      {quickViewAutomation ? (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-background/70 p-4 backdrop-blur-sm">
+          <section
+            className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Quick view for ${quickViewAutomation.title}`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Background automation
+                </p>
+                <h2 className="mt-1 text-lg font-medium">{quickViewAutomation.title}</h2>
+              </div>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                onClick={() => setQuickViewAutomation(null)}
+                aria-label="Close automation quick view"
+              >
+                <XIcon className="size-4" />
+              </Button>
+            </div>
+            <div className="mt-5 rounded-xl border border-border/70 bg-background/60 p-4 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <ActivityIcon
+                  className={cn(
+                    "size-4",
+                    quickViewAutomation.status === "running" && "animate-pulse text-sky-500",
+                  )}
+                />
+                {quickViewAutomation.status === "running"
+                  ? "Currently running"
+                  : "Ready to run in the background"}
+              </div>
+              <p className="mt-3 whitespace-pre-wrap text-foreground">
+                {quickViewAutomation.prompt}
+              </p>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">
+              This quick view is temporary. Background runs stay out of your reusable chat history.
+            </p>
+          </section>
+        </div>
+      ) : null}
     </SidebarInset>
   );
 }
