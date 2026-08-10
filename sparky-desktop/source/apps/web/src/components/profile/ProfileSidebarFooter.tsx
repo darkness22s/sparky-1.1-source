@@ -24,7 +24,7 @@ function ProfileMenuItem({
   onClick: () => void;
 }) {
   return (
-    <MenuItem className="min-h-9 gap-2.5 rounded-lg px-2.5 py-1 text-sm" onClick={onClick}>
+    <MenuItem className="min-h-10 gap-2.5 rounded-lg px-3 py-1.5 text-sm" onClick={onClick}>
       <Icon className="size-4 text-muted-foreground/85" />
       <span className="min-w-0 flex-1">{label}</span>
       {shortcut ? <MenuShortcut>{shortcut}</MenuShortcut> : null}
@@ -50,7 +50,7 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           render={
             <SidebarMenuButton
               aria-label={`Open ${profileName} profile menu`}
-              className="h-10 gap-2 rounded-lg px-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground data-popup-open:bg-accent"
+              className="h-11 gap-2.5 rounded-xl px-2.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground data-popup-open:bg-accent"
             />
           }
         >
@@ -62,13 +62,13 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           align="start"
           side="top"
           sideOffset={8}
-          className="w-[324px] rounded-2xl border-white/10 bg-popover/96 shadow-2xl dark:bg-[#292929]/96"
+          className="w-72 rounded-xl border-border/80 bg-popover shadow-xl"
         >
-          <div className="flex items-center gap-2.5 px-2.5 py-2">
+          <div className="flex items-center gap-3 px-3 py-2.5">
             <ProfileAvatar name={profileName} image={profileImage} size="md" />
-            <p className="min-w-0 truncate text-sm font-medium text-foreground">{profileName}</p>
+            <p className="min-w-0 truncate text-sm font-semibold text-foreground">{profileName}</p>
           </div>
-          <MenuSeparator className="mx-2.5 my-1 bg-border/60" />
+          <MenuSeparator className="mx-3 my-1 bg-border/60" />
           <ProfileMenuItem
             icon={UserCircleIcon}
             label="Profile"
@@ -86,8 +86,8 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              size="sm"
-              className="gap-2 rounded-lg px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              size="default"
+              className="gap-2 rounded-xl px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => {
                 if (isMobile) setOpenMobile(false);
                 void navigate({ to: "/" });
