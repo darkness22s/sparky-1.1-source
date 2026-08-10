@@ -62,7 +62,7 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           align="start"
           side="top"
           sideOffset={8}
-          className="w-72 rounded-xl border-border/80 bg-popover shadow-xl"
+          className="w-72 rounded-xl border-border/80 bg-card/20 shadow-xl chat-composer-shared-blur dark:bg-card/45"
         >
           <div className="flex items-center gap-3 px-3 py-2.5">
             <ProfileAvatar name={profileName} image={profileImage} size="md" />
