@@ -1,9 +1,9 @@
-import { ChevronUpIcon, Settings2Icon, UserCircleIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronUpIcon, Settings2Icon, UserCircleIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useClientSettings } from "~/hooks/useSettings";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "../ui/menu";
 import {
   SidebarFooter,
   SidebarMenu,
@@ -15,23 +15,19 @@ import {
 function ProfileMenuItem({
   icon: Icon,
   label,
-  description,
+  shortcut,
   onClick,
 }: {
   icon: typeof UserCircleIcon;
   label: string;
-  description: string;
+  shortcut?: string;
   onClick: () => void;
 }) {
   return (
-    <MenuItem className="min-h-11 gap-2.5 py-1.5" onClick={onClick}>
-      <Icon className="size-4 text-muted-foreground" />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-sm font-medium leading-tight">{label}</span>
-        <span className="truncate text-[11px] leading-tight text-muted-foreground">
-          {description}
-        </span>
-      </span>
+    <MenuItem className="min-h-9 gap-2.5 rounded-lg px-2.5 py-1 text-sm" onClick={onClick}>
+      <Icon className="size-4 text-muted-foreground/85" />
+      <span className="min-w-0 flex-1">{label}</span>
+      {shortcut ? <MenuShortcut>{shortcut}</MenuShortcut> : null}
     </MenuItem>
   );
 }
@@ -48,39 +44,40 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
   };
 
   return (
-    <SidebarFooter className="gap-1.5 p-2">
+    <SidebarFooter className="gap-1 p-2">
       <Menu>
         <MenuTrigger
           render={
             <SidebarMenuButton
               aria-label={`Open ${profileName} profile menu`}
-              className="h-10 gap-2.5 rounded-xl px-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground data-popup-open:bg-accent"
+              className="h-10 gap-2 rounded-lg px-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground data-popup-open:bg-accent"
             />
           }
         >
           <ProfileAvatar name={profileName} image={profileImage} size="sm" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium">{profileName}</span>
-          <ChevronUpIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
+          <span className="min-w-0 flex-1 truncate font-medium">{profileName}</span>
+          <ChevronUpIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
         </MenuTrigger>
-        <MenuPopup align="start" side="top" sideOffset={8} className="w-64">
-          <div className="flex items-center gap-3 px-2 py-2">
+        <MenuPopup
+          align="start"
+          side="top"
+          sideOffset={8}
+          className="w-[324px] rounded-2xl border-white/10 bg-popover/96 shadow-2xl dark:bg-[#292929]/96"
+        >
+          <div className="flex items-center gap-2.5 px-2.5 py-2">
             <ProfileAvatar name={profileName} image={profileImage} size="md" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{profileName}</p>
-              <p className="truncate text-xs text-muted-foreground">Personal workspace</p>
-            </div>
+            <p className="min-w-0 truncate text-sm font-medium text-foreground">{profileName}</p>
           </div>
-          <MenuSeparator />
+          <MenuSeparator className="mx-2.5 my-1 bg-border/60" />
           <ProfileMenuItem
             icon={UserCircleIcon}
             label="Profile"
-            description="Usage and profile details"
             onClick={() => handleNavigate("/settings/profile")}
           />
           <ProfileMenuItem
             icon={Settings2Icon}
             label="Settings"
-            description="Customize your Sparky workspace"
+            shortcut="Ctrl+,"
             onClick={() => handleNavigate("/settings/general")}
           />
         </MenuPopup>
@@ -90,13 +87,13 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           <SidebarMenuItem>
             <SidebarMenuButton
               size="sm"
-              className="gap-2 px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="gap-2 rounded-lg px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => {
                 if (isMobile) setOpenMobile(false);
                 void navigate({ to: "/" });
               }}
             >
-              <span aria-hidden="true">←</span>
+              <ArrowLeftIcon className="size-3.5" />
               <span>Back to chats</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

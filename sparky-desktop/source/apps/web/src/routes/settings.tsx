@@ -38,6 +38,7 @@ function SettingsContentLayout() {
   const canGoBack = useCanGoBack();
   const [restoreSignal, setRestoreSignal] = useState(0);
   const showRestoreDefaults = location.pathname === "/settings/general";
+  const pageTitle = location.pathname === "/settings/profile" ? "Profile" : "Settings";
   const handleRestored = () => setRestoreSignal((value) => value + 1);
   const navigateBackWithinApp = useCallback(() => {
     if (canGoBack) {
@@ -73,7 +74,7 @@ function SettingsContentLayout() {
             )}
           >
             <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
-              <span className="text-sm font-medium text-foreground">Settings</span>
+              <span className="text-sm font-medium text-foreground">{pageTitle}</span>
               {showRestoreDefaults ? (
                 <div className="ms-auto flex items-center gap-2">
                   <RestoreDefaultsButton onRestored={handleRestored} />
@@ -91,7 +92,7 @@ function SettingsContentLayout() {
             )}
           >
             <span className="text-xs font-medium tracking-wide text-muted-foreground/70">
-              Settings
+              {pageTitle}
             </span>
             {showRestoreDefaults ? (
               <div className="ms-auto flex items-center gap-2">
