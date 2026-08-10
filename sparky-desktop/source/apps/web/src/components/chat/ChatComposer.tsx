@@ -80,6 +80,8 @@ import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
+import { ComposerQueuedMessages } from "./ComposerQueuedMessages";
+import { type QueuedComposerMessage, type QueuedMessageSendRequest } from "./steeringQueue";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
@@ -439,6 +441,8 @@ export interface ChatComposerHandle {
     selectedProvider: ProviderDriverKind;
     selectedModel: string;
     selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
+    runtimeMode: RuntimeMode;
+    interactionMode: ProviderInteractionMode;
   };
 }
 
@@ -524,8 +528,17 @@ export interface ChatComposerProps {
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
 
+  // Steering queue
+  queuedMessages: ReadonlyArray<QueuedComposerMessage>;
+  queuedMessageSteerDisabled: boolean;
+
   // Callbacks
-  onSend: (e?: { preventDefault: () => void }) => void;
+  onSend: (
+    e?: { preventDefault: () => void },
+    request?: QueuedMessageSendRequest,
+  ) => Promise<boolean>;
+  onSteerQueuedMessage: (messageId: string) => void;
+  onDeleteQueuedMessage: (messageId: string) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
@@ -611,7 +624,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerImagesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
+    queuedMessages,
+    queuedMessageSteerDisabled,
     onSend,
+    onSteerQueuedMessage,
+    onDeleteQueuedMessage,
     onInterrupt,
     onImplementPlanInNewThread,
     onRespondToApproval,
@@ -2097,6 +2114,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         selectedProvider,
         selectedModel,
         selectedProviderModels,
+        runtimeMode,
+        interactionMode,
       }),
     }),
     [
@@ -2124,6 +2143,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedPromptEffort,
       selectedProvider,
       selectedProviderModels,
+      runtimeMode,
+      interactionMode,
     ],
   );
 
@@ -2178,6 +2199,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             scheduleComposerCollapseCheck();
           }}
         >
+          <ComposerQueuedMessages
+            messages={queuedMessages}
+            onSteer={onSteerQueuedMessage}
+            onDelete={onDeleteQueuedMessage}
+            steerDisabled={queuedMessageSteerDisabled}
+          />
+
           {!isComposerCollapsedMobile &&
             (activePendingApproval ? (
               <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
