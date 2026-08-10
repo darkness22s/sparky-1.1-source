@@ -24,7 +24,7 @@ function ProfileMenuItem({
   onClick: () => void;
 }) {
   return (
-    <MenuItem className="min-h-10 gap-2.5 rounded-lg px-3 py-1.5 text-sm" onClick={onClick}>
+    <MenuItem className="min-h-9 gap-2 rounded-lg px-2.5 py-1 text-sm" onClick={onClick}>
       <Icon className="size-4 text-muted-foreground/85" />
       <span className="min-w-0 flex-1">{label}</span>
       {shortcut ? <MenuShortcut>{shortcut}</MenuShortcut> : null}
@@ -62,13 +62,13 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           align="start"
           side="top"
           sideOffset={8}
-          className="w-72 rounded-xl border-border/80 bg-card/20 shadow-xl chat-composer-shared-blur dark:bg-card/45"
+          className="w-64 rounded-xl border-border/80 bg-card/20 shadow-xl chat-composer-shared-blur dark:bg-card/45"
         >
-          <div className="flex items-center gap-3 px-3 py-2.5">
+          <div className="flex items-center gap-2.5 px-2.5 py-2">
             <ProfileAvatar name={profileName} image={profileImage} size="md" />
             <p className="min-w-0 truncate text-sm font-semibold text-foreground">{profileName}</p>
           </div>
-          <MenuSeparator className="mx-3 my-1 bg-border/60" />
+          <MenuSeparator className="mx-2.5 my-0.5 bg-border/60" />
           <ProfileMenuItem
             icon={UserCircleIcon}
             label="Profile"
