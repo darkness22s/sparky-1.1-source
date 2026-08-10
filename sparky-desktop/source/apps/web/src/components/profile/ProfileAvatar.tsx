@@ -1,8 +1,8 @@
 import { cn } from "~/lib/utils";
 
 const SIZE_CLASSES = {
-  sm: "size-6 text-[9px]",
-  md: "size-7 text-[10px]",
+  sm: "size-7 text-[10px]",
+  md: "size-8 text-xs",
   lg: "size-24 text-4xl",
 } as const;
 
@@ -31,7 +31,7 @@ export function ProfileAvatar({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#849092] font-medium text-white ring-1 ring-black/12 dark:ring-white/10",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-500 font-medium text-white shadow-sm ring-1 ring-black/10 dark:bg-neutral-600 dark:ring-white/10",
         SIZE_CLASSES[size],
         className,
       )}

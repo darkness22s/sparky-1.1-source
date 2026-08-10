@@ -130,11 +130,20 @@ function UsageHeatmap({ usage }: { usage: ProfileUsageSummary }) {
   }, [defaultDay?.date, hasInteracted, selectedDate, usage.days]);
 
   return (
-    <section className="mt-12" data-testid="profile-usage-chart">
+    <section
+      aria-labelledby="profile-token-activity-heading"
+      className="mt-12"
+      data-testid="profile-usage-chart"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold tracking-tight text-foreground">Token activity</h2>
-          <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <h2
+            className="text-[17px] font-semibold tracking-[-0.01em] text-foreground"
+            id="profile-token-activity-heading"
+          >
+            Token activity
+          </h2>
+          <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {selectedDay ? (
               <>
                 <span>{selectedDay.label}</span>
@@ -150,12 +159,11 @@ function UsageHeatmap({ usage }: { usage: ProfileUsageSummary }) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <button className="font-medium text-foreground" type="button">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="rounded-full border border-border/70 bg-muted/45 px-2.5 py-1 font-medium text-foreground">
             Daily
-          </button>
-          <span className="text-muted-foreground/65">Weekly</span>
-          <span className="text-muted-foreground/65">Cumulative</span>
+          </span>
+          <span className="text-muted-foreground/70">Last 12 months</span>
         </div>
       </div>
 
@@ -183,6 +191,7 @@ function UsageHeatmap({ usage }: { usage: ProfileUsageSummary }) {
                     return (
                       <button
                         aria-label={`${day.label}: ${formatCount(day.tokens)} tokens, ${day.chats} chats, ${day.messages} messages`}
+                        aria-pressed={isSelected}
                         className={cn(
                           "aspect-square w-full rounded-[3px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                           heatmapLevel(day, maxTokens),
@@ -240,21 +249,21 @@ function ProfileUsageStats({ usage }: { usage: ProfileUsageSummary }) {
 
   return (
     <div
-      className="mt-12 grid grid-cols-2 overflow-hidden rounded-2xl border border-border/70 sm:grid-cols-5"
+      className="mt-10 grid grid-cols-2 overflow-hidden rounded-xl border border-border/70 bg-card/25 sm:grid-cols-5"
       data-testid="profile-usage-stats"
     >
       {stats.map(([label, value], index) => (
         <div
           className={cn(
-            "px-3 py-3.5 text-center",
+            "px-4 py-4 text-center",
             index > 0 && "sm:border-s sm:border-border/60",
             index >= 2 && "border-t border-border/60 sm:border-t-0",
             index % 2 === 1 && "border-s border-border/60",
           )}
           key={label}
         >
-          <p className="text-[15px] font-medium tabular-nums text-foreground">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+          <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
+          <p className="mt-1 text-[11px] font-medium text-muted-foreground">{label}</p>
         </div>
       ))}
     </div>
@@ -263,7 +272,7 @@ function ProfileUsageStats({ usage }: { usage: ProfileUsageSummary }) {
 
 function ProfileInsightRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border/45 py-2.5 last:border-b-0">
+    <div className="flex items-baseline justify-between gap-4 border-b border-border/45 py-3 last:border-b-0">
       <dt className="min-w-0 truncate text-sm text-muted-foreground">{label}</dt>
       <dd
         className="max-w-[60%] truncate text-right text-sm font-medium text-foreground"
@@ -284,8 +293,11 @@ function ProfileInsights({ usage }: { usage: ProfileUsageSummary }) {
 
   return (
     <div className="mt-14 grid gap-10 border-t border-border/60 pt-8 sm:grid-cols-2 sm:gap-16">
-      <section>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">
+      <section aria-labelledby="profile-activity-insights-heading">
+        <h2
+          className="text-[17px] font-semibold tracking-[-0.01em] text-foreground"
+          id="profile-activity-insights-heading"
+        >
           Activity insights
         </h2>
         <dl className="mt-3">
@@ -298,8 +310,13 @@ function ProfileInsights({ usage }: { usage: ProfileUsageSummary }) {
           />
         </dl>
       </section>
-      <section>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Most used</h2>
+      <section aria-labelledby="profile-most-used-heading">
+        <h2
+          className="text-[17px] font-semibold tracking-[-0.01em] text-foreground"
+          id="profile-most-used-heading"
+        >
+          Most used
+        </h2>
         <dl className="mt-3">
           {highlights.map(([label, value]) => (
             <ProfileInsightRow key={label} label={label} value={value} />
@@ -320,7 +337,7 @@ export function ProfileSettingsPanel() {
   const [threadDetails, setThreadDetails] = useState<Map<string, OrchestrationThread>>(
     () => new Map(),
   );
-  const [selectedChartDays] = useState(364);
+  const selectedChartDays = 364;
 
   useEffect(() => {
     setProfileName(settings.profileName);
@@ -385,26 +402,29 @@ export function ProfileSettingsPanel() {
       ))}
       <SettingsPageContainer className="max-w-none gap-0">
         <div className="mx-auto w-full max-w-[960px] pb-10">
-          <div className="flex justify-end pt-1">
-            <Button
-              className="text-muted-foreground"
-              onClick={toggleEditingProfile}
-              size="sm"
-              variant="ghost"
-            >
-              <PencilIcon className="size-3.5" />
-              {isEditingProfile ? "Done" : "Edit"}
-            </Button>
-          </div>
-
-          <section className="pt-5 text-center sm:pt-8">
+          <section className="relative border-b border-border/60 pb-10 pt-12 text-center sm:pt-4">
+            <div className="absolute end-0 top-0">
+              <Button
+                className="min-w-20 justify-center text-muted-foreground"
+                onClick={toggleEditingProfile}
+                size="lg"
+                variant="outline"
+              >
+                {isEditingProfile ? (
+                  <CheckIcon className="size-4" />
+                ) : (
+                  <PencilIcon className="size-4" />
+                )}
+                {isEditingProfile ? "Done" : "Edit"}
+              </Button>
+            </div>
             <label
               className="group relative inline-flex cursor-pointer rounded-full focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
               htmlFor="profile-image-upload"
             >
               <ProfileAvatar
                 alt={displayName}
-                className="size-24 text-3xl"
+                className="size-24 text-3xl shadow-md ring-4 ring-background"
                 image={settings.profileImage}
                 name={displayName}
                 size="lg"
@@ -425,7 +445,7 @@ export function ProfileSettingsPanel() {
               onChange={handleImageChange}
               type="file"
             />
-            <h1 className="mt-5 text-3xl font-medium tracking-tight text-foreground sm:text-[30px]">
+            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-[30px]">
               {displayName}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -434,11 +454,12 @@ export function ProfileSettingsPanel() {
             </p>
 
             {isEditingProfile ? (
-              <div className="mx-auto mt-5 flex max-w-xl flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-4">
+              <div className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-3 border-t border-border/50 pt-5">
                 <Input
                   aria-label="Profile name"
-                  className="h-8 max-w-64 bg-transparent text-center"
+                  className="h-10 min-w-56 max-w-72 flex-1 bg-transparent text-center sm:flex-none"
                   maxLength={80}
+                  size="lg"
                   onChange={(event) => setProfileName(event.currentTarget.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") saveProfileName();
@@ -446,20 +467,26 @@ export function ProfileSettingsPanel() {
                   placeholder="Your profile"
                   value={profileName}
                 />
-                <Button disabled={!nameIsDirty} onClick={saveProfileName} size="sm">
-                  <CheckIcon className="size-3.5" />
+                <Button
+                  className="min-w-20 justify-center"
+                  disabled={!nameIsDirty}
+                  onClick={saveProfileName}
+                  size="lg"
+                >
+                  <CheckIcon className="size-4" />
                   Save
                 </Button>
                 {settings.profileImage ? (
                   <Button
+                    className="min-w-28 justify-center"
                     onClick={() => updateSettings({ profileImage: "" })}
-                    size="sm"
+                    size="lg"
                     variant="ghost"
                   >
                     Remove photo
                   </Button>
                 ) : null}
-                <p className="basis-full text-[11px] text-muted-foreground/70">
+                <p className="basis-full pt-1 text-xs text-muted-foreground/70">
                   Click the avatar to upload a new photo.
                 </p>
               </div>
