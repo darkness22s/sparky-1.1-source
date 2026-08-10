@@ -11,7 +11,6 @@ import {
   Globe2Icon,
   LoaderIcon,
   SearchIcon,
-  SettingsIcon,
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
@@ -132,6 +131,7 @@ import {
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
+import { ProfileSidebarFooter } from "./profile/ProfileSidebarFooter";
 import { SidebarStageBackdrop, resolveSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { Kbd } from "./ui/kbd";
 import {
@@ -2899,45 +2899,48 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   }, [navigateFromFooter]);
 
   return (
-    <SidebarFooter className="p-2">
-      <SidebarProviderUpdatePill />
-      <SidebarUpdatePill />
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            isActive={pathname === "/activity"}
-            size="sm"
-            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-            onClick={handleActivityClick}
-          >
-            <ActivityIcon className="size-3.5" />
-            <span className="text-xs">Activity monitor</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            isActive={pathname === "/plugins"}
-            size="sm"
-            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground data-[active=true]:text-foreground"
-            onClick={handlePluginsClick}
-          >
-            <BlocksIcon className="size-3.5" />
-            <span className="text-xs">Plugins & Mods</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            isActive={pathname.startsWith("/settings")}
-            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-            onClick={handleSettingsClick}
-          >
-            <SettingsIcon className="size-3.5" />
-            <span className="text-xs">Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </SidebarFooter>
+    <>
+      <SidebarFooter className="p-2">
+        <SidebarProviderUpdatePill />
+        <SidebarUpdatePill />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname === "/activity"}
+              size="sm"
+              className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+              onClick={handleActivityClick}
+            >
+              <ActivityIcon className="size-3.5" />
+              <span className="text-xs">Activity monitor</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname === "/plugins"}
+              size="sm"
+              className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground data-[active=true]:text-foreground"
+              onClick={handlePluginsClick}
+            >
+              <BlocksIcon className="size-3.5" />
+              <span className="text-xs">Plugins & Mods</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="sm"
+              isActive={pathname.startsWith("/settings")}
+              className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+              onClick={handleSettingsClick}
+            >
+              <SettingsIcon className="size-3.5" />
+              <span className="text-xs">Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <ProfileSidebarFooter />
+    </>
   );
 });
 
