@@ -1,20 +1,15 @@
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
-import { PROJECTLESS_PROJECT_ID, isProjectlessProjectId } from "@sparky/contracts";
+import { PROJECTLESS_PROJECT_ID } from "@sparky/contracts";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
-import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import {
-  useAllEnvironmentShellsBootstrapped,
-  useProjects,
-  useThreadShells,
-} from "../state/entities";
+import { useAllEnvironmentShellsBootstrapped } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { APP_DISPLAY_NAME } from "~/branding";
 import { cn } from "~/lib/utils";
@@ -32,38 +27,22 @@ function ChatIndexRouteView() {
 }
 
 /**
- * Landing on the index route drops straight into a draft thread for the most
- * recently active project, so the first screen is a prompt instead of a dead
- * end. Falls back to an add-project hero when no project exists yet.
+ * Landing on the index route drops straight into a projectless draft thread.
+ * A project can be selected from the draft header when the user is ready to
+ * give the chat a registered project.
  */
 function IndexDraftLanding() {
-  const projects = useProjects();
-  const visibleProjects = useMemo(
-    () => projects.filter((project) => !isProjectlessProjectId(project.id)),
-    [projects],
-  );
-  const threads = useThreadShells();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const startingRef = useRef(false);
   const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
 
-  const mostRecentProject = useMemo(
-    () =>
-      bootstrapped
-        ? (sortScopedProjectsForSidebar(visibleProjects, threads, "updated_at")[0] ?? null)
-        : null,
-    [bootstrapped, threads, visibleProjects],
-  );
-
   useEffect(() => {
-    const startProjectRef = mostRecentProject
-      ? scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id)
-      : primaryEnvironmentId
-        ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
-        : null;
-    if (startProjectRef === null || startingRef.current) {
+    const startProjectRef = primaryEnvironmentId
+      ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
+      : null;
+    if (!bootstrapped || startProjectRef === null || startingRef.current) {
       return;
     }
     startingRef.current = true;
@@ -73,30 +52,21 @@ function IndexDraftLanding() {
       startingRef.current = false;
       setStartState((state) => ({ ...state, failed: true }));
     });
-  }, [
-    bootstrapped,
-    handleNewThread,
-    mostRecentProject,
-    primaryEnvironmentId,
-    startState.retryRequest,
-  ]);
+  }, [bootstrapped, handleNewThread, primaryEnvironmentId, startState.retryRequest]);
 
   if (!bootstrapped) {
     return null;
   }
-  if (mostRecentProject !== null) {
-    return startState.failed ? (
-      <DraftStartError
-        onRetry={() => {
-          setStartState((state) => ({
-            failed: false,
-            retryRequest: state.retryRequest + 1,
-          }));
-        }}
-      />
-    ) : null;
-  }
-  return <NoProjectsHero />;
+  return startState.failed ? (
+    <DraftStartError
+      onRetry={() => {
+        setStartState((state) => ({
+          failed: false,
+          retryRequest: state.retryRequest + 1,
+        }));
+      }}
+    />
+  ) : null;
 }
 
 function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {

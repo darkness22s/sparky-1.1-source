@@ -105,9 +105,9 @@ export function DraftHeroHeadline({
       {hasResolvedProject ? (
         <>What should we build in {projectSelector}?</>
       ) : canChooseProject ? (
-        <>{projectSelector} to start</>
+        <>Start a chat without a project, or {projectSelector}</>
       ) : (
-        <>Add a project to start</>
+        <>Start a chat without a project</>
       )}
     </h1>
   );

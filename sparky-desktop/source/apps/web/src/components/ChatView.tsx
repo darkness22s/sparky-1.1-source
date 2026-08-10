@@ -5443,7 +5443,7 @@ function ChatViewContent(props: ChatViewProps) {
                         isServerThread={isServerThread}
                         isLocalDraftThread={isLocalDraftThread}
                         forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
-                        projectSelectionRequired={isLocalDraftThread && activeProject === null}
+                        projectSelectionRequired={false}
                         phase={phase}
                         isConnecting={isConnecting}
                         isSendBusy={isSendBusy}
