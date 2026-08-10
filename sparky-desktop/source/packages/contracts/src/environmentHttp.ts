@@ -42,6 +42,14 @@ import {
   RelayEnvironmentMintResponse,
   RelayLinkProofRequest,
 } from "./relay.ts";
+import {
+  Automation,
+  AutomationCreateInput,
+  AutomationDeleteResult,
+  AutomationListResponse,
+  AutomationToggleInput,
+  AutomationUpdateInput,
+} from "./automation.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
@@ -489,6 +497,61 @@ export class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestr
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}
 
+const EnvironmentAutomationParams = Schema.Struct({
+  automationId: TrimmedNonEmptyString,
+});
+
+export class EnvironmentAutomationHttpApi extends HttpApiGroup.make("automations")
+  .add(
+    HttpApiEndpoint.get("list", "/api/automations", {
+      headers: OptionalBearerHeaders,
+      success: AutomationListResponse,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("create", "/api/automations", {
+      headers: OptionalBearerHeaders,
+      payload: AutomationCreateInput,
+      success: Automation,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("update", "/api/automations/:automationId/update", {
+      headers: OptionalBearerHeaders,
+      params: EnvironmentAutomationParams,
+      payload: AutomationUpdateInput,
+      success: Automation,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("toggle", "/api/automations/:automationId/toggle", {
+      headers: OptionalBearerHeaders,
+      params: EnvironmentAutomationParams,
+      payload: AutomationToggleInput,
+      success: Automation,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("run", "/api/automations/:automationId/run", {
+      headers: OptionalBearerHeaders,
+      params: EnvironmentAutomationParams,
+      success: Automation,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("delete", "/api/automations/:automationId/delete", {
+      headers: OptionalBearerHeaders,
+      params: EnvironmentAutomationParams,
+      success: AutomationDeleteResult,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  ) {}
+
 export class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
   .add(
     HttpApiEndpoint.post("linkProof", "/api/connect/link-proof", {
@@ -554,4 +617,5 @@ export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
+  .add(EnvironmentAutomationHttpApi)
   .add(EnvironmentConnectHttpApi) {}
