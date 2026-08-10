@@ -37,7 +37,9 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   lang: string;
   maxAlternatives: number;
-  addEventListener: (type: "end" | "error" | "result", listener: (event: Event) => void) => void;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
   start: () => void;
   stop: () => void;
   abort: () => void;
@@ -86,9 +88,9 @@ function VoiceWaveform({ level }: { level: number }) {
       className="flex h-5 w-[4.75rem] shrink-0 items-center justify-center gap-[3px] overflow-hidden text-destructive"
       aria-hidden="true"
     >
-      {DICTATION_WAVEFORM_SHAPE.map((barShape, index) => (
+      {DICTATION_WAVEFORM_SHAPE.map((_, index) => (
         <span
-          key={barShape}
+          key={index}
           className="w-px rounded-full bg-current transition-[height,opacity] duration-100 ease-out"
           style={{
             height: `${dictationWaveformHeight(level, index)}px`,
