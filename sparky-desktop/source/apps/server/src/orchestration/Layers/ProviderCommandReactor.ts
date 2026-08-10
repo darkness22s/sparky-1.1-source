@@ -562,7 +562,7 @@ const make = Effect.gen(function* () {
             Effect.map(
               (info) => ({ instanceId: SPARKY_INSTANCE_ID, info, migrated: true }) as const,
             ),
-            Effect.catch(() => Effect.fail(originalError)),
+            Effect.mapError(() => originalError),
           ),
         ),
       );

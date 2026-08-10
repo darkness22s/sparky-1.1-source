@@ -23,8 +23,23 @@ import {
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
 } from "./session-logic";
+import type { ThreadSession } from "./types";
 
 let nextActivityId = 0;
+
+function makeSession(
+  overrides: Pick<ThreadSession, "status" | "activeTurnId">,
+): ThreadSession {
+  return {
+    threadId: ThreadId.make("thread-1"),
+    status: overrides.status,
+    providerName: "codex",
+    runtimeMode: "full-access",
+    activeTurnId: overrides.activeTurnId,
+    lastError: null,
+    updatedAt: "2026-02-27T21:10:06.000Z",
+  };
+}
 
 function makeActivity(overrides: {
   id?: string;
@@ -1710,10 +1725,10 @@ describe("isLatestTurnSettled", () => {
   });
 
   it("treats an omitted active turn id as a warm, settled session", () => {
-    const sessionWithoutActiveTurn = {
-      status: "running" as const,
+    const sessionWithoutActiveTurn = makeSession({
+      status: "running",
       activeTurnId: undefined as never,
-    };
+    });
 
     expect(isLatestTurnSettled(latestTurn, sessionWithoutActiveTurn)).toBe(true);
     expect(derivePhase(sessionWithoutActiveTurn)).toBe("ready");
@@ -1721,10 +1736,13 @@ describe("isLatestTurnSettled", () => {
 
   it("treats a warm reusable running session with no active turn as settled", () => {
     expect(
-      isLatestTurnSettled(latestTurn, {
-        status: "running",
-        activeTurnId: null,
-      }),
+      isLatestTurnSettled(
+        latestTurn,
+        makeSession({
+          status: "running",
+          activeTurnId: null,
+        }),
+      ),
     ).toBe(true);
   });
 
@@ -1745,19 +1763,23 @@ describe("isLatestTurnSettled", () => {
 describe("derivePhase", () => {
   it("shows a running task only when the reusable session has an active turn", () => {
     expect(
-      derivePhase({
-        status: "running",
-        activeTurnId: TurnId.make("turn-1"),
-      }),
+      derivePhase(
+        makeSession({
+          status: "running",
+          activeTurnId: TurnId.make("turn-1"),
+        }),
+      ),
     ).toBe("running");
   });
 
   it("returns ready for a warm provider session between turns", () => {
     expect(
-      derivePhase({
-        status: "running",
-        activeTurnId: null,
-      }),
+      derivePhase(
+        makeSession({
+          status: "running",
+          activeTurnId: null,
+        }),
+      ),
     ).toBe("ready");
   });
 });

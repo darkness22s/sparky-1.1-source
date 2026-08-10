@@ -1,6 +1,6 @@
 import {
   CommandId,
-  type CheckpointRef,
+  CheckpointRef,
   EventId,
   MessageId,
   type ProjectId,
@@ -8,6 +8,7 @@ import {
   TurnId,
   type OrchestrationEvent,
   type ProviderRuntimeEvent,
+  isToolLifecycleItemType,
 } from "@sparky/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -34,7 +35,6 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import { RuntimeReceiptBus } from "../Services/RuntimeReceiptBus.ts";
 import type { CheckpointStoreError } from "../../checkpointing/Errors.ts";
 import type { OrchestrationDispatchError } from "../Errors.ts";
-import { isGitRepository } from "../../git/Utils.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 
@@ -72,6 +72,32 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
     default:
       return "ready";
   }
+}
+
+const READ_ONLY_TOOL_NAMES = new Set([
+  "read",
+  "grep",
+  "find",
+  "ls",
+  "web_search",
+  "preview_snapshot",
+  "preview_status",
+]);
+
+function potentiallyMutatingToolEvent(
+  event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
+): boolean {
+  if (!isToolLifecycleItemType(event.payload.itemType)) return false;
+  if (event.payload.itemType === "web_search" || event.payload.itemType === "image_view") return false;
+  if (event.payload.itemType === "command_execution" || event.payload.itemType === "file_change") {
+    return true;
+  }
+  const data =
+    event.payload.data && typeof event.payload.data === "object"
+      ? (event.payload.data as Record<string, unknown>)
+      : {};
+  const name = String(data.toolName ?? data.name ?? event.payload.title ?? "").toLowerCase();
+  return !READ_ONLY_TOOL_NAMES.has(name);
 }
 
 const make = Effect.gen(function* () {
@@ -176,12 +202,9 @@ const make = Effect.gen(function* () {
     return project ? [project] : [];
   });
 
-  const isGitWorkspace = (cwd: string) => isGitRepository(cwd);
-
   // Resolves the workspace CWD for checkpoint operations, preferring the
   // active provider session CWD and falling back to the thread/project config.
-  // Returns undefined when no CWD can be determined or the workspace is not
-  // a git repository.
+  // The external snapshot engine supports both Git and non-Git workspaces.
   const resolveCheckpointCwd = Effect.fn("resolveCheckpointCwd")(function* (input: {
     readonly threadId: ThreadId;
     readonly thread: { readonly projectId: ProjectId; readonly worktreePath: string | null };
@@ -206,9 +229,6 @@ const make = Effect.gen(function* () {
         }));
 
     if (!cwd) {
-      return undefined;
-    }
-    if (!isGitWorkspace(cwd)) {
       return undefined;
     }
     return cwd;
@@ -680,6 +700,57 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const captureToolLifecycleCheckpoint = Effect.fn("captureToolLifecycleCheckpoint")(function* (
+    event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
+  ) {
+    if (!potentiallyMutatingToolEvent(event)) return;
+    const thread = yield* resolveThreadDetail(event.threadId);
+    if (!thread) return;
+    const projects = yield* resolveThreadProjects(thread.projectId);
+    const cwd = yield* resolveCheckpointCwd({
+      threadId: thread.id,
+      thread,
+      projects,
+      preferSessionRuntime: true,
+    });
+    if (!cwd) return;
+    const phase = event.type === "item.started" ? "before" : "after";
+    const checkpointRef = CheckpointRef.make(
+      `refs/sparky/tools/${event.threadId}/${event.eventId}/${phase}`,
+    );
+    yield* checkpointStore.captureCheckpoint({ cwd, checkpointRef });
+    if (phase === "after") {
+      const title = event.payload.title ?? event.payload.itemType.replaceAll("_", " ");
+      yield* Effect.all({
+        commandId: serverCommandId("tool-checkpoint-captured"),
+        activityId: serverEventId,
+      }).pipe(
+        Effect.flatMap(({ commandId, activityId }) =>
+          orchestrationEngine.dispatch({
+            type: "thread.activity.append",
+            commandId,
+            threadId: event.threadId,
+            activity: {
+              id: activityId,
+              tone: "info",
+              kind: "checkpoint.captured",
+              summary: `Checkpoint saved after ${title}`,
+              payload: {
+                checkpointRef,
+                reason: event.payload.status === "failed" ? "tool-failure" : "after-tool",
+                toolCallId: event.itemId ?? event.eventId,
+                automatic: true,
+              },
+              turnId: toTurnId(event.turnId),
+              createdAt: event.createdAt,
+            },
+            createdAt: event.createdAt,
+          }),
+        ),
+      );
+    }
+  });
+
   const handleRevertRequested = Effect.fn("handleRevertRequested")(function* (
     event: Extract<OrchestrationEvent, { type: "thread.checkpoint-revert-requested" }>,
   ) {
@@ -706,16 +777,6 @@ const make = Effect.gen(function* () {
       }).pipe(Effect.catch(() => Effect.void));
       return;
     }
-    if (!isGitWorkspace(sessionRuntime.value.cwd)) {
-      yield* appendRevertFailureActivity({
-        threadId: event.payload.threadId,
-        turnCount: event.payload.turnCount,
-        detail: "Checkpoints are unavailable because this project is not a git repository.",
-        createdAt: now,
-      }).pipe(Effect.catch(() => Effect.void));
-      return;
-    }
-
     const currentTurnCount = thread.checkpoints.reduce(
       (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
       0,

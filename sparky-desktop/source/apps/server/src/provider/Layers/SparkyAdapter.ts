@@ -959,9 +959,10 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           ...stamp(threadId, turnId),
           payload: { model },
         });
+        const context = yield* Effect.context();
         const assistantSegments = makeSparkyAssistantSegmenter({
           onStarted: (segmentId) => {
-            Effect.runSync(
+            Effect.runSyncWith(context)(
               publish({
                 type: "item.started",
                 ...stamp(threadId, turnId),
@@ -971,7 +972,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onDelta: (segmentId, delta) => {
-            Effect.runSync(
+            Effect.runSyncWith(context)(
               publish({
                 type: "content.delta",
                 ...stamp(threadId, turnId),
@@ -981,7 +982,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onCompleted: (segmentId, text) => {
-            Effect.runSync(
+            Effect.runSyncWith(context)(
               publish({
                 type: "item.completed",
                 ...stamp(threadId, turnId),
@@ -1118,7 +1119,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                 },
                 onUsage: (usage) => {
                   if (isTurnCancelled()) return;
-                  Effect.runSync(
+                  Effect.runSyncWith(context)(
                     publish({
                       type: "thread.token-usage.updated",
                       ...stamp(threadId, turnId),
@@ -1152,7 +1153,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   const presentation = sparkyToolPresentation(event.toolName, event.arguments);
                   toolPresentations.set(event.toolCallId, presentation);
                   const data = { ...presentation.data, toolCallId: event.toolCallId };
-                  Effect.runSync(
+                  Effect.runSyncWith(context)(
                     publish({
                       type: "item.started",
                       ...stamp(threadId, turnId),
@@ -1174,7 +1175,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                     toolPresentations.get(event.toolCallId) ??
                     sparkyToolPresentation(event.toolName, {});
                   toolPresentations.delete(event.toolCallId);
-                  Effect.runSync(
+                  Effect.runSyncWith(context)(
                     publish({
                       type: "item.completed",
                       ...stamp(threadId, turnId),
@@ -1269,16 +1270,20 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           yield* publishReconnectCompleted(true, successfulRetryCount);
         }
         assistantSegments.finish(result.response);
-        if (result.sessionId) {
-          try {
-            writeSparkySessionBinding(cwd, String(threadId), result.sessionId);
-          } catch (cause) {
-            yield* Effect.logWarning("failed to persist Sparky thread session binding", {
-              threadId,
-              sessionId: result.sessionId,
-              cause,
-            });
-          }
+        const completedSessionId = result.sessionId;
+        if (completedSessionId) {
+          yield* Effect.try({
+            try: () => writeSparkySessionBinding(cwd, String(threadId), completedSessionId),
+            catch: (cause) => String(cause),
+          }).pipe(
+            Effect.catch((cause) =>
+              Effect.logWarning("failed to persist Sparky thread session binding", {
+                threadId,
+                sessionId: completedSessionId,
+                cause,
+              }),
+            ),
+          );
         }
 
         state.snapshot = {

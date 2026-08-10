@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,25 +33,42 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">REFERENCE</div>
         <h1>Troubleshooting</h1>
-        <p>Common issues and how to fix them.</p>
+        <p>Identify whether the blocker belongs to installation, provider access, model capability, project tools, Memory, or the active session, then use the matching recovery.</p>
       </div>
 
 <h2 id="api-key">API key not set</h2>
-<p>Set the matching environment variable or paste the key in <strong>Settings, Models</strong>.</p>
+<p>Open <strong>Settings, Models</strong>, select the intended provider, and add that provider's credential or supported account connection. A key for one provider does not authenticate another. If the key is present but rejected, confirm that it is active, has access to the selected model, and is not surrounded by copied whitespace.</p>
+
+<h2 id="install">The app is blocked during installation</h2>
+<p>Use only a package downloaded from the official Sparky download page. The current Windows build is unsigned, so SmartScreen can require <strong>More info</strong> and <strong>Run anyway</strong>. macOS can require a Finder or Privacy &amp; Security confirmation for an app that is not notarized. Choose the macOS package that matches Apple Silicon or Intel.</p>
 
 <h2 id="slow">Sparky seems slow or hangs</h2>
-<p>Waiting for AI response or long command. Press <strong>Ctrl+C</strong> to interrupt. Try a different model if responses are consistently slow.</p>
+<p>Check the timeline to see whether Sparky is waiting for the provider, running a terminal command, using a tool, or reporting an environment error. Use <strong>Stop</strong> to settle the active turn in the UI. If the provider is repeatedly slow or unavailable, try another model or provider; if a command is still running, inspect its terminal output before deciding whether to stop it.</p>
 
 <h2 id="wrong-edit">Sparky made the wrong edit</h2>
-<p>Tell it to undo and try again: "That is not right — undo and try a different approach." Sparky will revert and retry.</p>
+<p>Open the Diff surface and identify the incorrect hunk. Ask for a precise correction and name what must be preserved. If you need a Git restoration, state the exact files and confirm that unrelated working-tree changes must remain untouched. Do not assume a broad “undo” is safe in a dirty project.</p>
 
 <h2 id="timeout">Command timed out</h2>
-<p>Split long tasks into smaller steps, or run long processes separately in another terminal.</p>
+<p>Read the captured output first; a timeout does not prove the command made no progress. Split long checks into focused commands, increase the timeout when the command has a legitimate finite duration, or keep a development server or watcher in a dedicated terminal where it can remain active.</p>
 
 <h2 id="stopped">Sparky stopped before finishing</h2>
-<p>Each prompt gets 40 rounds. Just run another prompt to continue — the session remembers everything.</p>
+<p>Sparky 1.1.2 no longer uses the old fixed 40-round cutoff. If a task stops, read the final status first: it should distinguish a completed task, a user cancellation, a provider error, or an environment failure. After resolving any reported problem, continue in the same session so Sparky can reuse the preserved conversation and provider state. For longer work, see <a href="sessions.html#compaction">Long conversations and compaction</a>.</p>
+
+<h2 id="resume">A follow-up lost conversation context</h2>
+<p>Confirm that you reopened the same session instead of starting a new thread. Version 1.1.2 persists provider bindings and should fail visibly when required resume state is missing instead of silently creating a hidden replacement conversation. Preserve the error text, selected provider, model, and session when reporting the problem.</p>
+
+<h2 id="model">A reasoning level or model is missing</h2>
+<p>Sparky does not fabricate unsupported controls. Model names, context windows, and reasoning-effort choices come from provider metadata and can change independently of the app. Refresh the relevant provider configuration, confirm the credential has catalog access, and reopen the model picker. Disabled OpenCode variants are intentionally filtered.</p>
+
+<h2 id="images">An image prompt fails</h2>
+<p>Confirm that the file is a valid supported image and that the selected provider model accepts multimodal input. Sparky validates attachments and forwards image data with its MIME type, but it cannot add image capability to a text-only model. Add a short text instruction so the visual task is unambiguous.</p>
+
+<h2 id="memory">Memory did not save or is not reused</h2>
+<p>Check whether the entry is global or project-scoped, search for an existing entry with the same subject, and retry after the visible loading or save error. Correct conflicting or stale entries. Memory errors are contained and should not crash the active coding session, so include the needed context in your current prompt while recovering.</p>
+
+<h2 id="preview">Browser preview does not connect</h2>
+<p>Verify that the local development server is running and note its exact URL and port. Reopen the preview, then retry the requested browser action. If a popup or click was interrupted, start a fresh action after the preview status returns to ready.</p>
 
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="getting-started.html">Quickstart</a> — set up from scratch</li>
@@ -62,10 +79,16 @@
     <aside class="docs-toc">
       <div class="docs-toc-title">On this page</div>
       <ul class="docs-toc-list"><li><a href="#api-key">API key not set</a></li>
+<li><a href="#install">Installation blocked</a></li>
 <li><a href="#slow">Slow or hangs</a></li>
 <li><a href="#wrong-edit">Wrong edit</a></li>
 <li><a href="#timeout">Command timed out</a></li>
 <li><a href="#stopped">Stopped early</a></li>
+<li><a href="#resume">Lost context</a></li>
+<li><a href="#model">Missing model option</a></li>
+<li><a href="#images">Image prompt fails</a></li>
+<li><a href="#memory">Memory issue</a></li>
+<li><a href="#preview">Preview issue</a></li>
 </ul>
     </aside>
   </div>

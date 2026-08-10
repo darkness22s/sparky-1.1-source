@@ -45,6 +45,8 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   type ContextMenuItem,
   DEFAULT_SERVER_SETTINGS,
+  isProjectlessProjectId,
+  PROJECTLESS_PROJECT_ID,
   ProjectId,
   type ScopedThreadRef,
   type ResolvedKeybindingsConfig,
@@ -2891,6 +2893,7 @@ interface SidebarProjectsContentProps {
   threadPreviewCount: SidebarThreadPreviewCount;
   updateSettings: ReturnType<typeof useUpdateClientSettings>;
   openAddProject: () => void;
+  onNewChat: () => void;
   isManualProjectSorting: boolean;
   projectDnDSensors: ReturnType<typeof useSensors>;
   projectCollisionDetection: CollisionDetection;
@@ -2933,6 +2936,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     threadPreviewCount,
     updateSettings,
     openAddProject,
+    onNewChat,
     isManualProjectSorting,
     projectDnDSensors,
     projectCollisionDetection,
@@ -2988,6 +2992,22 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     <SidebarContent className="gap-0">
       <SidebarGroup className="px-2 pt-2 pb-1">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="sm"
+              className="gap-2 bg-primary px-2 py-1.5 text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground"
+              data-testid="new-chat-trigger"
+              onClick={onNewChat}
+            >
+              <SquarePenIcon className="size-3.5" />
+              <span className="flex-1 truncate text-left text-xs font-medium">New chat</span>
+              {newThreadShortcutLabel ? (
+                <Kbd className="h-4 min-w-0 rounded-sm bg-primary-foreground/15 px-1.5 text-[10px] text-primary-foreground">
+                  {newThreadShortcutLabel}
+                </Kbd>
+              ) : null}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <CommandDialogTrigger
               render={
@@ -3163,7 +3183,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 });
 
 export default function Sidebar() {
-  const projects = useProjects();
+  const projects = useProjects().filter((project) => !isProjectlessProjectId(project.id));
   const sidebarThreads = useThreadShells();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -3736,6 +3756,22 @@ export default function Sidebar() {
     }
   }, [desktopUpdateButtonAction, desktopUpdateButtonDisabled, desktopUpdateState]);
 
+  const handleNewChat = useCallback(() => {
+    const project = orderedProjects[0];
+    const projectRef = project
+      ? scopeProjectRef(project.environmentId, project.id)
+      : primaryEnvironmentId
+        ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
+        : null;
+    if (!projectRef) {
+      return;
+    }
+    void handleNewThread(projectRef);
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [handleNewThread, isMobile, orderedProjects, primaryEnvironmentId, setOpenMobile]);
+
   const expandThreadListForProject = useCallback((projectKey: string) => {
     setExpandedThreadListsByProject((current) => {
       if (current.has(projectKey)) return current;
@@ -3777,6 +3813,7 @@ export default function Sidebar() {
             threadPreviewCount={sidebarThreadPreviewCount}
             updateSettings={updateSettings}
             openAddProject={openAddProjectCommandPalette}
+            onNewChat={handleNewChat}
             isManualProjectSorting={isManualProjectSorting}
             projectDnDSensors={projectDnDSensors}
             projectCollisionDetection={projectCollisionDetection}

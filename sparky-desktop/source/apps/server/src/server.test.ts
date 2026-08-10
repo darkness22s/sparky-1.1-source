@@ -5860,8 +5860,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       type: "thread.session-set",
       payload: {
         threadId: defaultThreadId,
-        provider: "codex",
-        sessionId: "provider-session-boundary",
+        session: {
+          threadId: defaultThreadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "2026-01-01T00:00:02.000Z",
+        },
       },
     } satisfies Extract<OrchestrationEvent, { type: "thread.session-set" }>;
 

@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,13 +33,12 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">TOOLS</div>
         <h1>Web Search</h1>
-        <p>Look up documentation, find solutions, and fetch current references from the web.</p>
+        <p>Research current external information, normalize useful result links, and keep web evidence separate from facts found in the local project.</p>
       </div>
 
 <h2 id="how-it-works">How it works</h2>
-<p>Sparky can search the web without any API key or extra setup.</p>
+<p>Sparky includes a web-search tool that does not require a separate search API key. Search results are external content: inspect the destination, date, and authority before using a claim in code or documentation.</p>
 
 <h2 id="when-to-search">When to search</h2>
 <p>Sparky searches automatically when it needs current information. You can also ask directly:</p>
@@ -54,6 +53,12 @@
 <li><strong>Include the error message</strong> — exact error text finds solutions</li>
 </ul>
 
+<h2 id="results">How results are handled</h2>
+<p>Version 1.1.2 improves DuckDuckGo HTML parsing, supports ordinary, protocol-relative, and redirect-wrapped URLs, normalizes destinations, and removes repeated results. Search failures use provider-neutral wording so the recovery is about the failed search, not an internal parser name.</p>
+
+<h2 id="evidence">Use trustworthy evidence</h2>
+<ul><li>Prefer official documentation and primary sources for technical behavior.</li><li>Include the exact product, library, and version when freshness matters.</li><li>Open a result before treating its snippet as evidence.</li><li>Compare publication dates for changed APIs, releases, or security guidance.</li><li>Use project search, not web search, to establish what the active checkout actually contains.</li></ul>
+
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="read-edit.html">Read & Edit Files</a> — apply what you found</li>
 <li><a href="terminal.html">Terminal Commands</a> — run the fix</li>
@@ -65,6 +70,8 @@
       <ul class="docs-toc-list"><li><a href="#how-it-works">How it works</a></li>
 <li><a href="#when-to-search">When to search</a></li>
 <li><a href="#tips">Tips</a></li>
+<li><a href="#results">Result handling</a></li>
+<li><a href="#evidence">Trustworthy evidence</a></li>
 </ul>
     </aside>
   </div>

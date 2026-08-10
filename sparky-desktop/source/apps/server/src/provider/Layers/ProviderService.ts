@@ -554,40 +554,37 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
     event: ProviderRuntimeEvent,
   ): Effect.Effect<void> =>
-    Effect.sync(() => correlateRuntimeEventWithInstance(source, event))
-      .pipe(
-        Effect.flatMap((canonicalEvent) =>
-          observeTurnLatency(canonicalEvent).pipe(
-            Effect.andThen(
-              increment(providerRuntimeEventsTotal, {
-                provider: canonicalEvent.provider,
-                eventType: canonicalEvent.type,
-              }),
-            ),
-            // Publish before the persistence side effect. A slow SQLite write
-            // must not hold back the first delta or the terminal lifecycle event.
-            Effect.andThen(publishRuntimeEvent(canonicalEvent)),
-            Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
-            Effect.andThen(
-              canonicalEvent.type === "turn.completed" ||
-                canonicalEvent.type === "turn.aborted" ||
-                canonicalEvent.type === "runtime.error" ||
-                canonicalEvent.type === "session.exited"
-                ? clearTurnLatency(canonicalEvent.threadId)
-                : Effect.void,
-            ),
+    Effect.sync(() => correlateRuntimeEventWithInstance(source, event)).pipe(
+      Effect.flatMap((canonicalEvent) =>
+        observeTurnLatency(canonicalEvent).pipe(
+          Effect.andThen(
+            increment(providerRuntimeEventsTotal, {
+              provider: canonicalEvent.provider,
+              eventType: canonicalEvent.type,
+            }),
+          ),
+          // Publish before the persistence side effect. A slow SQLite write
+          // must not hold back the first delta or the terminal lifecycle event.
+          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+          Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
+          Effect.andThen(
+            canonicalEvent.type === "turn.completed" ||
+              canonicalEvent.type === "turn.aborted" ||
+              canonicalEvent.type === "runtime.error" ||
+              canonicalEvent.type === "session.exited"
+              ? clearTurnLatency(canonicalEvent.threadId)
+              : Effect.void,
           ),
         ),
-      )
-      .pipe(
-        withMetrics({
-          timer: providerRuntimeEventProcessingDuration,
-          attributes: {
-            provider: source.provider,
-            eventType: event.type,
-          },
-        }),
-      );
+      ),
+      withMetrics({
+        timer: providerRuntimeEventProcessingDuration,
+        attributes: {
+          provider: source.provider,
+          eventType: event.type,
+        },
+      }),
+    );
 
   // `subscribedAdapters` is our source-of-truth for "which instance adapters
   // are currently wired into the runtime event bus". It both tracks the set

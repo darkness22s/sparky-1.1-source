@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
+import { ProviderInstanceId } from "@sparky/contracts";
 
 import {
   makeSparkyAssistantSegmenter,
@@ -432,7 +433,7 @@ describe("Sparky session continuity", () => {
   it("does not pass an unverified Models.dev context window to the runtime", () => {
     expect(
       resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {
-        instanceId: "sparky",
+        instanceId: ProviderInstanceId.make("sparky"),
         model: "openai-codex/gpt-5.6-sol",
         contextWindowSource: "models.dev",
         options: [{ id: "contextWindow", value: "1m" }],
@@ -440,7 +441,7 @@ describe("Sparky session continuity", () => {
     ).toBe("258400");
     expect(
       resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {
-        instanceId: "sparky",
+        instanceId: ProviderInstanceId.make("sparky"),
         model: "openai-codex/gpt-5.6-sol",
         contextWindowSource: "provider",
         options: [{ id: "contextWindow", value: "258400" }],

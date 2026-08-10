@@ -57,7 +57,7 @@ test("redesigned Docs and Changelog survive a production build", async () => {
   assert.doesNotMatch(docs, /legacy-pages/u);
   assert.match(changelog, /\/assets\/[^"]+\.css/u);
   assert.match(docs, /\/assets\/[^"]+\.css/u);
-  assert.match(changelogScript, /Memory, continuity, and a more dependable Sparky/u);
+  assert.match(changelogScript, /Memory, Plan mode, images, and more/u);
   assert.match(changelogScript, /Read full blog post/u);
   assert.match(releaseNotes, /^Persistent Memory/u);
   assert.match(releaseNotes, /Desktop product identity remains Sparky\.\s*$/u);

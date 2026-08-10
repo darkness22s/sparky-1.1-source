@@ -271,7 +271,7 @@ function buildContextWindowActivityPayload(
 }
 
 function modelSelectionForObservedContextWindow(
-  thread: OrchestrationThread,
+  thread: Pick<OrchestrationThread, "modelSelection">,
   event: ProviderRuntimeEvent,
 ): ModelSelection | undefined {
   if (event.type !== "thread.token-usage.updated") return undefined;

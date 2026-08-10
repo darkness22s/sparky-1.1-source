@@ -1,16 +1,16 @@
 const featuredRelease = {
   version: "1.1.2",
   publishedAt: "2026-08-09T00:00:00.000Z",
-  name: "Memory, continuity, and a more dependable Sparky",
+  name: "Memory, Plan mode, images, and more",
   intro:
-    "Sparky 1.1.2 is a major reliability release built around one goal: helping the agent stay useful and trustworthy across real, long-running work.",
+    "Sparky 1.1.2 introduces persistent Memory, letting you save preferences and project context for future conversations.",
   summary:
-    "Persistent Memory can now carry preferences and project context into future sessions. Provider conversations survive follow-ups, reloads, and compaction more reliably, while tool execution, streaming, cancellation, model discovery, and desktop feedback all received substantial hardening.",
+    "The release also brings native Plan mode, image prompts, desktop notifications, selectable streaming animations, richer tool icons, browser previews, and a Linux desktop app.",
   highlights: [
-    "Create and manage global or project-scoped memories from Settings.",
-    "Keep provider context intact across follow-ups, reloads, and Codex compaction.",
-    "Get safer Windows file edits, clearer tool states, and more reliable cancellation.",
-    "Use improved model capabilities, multimodal requests, Plan mode, notifications, and Linux support.",
+    "Create, search, edit, and delete global or project-scoped memories from Settings.",
+    "Plan a task before edits begin with Sparky’s Rust-native Plan mode.",
+    "Add images to prompts and choose how streaming replies animate.",
+    "Receive desktop notifications and run Sparky on Windows, macOS, or Linux.",
   ],
   fullPostPath: "/release-notes/1.1.2.txt",
 };

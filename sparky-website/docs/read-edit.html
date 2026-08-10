@@ -30,6 +30,8 @@
         <ul class="docs-nav-items">
           <li><a href="overview.html">Overview</a></li>
           <li><a href="getting-started.html">Quickstart</a></li>
+          <li><a href="release-1.1.2.html">What's New in 1.1.2</a></li>
+          <li><a href="memory.html">Memory</a></li>
         </ul>
       </div>
       <div class="docs-nav-section">
@@ -57,13 +59,12 @@
     <!-- Main content -->
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">TOOLS</div>
         <h1>Read & Edit Files</h1>
-        <p>Open any text file, make changes, and see exactly what changed before saving. Works with code, config files, markdown, and anything text-based.</p>
+        <p>Inspect project files, apply targeted text changes, and review the resulting diff and file statistics in the same task timeline.</p>
       </div>
 
       <h2 id="how-it-works">How it works</h2>
-      <p>When you ask Sparky to modify a file, it follows a safe workflow: read the current content, apply the changes, and show you a diff of what changed before saving.</p>
+      <p>When you ask Sparky to modify a file, it reads the current content, prepares a targeted change, applies it through the file tool, and exposes the result in the timeline and Diff surface. Review the working tree before committing or publishing.</p>
 
       <h2 id="reading-files">Reading files</h2>
       <p>Sparky reads any text file in your project. It can read entire files or specific line ranges. For large files, it reads only the relevant sections to stay efficient.</p>
@@ -109,10 +110,18 @@
       <h2 id="viewing-changes">Viewing changes</h2>
       <p>Sparky shows you a <strong>diff</strong> — a side-by-side comparison of what changed. Added lines appear in green, removed lines in red. You can review every change before it's committed.</p>
 
+      <h2 id="safe-edits">Stale files, sequential edits, and CRLF</h2>
+      <p>Version 1.1.2 strengthens editing on Windows and in CRLF-formatted files. Sequential edits use current snapshots, and stale-file detection rejects an edit when the working copy no longer matches the content it was prepared against. Ambiguous replacements fail instead of changing an arbitrary match.</p>
+      <p>If an edit fails, read the tool error. Reopen the latest file content, narrow the requested replacement, and retry. This is safer than forcing a broad replacement over a file that may have changed in another editor.</p>
+
+      <h2 id="timeline">Tool states and file statistics</h2>
+      <p>The timeline distinguishes <strong>Running</strong>, <strong>Completed</strong>, <strong>Failed</strong>, <strong>Stopped</strong>, and <strong>Declined</strong>. File-change statistics can update while work is still active, but the final status and diff are the evidence to review before treating the edit as complete.</p>
+
       <h2 id="limitations">Limitations</h2>
       <ul>
         <li>Only works with <strong>text files</strong> — images, binaries, and other non-text files can't be edited.</li>
-        <li>Sparky won't overwrite your changes without showing you the diff first.</li>
+        <li>Generated files, minified bundles, and very large text payloads may be poor direct-edit targets; prefer their source files and normal build process.</li>
+        <li>A visible diff is review evidence, not an automatic guarantee that the change is correct or that unrelated work was preserved.</li>
       </ul>
 
       <div class="docs-next">
@@ -133,8 +142,10 @@
         <li><a href="#reading-files">Reading files</a></li>
         <li><a href="#editing-files">Editing files</a></li>
         <li><a href="#creating-files">Creating files</a></li>
-        <li><a href="#viewing-changes">Viewing changes</a></li>
-        <li><a href="#limitations">Limitations</a></li>
+<li><a href="#viewing-changes">Viewing changes</a></li>
+<li><a href="#safe-edits">Safe editing behavior</a></li>
+<li><a href="#timeline">Tool states</a></li>
+<li><a href="#limitations">Limitations</a></li>
       </ul>
     </aside>
   </div>

@@ -13,14 +13,49 @@
  *
  * @module CheckpointStore
  */
-import { VcsUnsupportedOperationError, type CheckpointRef } from "@sparky/contracts";
+import { VcsRepositoryDetectionError, type CheckpointRef } from "@sparky/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import type { CheckpointStoreError } from "./Errors.ts";
-import type { VcsCheckpointOps } from "../vcs/VcsDriver.ts";
-import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import { SnapshotEngine } from "./SnapshotEngine.ts";
+import * as ServerConfig from "../config.ts";
+import { isGitRepository as detectGitRepository } from "../git/Utils.ts";
+
+function omitWhitespaceOnlyDiffLines(diff: string): string {
+  const lines = diff.split("\n");
+  const removed = new Map<string, number>();
+  const added = new Map<string, number>();
+  for (const line of lines) {
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      const key = line.slice(1).trim();
+      removed.set(key, (removed.get(key) ?? 0) + 1);
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      const key = line.slice(1).trim();
+      added.set(key, (added.get(key) ?? 0) + 1);
+    }
+  }
+  const matched = new Map<string, number>();
+  for (const [key, count] of removed) {
+    matched.set(key, Math.min(count, added.get(key) ?? 0));
+  }
+  const removedMatches = new Map<string, number>();
+  const addedMatches = new Map<string, number>();
+  return lines
+    .filter((line) => {
+      const isRemoved = line.startsWith("-") && !line.startsWith("---");
+      const isAdded = line.startsWith("+") && !line.startsWith("+++");
+      if (!isRemoved && !isAdded) return true;
+      const key = line.slice(1).trim();
+      const limit = matched.get(key) ?? 0;
+      const seen = isRemoved ? removedMatches : addedMatches;
+      const next = (seen.get(key) ?? 0) + 1;
+      seen.set(key, next);
+      return next > limit;
+    })
+    .join("\n");
+}
 
 export interface CaptureCheckpointInput {
   readonly cwd: string;
@@ -97,64 +132,71 @@ export class CheckpointStore extends Context.Service<
 >()("t3/checkpointing/CheckpointStore") {}
 
 export const make = Effect.gen(function* () {
-  const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
-
-  const resolveCheckpoints = Effect.fn("CheckpointStore.resolveCheckpoints")(function* (
-    operation: string,
-    cwd: string,
-  ) {
-    const handle = yield* vcsRegistry.resolve({ cwd });
-    if (!handle.driver.checkpoints) {
-      return yield* new VcsUnsupportedOperationError({
-        operation,
-        kind: handle.kind,
-        detail: `${handle.kind} driver does not implement checkpoint operations.`,
-      });
-    }
-    return handle.driver.checkpoints satisfies VcsCheckpointOps;
+  const config = yield* ServerConfig.ServerConfig;
+  const engine = new SnapshotEngine({
+    storageRoot: config.checkpointsDir,
   });
 
+  const run = <T>(operation: string, cwd: string, promise: () => Promise<T>) =>
+    Effect.tryPromise({
+      try: promise,
+      catch: (cause) =>
+        new VcsRepositoryDetectionError({
+          operation,
+          cwd,
+          detail: cause instanceof Error ? cause.message : String(cause),
+          cause,
+        }),
+    });
+
   const isGitRepository: CheckpointStore["Service"]["isGitRepository"] = (cwd) =>
-    vcsRegistry
-      .detect({ cwd, requestedKind: "git" })
-      .pipe(Effect.map((repository) => repository !== null));
+    Effect.sync(() => detectGitRepository(cwd));
 
   const captureCheckpoint: CheckpointStore["Service"]["captureCheckpoint"] = Effect.fn(
     "captureCheckpoint",
   )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints("CheckpointStore.captureCheckpoint", input.cwd);
-    return yield* checkpoints.captureCheckpoint(input);
+    yield* run("CheckpointStore.captureCheckpoint", input.cwd, () =>
+      engine.capture(input.cwd, input.checkpointRef),
+    );
   });
 
   const hasCheckpointRef: CheckpointStore["Service"]["hasCheckpointRef"] = Effect.fn(
     "hasCheckpointRef",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints("CheckpointStore.hasCheckpointRef", input.cwd);
-    return yield* checkpoints.hasCheckpointRef(input);
-  });
+  )((input) =>
+    run("CheckpointStore.hasCheckpointRef", input.cwd, () =>
+      engine.has(input.cwd, input.checkpointRef),
+    ),
+  );
 
   const restoreCheckpoint: CheckpointStore["Service"]["restoreCheckpoint"] = Effect.fn(
     "restoreCheckpoint",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints("CheckpointStore.restoreCheckpoint", input.cwd);
-    return yield* checkpoints.restoreCheckpoint(input);
-  });
+  )((input) =>
+    run("CheckpointStore.restoreCheckpoint", input.cwd, () =>
+      engine.restore(input.cwd, input.checkpointRef).then((result) => result !== null),
+    ),
+  );
 
   const diffCheckpoints: CheckpointStore["Service"]["diffCheckpoints"] = Effect.fn(
     "diffCheckpoints",
-  )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints("CheckpointStore.diffCheckpoints", input.cwd);
-    return yield* checkpoints.diffCheckpoints(input);
-  });
+  )((input) =>
+    run("CheckpointStore.diffCheckpoints", input.cwd, async () => {
+      const result = await engine.diff(
+        input.cwd,
+        input.fromCheckpointRef,
+        input.toCheckpointRef,
+      );
+      return input.ignoreWhitespace
+        ? omitWhitespaceOnlyDiffLines(result.unifiedDiff)
+        : result.unifiedDiff;
+    }),
+  );
 
   const deleteCheckpointRefs: CheckpointStore["Service"]["deleteCheckpointRefs"] = Effect.fn(
     "deleteCheckpointRefs",
   )(function* (input) {
-    const checkpoints = yield* resolveCheckpoints(
-      "CheckpointStore.deleteCheckpointRefs",
-      input.cwd,
+    yield* run("CheckpointStore.deleteCheckpointRefs", input.cwd, () =>
+      engine.deleteRefs(input.cwd, input.checkpointRefs),
     );
-    return yield* checkpoints.deleteCheckpointRefs(input);
   });
 
   return CheckpointStore.of({

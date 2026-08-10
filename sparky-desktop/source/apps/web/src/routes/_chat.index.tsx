@@ -1,4 +1,5 @@
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
+import { PROJECTLESS_PROJECT_ID, isProjectlessProjectId } from "@sparky/contracts";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,7 +15,7 @@ import {
   useProjects,
   useThreadShells,
 } from "../state/entities";
-import { useEnvironments } from "../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { APP_DISPLAY_NAME } from "~/branding";
 import { cn } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
@@ -37,7 +38,12 @@ function ChatIndexRouteView() {
  */
 function IndexDraftLanding() {
   const projects = useProjects();
+  const visibleProjects = useMemo(
+    () => projects.filter((project) => !isProjectlessProjectId(project.id)),
+    [projects],
+  );
   const threads = useThreadShells();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const startingRef = useRef(false);
@@ -46,23 +52,34 @@ function IndexDraftLanding() {
   const mostRecentProject = useMemo(
     () =>
       bootstrapped
-        ? (sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null)
+        ? (sortScopedProjectsForSidebar(visibleProjects, threads, "updated_at")[0] ?? null)
         : null,
-    [bootstrapped, projects, threads],
+    [bootstrapped, threads, visibleProjects],
   );
 
   useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
+    const startProjectRef = mostRecentProject
+      ? scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id)
+      : primaryEnvironmentId
+        ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
+        : null;
+    if (startProjectRef === null || startingRef.current) {
       return;
     }
     startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
+    void handleNewThread(startProjectRef, {
       replace: true,
     }).catch(() => {
       startingRef.current = false;
       setStartState((state) => ({ ...state, failed: true }));
     });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+  }, [
+    bootstrapped,
+    handleNewThread,
+    mostRecentProject,
+    primaryEnvironmentId,
+    startState.retryRequest,
+  ]);
 
   if (!bootstrapped) {
     return null;
@@ -113,10 +130,10 @@ function NoProjectsHero() {
           <div className="w-full max-w-lg px-8 py-12">
             <EmptyHeader className="max-w-none">
               <EmptyTitle className="text-foreground text-2xl sm:text-3xl">
-                What should we work on?
+                Start a new chat
               </EmptyTitle>
               <EmptyDescription className="mt-2 text-sm text-muted-foreground/78">
-                Add a project to start your first thread.
+                Choose a project to start chatting with Sparky.
               </EmptyDescription>
               <div className="mt-6 flex justify-center">
                 <Button size="sm" onClick={openAddProject}>
@@ -137,7 +154,6 @@ export const Route = createFileRoute("/_chat/")({
 });
 
 function HostedStaticOnboardingState() {
-
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">

@@ -326,7 +326,10 @@ describe("reloadConfiguredCodexMcpServer", () => {
     Effect.gen(function* () {
       const calls: Array<string> = [];
       const client = {
-        request: <M extends "config/mcpServer/reload">(method: M, _payload: undefined) => {
+        request: <M extends CodexRpc.ClientRequestMethod>(
+          method: M,
+          _payload: CodexRpc.ClientRequestParamsByMethod[M],
+        ) => {
           calls.push(method);
           return Effect.succeed({} as CodexRpc.ClientRequestResponsesByMethod[M]);
         },

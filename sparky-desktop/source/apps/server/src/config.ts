@@ -33,6 +33,10 @@ export interface ServerDerivedPaths {
   readonly providerStatusCacheDir: string;
   readonly worktreesDir: string;
   readonly attachmentsDir: string;
+  readonly checkpointsDir: string;
+  readonly projectsDir: string;
+  readonly sessionsDir: string;
+  readonly configDir: string;
   readonly logsDir: string;
   readonly serverLogPath: string;
   readonly serverTracePath: string;
@@ -115,6 +119,10 @@ export const deriveServerPaths = Effect.fn(function* (
     providerStatusCacheDir,
     worktreesDir: join(baseDir, "worktrees"),
     attachmentsDir,
+    checkpointsDir: join(stateDir, "checkpoints"),
+    projectsDir: join(baseDir, "projects"),
+    sessionsDir: join(baseDir, "sessions"),
+    configDir: join(baseDir, "config"),
     logsDir,
     serverLogPath: join(logsDir, "server.log"),
     serverTracePath: join(logsDir, "server.trace.ndjson"),
@@ -139,6 +147,10 @@ export const ensureServerDirectories = Effect.fn(function* (derivedPaths: Server
       fs.makeDirectory(derivedPaths.providerLogsDir, { recursive: true }),
       fs.makeDirectory(derivedPaths.terminalLogsDir, { recursive: true }),
       fs.makeDirectory(derivedPaths.attachmentsDir, { recursive: true }),
+      fs.makeDirectory(derivedPaths.checkpointsDir, { recursive: true }),
+      fs.makeDirectory(derivedPaths.projectsDir, { recursive: true }),
+      fs.makeDirectory(derivedPaths.sessionsDir, { recursive: true }),
+      fs.makeDirectory(derivedPaths.configDir, { recursive: true }),
       fs.makeDirectory(derivedPaths.worktreesDir, { recursive: true }),
       fs.makeDirectory(path.dirname(derivedPaths.keybindingsConfigPath), { recursive: true }),
       fs.makeDirectory(path.dirname(derivedPaths.settingsPath), { recursive: true }),
