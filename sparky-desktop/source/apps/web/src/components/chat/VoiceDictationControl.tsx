@@ -37,9 +37,7 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   lang: string;
   maxAlternatives: number;
-  onend: (() => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
-  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
+  addEventListener: (type: "end" | "error" | "result", listener: (event: Event) => void) => void;
   start: () => void;
   stop: () => void;
   abort: () => void;
@@ -88,9 +86,9 @@ function VoiceWaveform({ level }: { level: number }) {
       className="flex h-5 w-[4.75rem] shrink-0 items-center justify-center gap-[3px] overflow-hidden text-destructive"
       aria-hidden="true"
     >
-      {DICTATION_WAVEFORM_SHAPE.map((_, index) => (
+      {DICTATION_WAVEFORM_SHAPE.map((barShape, index) => (
         <span
-          key={index}
+          key={barShape}
           className="w-px rounded-full bg-current transition-[height,opacity] duration-100 ease-out"
           style={{
             height: `${dictationWaveformHeight(level, index)}px`,
@@ -296,11 +294,12 @@ export function VoiceDictationControl({
       recognition.interimResults = true;
       recognition.lang = navigator.language || "en-US";
       recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
+      recognition.addEventListener("result", (event) => {
+        const resultEvent = event as SpeechRecognitionResultEventLike;
         if (!isCurrentSession(sessionId)) return;
         let nextInterimTranscript = "";
-        for (let index = event.resultIndex; index < event.results.length; index += 1) {
-          const result = event.results[index];
+        for (let index = resultEvent.resultIndex; index < resultEvent.results.length; index += 1) {
+          const result = resultEvent.results[index];
           if (!result) continue;
           const transcript = result?.[0]?.transcript?.trim();
           if (!transcript) continue;
@@ -311,14 +310,15 @@ export function VoiceDictationControl({
           }
         }
         interimTranscriptRef.current = nextInterimTranscript.trim();
-      };
-      recognition.onerror = (event) => {
+      });
+      recognition.addEventListener("error", (event) => {
+        const errorEvent = event as SpeechRecognitionErrorEventLike;
         if (!isCurrentSession(sessionId)) return;
-        if (event.error === "no-speech" || event.error === "aborted") return;
+        if (errorEvent.error === "no-speech" || errorEvent.error === "aborted") return;
         shouldKeepListeningRef.current = false;
-        finishSession(sessionId, recognitionErrorMessage(event.error));
-      };
-      recognition.onend = () => {
+        finishSession(sessionId, recognitionErrorMessage(errorEvent.error));
+      });
+      recognition.addEventListener("end", () => {
         if (recognitionRef.current !== recognition || sessionId !== sessionIdRef.current) return;
         recognitionRef.current = null;
         if (!shouldKeepListeningRef.current) {
@@ -331,7 +331,7 @@ export function VoiceDictationControl({
             startRecognition(sessionId);
           }
         }, 120);
-      };
+      });
       recognitionRef.current = recognition;
       try {
         recognition.start();
