@@ -1,6 +1,7 @@
 import {
   ArchiveIcon,
   ArrowUpDownIcon,
+  BlocksIcon,
   ChevronRightIcon,
   CloudIcon,
   ContainerIcon,
@@ -2850,7 +2851,14 @@ function SparkyWordmark() {
 
 const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
+  const handlePluginsClick = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    void navigate({ to: "/plugins" });
+  }, [isMobile, navigate, setOpenMobile]);
   const handleSettingsClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -2863,6 +2871,17 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarProviderUpdatePill />
       <SidebarUpdatePill />
       <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            isActive={pathname === "/plugins"}
+            size="sm"
+            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground data-[active=true]:text-foreground"
+            onClick={handlePluginsClick}
+          >
+            <BlocksIcon className="size-3.5" />
+            <span className="text-xs">Plugins & Mods</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
