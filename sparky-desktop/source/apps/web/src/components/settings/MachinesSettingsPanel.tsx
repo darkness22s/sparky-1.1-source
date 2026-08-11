@@ -1,18 +1,28 @@
 import {
-  CheckIcon,
-  CloudIcon,
   CopyIcon,
-  ExternalLinkIcon,
+  KeyRoundIcon,
   MonitorIcon,
+  NetworkIcon,
   PlusIcon,
-  RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
+import { AuthStandardClientScopes } from "@sparky/contracts";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@sparky/client-runtime/state/runtime";
 
 import { environmentCatalog } from "../../connection/catalog";
-import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
+import { readPrimaryCloudLinkTarget } from "../../cloud/linkEnvironment";
+import { provisionPrimaryMachine } from "../../cloud/linkEnvironmentAtoms";
+import { connectPairing } from "../../connection/onboarding";
+import { createServerPairingCredential, revokeServerPairingLink } from "../../environments/primary";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { selectMachineEnvironments } from "../../machines";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import {
   Dialog,
   DialogDescription,
@@ -23,18 +33,10 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { selectMachineEnvironments } from "../../machines";
-import { SettingsPageContainer, SettingsSection, SettingsRow } from "./settingsLayout";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { presentSavedCloudEnvironmentConnection } from "../cloud/cloudEnvironmentConnectionPresentation";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@sparky/client-runtime/state/runtime";
-
-const CONNECT_COMMAND = "t3 connect link";
+import { SettingsPageContainer, SettingsSection, SettingsRow } from "./settingsLayout";
+import { makeSparkyPairingUrl } from "./machinesPairing";
 
 function AddMachineDialog({
   open,
@@ -43,19 +45,112 @@ function AddMachineDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<"share" | "join">("share");
+  const [host, setHost] = useState("");
+  const [shareLabel, setShareLabel] = useState("");
+  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [pairingUrl, setPairingUrl] = useState("");
+  const [machineLabel, setMachineLabel] = useState("");
+  const [busy, setBusy] = useState(false);
+  const connectMachine = useAtomCommand(connectPairing, { reportFailure: false });
+  const provisionMachine = useAtomCommand(provisionPrimaryMachine, { reportFailure: false });
 
-  const copyCommand = async () => {
+  const createInvite = async () => {
+    setBusy(true);
     try {
-      await navigator.clipboard.writeText(CONNECT_COMMAND);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      const localTarget = readPrimaryCloudLinkTarget();
+      let inviteHost = host.trim();
+      if (!inviteHost && localTarget) {
+        const result = await provisionMachine({
+          target: localTarget,
+        });
+        if (result._tag !== "Success") {
+          if (isAtomCommandInterrupted(result)) return;
+          throw squashAtomCommandFailure(result);
+        }
+        inviteHost = result.value;
+      }
+      if (!inviteHost) {
+        throw new Error("Enter an address that the other machine can reach.");
+      }
+      const credential = await createServerPairingCredential({
+        ...(shareLabel.trim() ? { label: shareLabel.trim() } : {}),
+        scopes: AuthStandardClientScopes,
+      });
+      setInviteId(credential.id);
+      setInviteUrl(makeSparkyPairingUrl(inviteHost, credential.credential));
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not create machine invite",
+        description: error instanceof Error ? error.message : "Try again from this machine.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const joinMachine = async () => {
+    const trimmedUrl = pairingUrl.trim();
+    if (!trimmedUrl) return;
+    setBusy(true);
+    const result = await connectMachine({
+      pairingUrl: trimmedUrl,
+      ...(machineLabel.trim() ? { label: machineLabel.trim() } : {}),
+    });
+    setBusy(false);
+    if (result._tag === "Success") {
+      toastManager.add({
+        type: "success",
+        title: "Machine paired",
+        description: "The machine is now available in the Run on menu.",
+      });
+      onOpenChange(false);
+      setPairingUrl("");
+      setMachineLabel("");
+      return;
+    }
+    if (isAtomCommandInterrupted(result)) return;
+    const cause = squashAtomCommandFailure(result);
+    toastManager.add({
+      type: "error",
+      title: "Could not pair machine",
+      description: cause instanceof Error ? cause.message : "Check the invite and try again.",
+    });
+  };
+
+  const copyInvite = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toastManager.add({ type: "success", title: "Invite copied" });
     } catch {
       toastManager.add({
         type: "error",
-        title: "Could not copy command",
-        description: "Copy the command manually from the dialog.",
+        title: "Could not copy invite",
+        description: "Select and copy the invite manually.",
       });
+    }
+  };
+
+  const discardInvite = async () => {
+    if (!inviteId) return;
+    setBusy(true);
+    try {
+      await revokeServerPairingLink(inviteId);
+      setInviteId(null);
+      setInviteUrl(null);
+      toastManager.add({ type: "success", title: "Invite revoked" });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not revoke invite",
+        description:
+          error instanceof Error ? error.message : "The invite will expire automatically.",
+      });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -64,45 +159,118 @@ function AddMachineDialog({
       <DialogPopup className="max-w-lg">
         <DialogHeader>
           <div className="flex size-9 items-center justify-center rounded-lg border border-border/70 bg-muted/60">
-            <CloudIcon className="size-4.5 text-muted-foreground" aria-hidden />
+            <NetworkIcon className="size-4.5 text-muted-foreground" aria-hidden />
           </div>
-          <DialogTitle>Add a machine</DialogTitle>
+          <DialogTitle>Pair a Sparky machine</DialogTitle>
           <DialogDescription>
-            Connect any machine that runs Sparky. The operating system and local development tools
-            can be different; only the Sparky app and the same account are required.
+            Pair with a one-time invite. No account is required.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel>
-          <ol className="space-y-4 text-sm">
-            <li className="flex gap-3">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                1
-              </span>
-              <span className="pt-0.5">
-                Install and open Sparky on the machine you want to add.
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                2
-              </span>
-              <span className="pt-0.5">Sign in with this same Sparky account, then run:</span>
-            </li>
-          </ol>
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-border/70 bg-muted/35 p-3">
-            <code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-foreground">
-              {CONNECT_COMMAND}
-            </code>
-            <Button size="sm" variant="outline" onClick={() => void copyCommand()}>
-              {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-              {copied ? "Copied" : "Copy"}
+        <DialogPanel className="space-y-5">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/45 p-1">
+            <Button
+              size="sm"
+              variant={mode === "share" ? "default" : "ghost"}
+              onClick={() => setMode("share")}
+            >
+              Share this machine
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "join" ? "default" : "ghost"}
+              onClick={() => setMode("join")}
+            >
+              Join a machine
             </Button>
           </div>
-          <p className="mt-4 flex gap-2 text-xs leading-relaxed text-muted-foreground">
-            <ExternalLinkIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            After the link is approved, refresh this page. The machine will be available in the
-            composer&apos;s <span className="font-medium text-foreground">Run on</span> menu.
-          </p>
+
+          {mode === "share" ? (
+            <div className="space-y-4">
+              <label className="grid gap-2">
+                <span className="text-xs font-medium">Reachable address (optional)</span>
+                <Input
+                  value={host}
+                  onChange={(event) => setHost(event.target.value)}
+                  placeholder="Leave blank for secure remote access"
+                  autoFocus
+                />
+                <span className="text-[11px] leading-relaxed text-muted-foreground">
+                  Leave blank to create a secure internet-reachable endpoint, or enter a LAN/VPN
+                  address for direct pairing.
+                </span>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium">Name for this machine (optional)</span>
+                <Input
+                  value={shareLabel}
+                  onChange={(event) => setShareLabel(event.target.value)}
+                  placeholder="e.g. Home desktop"
+                />
+              </label>
+              <Button className="w-full" disabled={busy} onClick={() => void createInvite()}>
+                <KeyRoundIcon className="size-3.5" />
+                {busy ? "Creating invite…" : "Create one-time invite"}
+              </Button>
+              {inviteUrl ? (
+                <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-3">
+                  <p className="text-xs font-medium">
+                    Copy this invite into Sparky on the other machine
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md bg-background/80 px-2 py-1.5 font-mono text-[11px]">
+                      {inviteUrl}
+                    </code>
+                    <Button size="sm" variant="outline" onClick={() => void copyInvite()}>
+                      <CopyIcon className="size-3.5" /> Copy
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void discardInvite()}
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    This invite is single-use and expires automatically. Keep it private.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <label className="grid gap-2">
+                <span className="text-xs font-medium">Machine invite</span>
+                <Input
+                  value={pairingUrl}
+                  onChange={(event) => setPairingUrl(event.target.value)}
+                  placeholder="Paste the Sparky invite here"
+                  autoFocus
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium">Local machine name (optional)</span>
+                <Input
+                  value={machineLabel}
+                  onChange={(event) => setMachineLabel(event.target.value)}
+                  placeholder="e.g. Linux build box"
+                />
+              </label>
+              <Button
+                className="w-full"
+                disabled={!pairingUrl.trim() || busy}
+                onClick={() => void joinMachine()}
+              >
+                <NetworkIcon className="size-3.5" />
+                {busy ? "Pairing…" : "Pair machine"}
+              </Button>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                The invite is exchanged directly with the other Sparky instance. Both machines must
+                be able to reach the address in the invite.
+              </p>
+            </div>
+          )}
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -151,17 +319,17 @@ export function MachinesSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection
         title="Machines"
-        icon={<CloudIcon className="size-3.5" />}
+        icon={<NetworkIcon className="size-3.5" />}
         headerAction={
           <Button size="xs" onClick={() => setAddDialogOpen(true)}>
-            <PlusIcon className="size-3.5" /> Add machine
+            <PlusIcon className="size-3.5" /> Pair machine
           </Button>
         }
       >
         <div className="border-b border-border/60 px-5 py-4">
           <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground/80">
-            Connect multiple Sparky apps and choose where each thread runs. Machines can use
-            different operating systems and software; Sparky Cloud handles the secure connection.
+            Pair Sparky instances directly and choose where each thread runs. Each machine keeps its
+            own local identity and can use a different operating system and development setup.
           </p>
         </div>
 
@@ -197,11 +365,11 @@ export function MachinesSettingsPanel() {
               key={machine.environmentId}
               title={
                 <span className="flex min-w-0 items-center gap-2">
-                  <CloudIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <NetworkIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="truncate">{machine.label}</span>
                 </span>
               }
-              description="Sparky Cloud machine"
+              description="Paired Sparky machine"
               status={
                 <span className="inline-flex items-center gap-1.5">
                   <ConnectionStatusDot dotClassName={dotClassName} /> {connection.statusText}
@@ -223,25 +391,9 @@ export function MachinesSettingsPanel() {
 
         {isReady && savedMachines.length === 0 ? (
           <div className="border-t border-border/60 px-5 py-5 text-sm text-muted-foreground">
-            No other machines are connected yet. Add one to run work from this device elsewhere.
+            No other machines are paired yet. Pair one to run work from this device elsewhere.
           </div>
         ) : null}
-      </SettingsSection>
-
-      <SettingsSection title="Available machines" icon={<RefreshCwIcon className="size-3.5" />}>
-        <CloudEnvironmentConnectRows
-          primaryEnvironmentId={primaryEnvironmentId}
-          savedEnvironments={savedMachines.map(({ environmentId, connection }) => ({
-            environmentId,
-            connection,
-          }))}
-          empty={
-            <div className="border-t border-border/60 px-5 py-5 text-sm text-muted-foreground">
-              No new linked machines found. Add Sparky on another machine, sign in, and run the link
-              command.
-            </div>
-          }
-        />
       </SettingsSection>
 
       <AddMachineDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />

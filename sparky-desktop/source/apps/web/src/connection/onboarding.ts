@@ -15,13 +15,14 @@ export const connectPairing = createRuntimeCommand(connectionAtomRuntime, {
   scheduler: onboardingScheduler,
   concurrency: {
     mode: "singleFlight",
-    key: (input: { pairingUrl?: string; host?: string; pairingCode?: string }) =>
+    key: (input: { pairingUrl?: string; host?: string; pairingCode?: string; label?: string }) =>
       JSON.stringify(input),
   },
   execute: (input: {
     readonly pairingUrl?: string;
     readonly host?: string;
     readonly pairingCode?: string;
+    readonly label?: string;
   }) =>
     ConnectionOnboarding.pipe(Effect.flatMap((onboarding) => onboarding.registerPairing(input))),
 });
