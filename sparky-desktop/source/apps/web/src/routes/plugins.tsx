@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
-import { ExtensionIcon, ExtensionsPageMark } from "../components/extensions/ExtensionIcon";
+import { ExtensionIcon } from "../components/extensions/ExtensionIcon";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { SidebarInset } from "../components/ui/sidebar";
@@ -172,13 +172,6 @@ function LibraryHeader({
         isElectron && "drag-region",
       )}
     >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <ExtensionsPageMark />
-        <span className="hidden text-sm font-semibold tracking-[-0.01em] text-foreground sm:block">
-          Extensions
-        </span>
-      </div>
-
       <div
         aria-label="Extension type"
         className="no-drag absolute left-1/2 flex -translate-x-1/2 items-center rounded-lg bg-muted/70 p-0.5 ring-1 ring-border/45"
