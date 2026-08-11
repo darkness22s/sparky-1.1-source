@@ -50,7 +50,7 @@ export function ProfileSidebarFooter({ includeBack = false }: { includeBack?: bo
           render={
             <SidebarMenuButton
               aria-label={`Open ${profileName} profile menu`}
-              className="h-11 gap-2.5 rounded-xl px-2.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground data-popup-open:bg-accent"
+              className="h-11 gap-2.5 rounded-xl px-2.5 text-left text-sm text-muted-foreground transition-[background-color,transform] duration-200 ease-out hover:scale-[1.01] hover:bg-accent hover:text-foreground active:scale-[0.98] data-popup-open:bg-accent motion-reduce:transform-none motion-reduce:transition-none"
             />
           }
         >
