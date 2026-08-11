@@ -2,6 +2,7 @@ import { useCallback, type ComponentType } from "react";
 import {
   ArchiveIcon,
   BoxesIcon,
+  CloudIcon,
   SlidersHorizontalIcon,
   BrainIcon,
   KeyboardIcon,
@@ -28,6 +29,7 @@ export type SettingsSectionPath =
   | "/settings/keybindings"
   | "/settings/models"
   | "/settings/memory"
+  | "/settings/machines"
   | "/settings/archived";
 
 export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
@@ -41,6 +43,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { label: "Keybindings", to: "/settings/keybindings", icon: KeyboardIcon },
   { label: "Models", to: "/settings/models", icon: BoxesIcon },
   { label: "Memory", to: "/settings/memory", icon: BrainIcon },
+  { label: "Machines", to: "/settings/machines", icon: CloudIcon },
   { label: "Archive", to: "/settings/archived", icon: ArchiveIcon },
 ];
 

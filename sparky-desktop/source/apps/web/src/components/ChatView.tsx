@@ -135,7 +135,7 @@ import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
-import { BranchToolbar } from "./BranchToolbar";
+import { BranchToolbar, ComposerMachineSelector } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
@@ -5706,7 +5706,7 @@ function ChatViewContent(props: ChatViewProps) {
                             : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
                         )}
                       >
-                        {isGitRepo && (
+                        {isGitRepo ? (
                           <div className="pointer-events-auto">
                             <BranchToolbar
                               environmentId={activeThread.environmentId}
@@ -5734,7 +5734,16 @@ function ChatViewContent(props: ChatViewProps) {
                               availableEnvironments={logicalProjectEnvironments}
                             />
                           </div>
-                        )}
+                        ) : hasMultipleEnvironments ? (
+                          <div className="pointer-events-auto">
+                            <ComposerMachineSelector
+                              environmentId={activeThread.environmentId}
+                              availableEnvironments={logicalProjectEnvironments}
+                              envLocked={envLocked}
+                              onEnvironmentChange={onEnvironmentChange}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
