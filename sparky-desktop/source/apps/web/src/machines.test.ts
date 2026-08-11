@@ -13,12 +13,21 @@ describe("selectMachineEnvironments", () => {
       [
         { environmentId: primary, relayManaged: false, label: "This device" },
         { environmentId: remote, relayManaged: true, label: "Laptop" },
+        {
+          environmentId: EnvironmentId.make("environment-paired-direct"),
+          relayManaged: false,
+          connectionKind: "BearerConnectionTarget",
+          label: "Direct pair",
+        },
         { environmentId: ssh, relayManaged: false, label: "SSH server" },
       ],
       primary,
     );
 
-    expect(result.map(({ environmentId }) => environmentId)).toEqual([remote]);
+    expect(result.map(({ environmentId }) => environmentId)).toEqual([
+      remote,
+      EnvironmentId.make("environment-paired-direct"),
+    ]);
   });
 
   it("supports a missing primary environment while the catalog is booting", () => {

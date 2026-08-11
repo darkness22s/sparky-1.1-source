@@ -614,6 +614,121 @@ export const clientApi = HttpApiBuilder.group(
   }),
 );
 
+const MACHINE_PAIRING_PRINCIPAL = "sparky:machine-pairing";
+
+export const machinePairingApi = HttpApiBuilder.group(
+  RelayApi,
+  "machinePairing",
+  Effect.fnUntraced(function* (handlers) {
+    const config = yield* RelayConfiguration.RelayConfiguration;
+    const crypto = yield* Crypto.Crypto;
+    const relayTokens = yield* RelayTokens.RelayTokens;
+    const linker = yield* EnvironmentLinker.EnvironmentLinker;
+    return handlers
+      .handle(
+        "createMachinePairingChallenge",
+        Effect.fn("relay.api.machinePairing.createChallenge")(function* (args) {
+          yield* appendRelayCredentialResponseHeaders;
+          const now = yield* DateTime.now;
+          const expiresAt = DateTime.add(now, { minutes: 5 });
+          const jti = yield* crypto.randomUUIDv4.pipe(
+            Effect.catch(() => relayInternalErrorResponse("internal_error")),
+          );
+          const challenge = yield* relayTokens
+            .issueLinkChallenge({
+              userId: MACHINE_PAIRING_PRINCIPAL,
+              request: {
+                notificationsEnabled: false,
+                liveActivitiesEnabled: false,
+                managedTunnelsEnabled: args.payload.managedTunnelsEnabled,
+              },
+              jti,
+              issuedAtEpochSeconds: Math.floor(now.epochMilliseconds / 1_000),
+              expiresAtEpochSeconds: Math.floor(expiresAt.epochMilliseconds / 1_000),
+            })
+            .pipe(Effect.catch(() => relayInternalErrorResponse("internal_error")));
+          return { challenge, expiresAt: DateTime.formatIso(expiresAt) };
+        }),
+      )
+      .handle(
+        "pairMachine",
+        Effect.fn("relay.api.machinePairing.pair")(
+          function* (args) {
+            yield* appendRelayCredentialResponseHeaders;
+            const result = yield* linker.link({
+              userId: MACHINE_PAIRING_PRINCIPAL,
+              request: {
+                proof: args.payload.proof,
+                notificationsEnabled: false,
+                liveActivitiesEnabled: false,
+                managedTunnelsEnabled: true,
+              },
+            });
+            return {
+              ok: true,
+              cloudUserId: MACHINE_PAIRING_PRINCIPAL,
+              environmentId: result.environmentId,
+              endpoint: result.endpoint,
+              endpointRuntime: result.endpointRuntime,
+              relayIssuer: config.relayIssuer,
+              environmentCredential: result.environmentCredential,
+              cloudMintPublicKey: config.cloudMintPublicKey,
+            };
+          },
+          mapErrorTags({
+            EnvironmentLinkProofExpired: (_error, traceId) =>
+              new RelayEnvironmentLinkProofExpiredError({
+                code: "environment_link_proof_expired",
+                traceId,
+              }),
+            EnvironmentLinkProofInvalid: (error, traceId) =>
+              new RelayEnvironmentLinkProofInvalidError({
+                code: "environment_link_proof_invalid",
+                reason: error.reason,
+                traceId,
+              }),
+            ManagedEndpointProvisioningNotConfigured: (_error, traceId) =>
+              new RelayEnvironmentLinkUnavailableError({
+                code: "environment_link_unavailable",
+                reason: "managed_endpoint_not_configured",
+                traceId,
+              }),
+            ManagedEndpointProvisioningFailed: (_error, traceId) =>
+              new RelayEnvironmentLinkUnavailableError({
+                code: "environment_link_unavailable",
+                reason: "managed_endpoint_provisioning_failed",
+                traceId,
+              }),
+            ManagedEndpointOriginNotAllowed: (_error, traceId) =>
+              new RelayEnvironmentLinkProofInvalidError({
+                code: "environment_link_proof_invalid",
+                reason: "origin_not_allowed",
+                traceId,
+              }),
+            EnvironmentLinkUpsertPersistenceError: (_error, traceId) =>
+              new RelayEnvironmentLinkFailedError({
+                code: "environment_link_failed",
+                reason: "link_persistence_failed",
+                traceId,
+              }),
+            EnvironmentCredentialCreatePersistenceError: (_error, traceId) =>
+              new RelayEnvironmentLinkFailedError({
+                code: "environment_link_failed",
+                reason: "credential_persistence_failed",
+                traceId,
+              }),
+            DpopProofReplayPersistenceError: (_error, traceId) =>
+              new RelayEnvironmentLinkFailedError({
+                code: "environment_link_failed",
+                reason: "replay_persistence_failed",
+                traceId,
+              }),
+          }),
+        ),
+      );
+  }),
+);
+
 export const tokenApi = HttpApiBuilder.group(
   RelayApi,
   "token",

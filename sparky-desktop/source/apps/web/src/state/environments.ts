@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   connectionCatalogDisplayUrl,
+  type ConnectionTarget,
   type EnvironmentPresentation as BaseEnvironmentPresentation,
 } from "@sparky/client-runtime/connection";
 import { Discovery } from "@sparky/client-runtime/relay";
@@ -20,6 +21,7 @@ export interface EnvironmentPresentation extends BaseEnvironmentPresentation {
   readonly label: string;
   readonly displayUrl: string | null;
   readonly relayManaged: boolean;
+  readonly connectionKind: ConnectionTarget["_tag"];
 }
 
 function projectEnvironmentPresentation(
@@ -32,6 +34,7 @@ function projectEnvironmentPresentation(
     label: presentation.entry.target.label,
     displayUrl: connectionCatalogDisplayUrl(presentation.entry),
     relayManaged: presentation.entry.target._tag === "RelayConnectionTarget",
+    connectionKind: presentation.entry.target._tag,
   };
 }
 

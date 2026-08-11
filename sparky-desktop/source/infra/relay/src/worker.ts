@@ -19,6 +19,7 @@ import {
   clientApi,
   dpopClientApi,
   healthApi,
+  machinePairingApi,
   metadataApi,
   mobileApi,
   relayClientAuthLayer,
@@ -78,6 +79,7 @@ const httpPlatformNotSupportedLayer = Layer.succeed(HttpPlatform.HttpPlatform, {
 const relayApiLayer = Layer.mergeAll(
   healthApi,
   metadataApi,
+  machinePairingApi,
   mobileApi,
   clientApi,
   tokenApi,
