@@ -1,4 +1,5 @@
 import {
+  ActivityIcon,
   ArchiveIcon,
   ArrowUpDownIcon,
   ChevronRightIcon,
@@ -2850,13 +2851,23 @@ function SparkyWordmark() {
 
 const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const navigate = useNavigate();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const { isMobile, setOpenMobile } = useSidebar();
+  const navigateFromFooter = useCallback(
+    (to: "/activity" | "/settings") => {
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+      void navigate({ to });
+    },
+    [isMobile, navigate, setOpenMobile],
+  );
+  const handleActivityClick = useCallback(() => {
+    navigateFromFooter("/activity");
+  }, [navigateFromFooter]);
   const handleSettingsClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void navigate({ to: "/settings" });
-  }, [isMobile, navigate, setOpenMobile]);
+    navigateFromFooter("/settings");
+  }, [navigateFromFooter]);
 
   return (
     <SidebarFooter className="p-2">
@@ -2866,6 +2877,18 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
+            isActive={pathname === "/activity"}
+            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+            onClick={handleActivityClick}
+          >
+            <ActivityIcon className="size-3.5" />
+            <span className="text-xs">Activity monitor</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="sm"
+            isActive={pathname.startsWith("/settings")}
             className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
             onClick={handleSettingsClick}
           >
