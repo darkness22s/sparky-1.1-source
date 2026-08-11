@@ -1,29 +1,44 @@
 # Sparky MCP backend
 
-This is a separate Convex project for Sparky's generic MCP integrations. It keeps
-MCP OAuth configuration and encrypted per-user credentials out of the desktop
-client. The client receives only a short-lived MCP gateway session.
+Standalone Node service for Sparky's generic MCP integrations. Neon Postgres stores
+catalog metadata, OAuth state, encrypted per-user credentials, and short-lived MCP
+sessions. The desktop client never receives provider client secrets or long-lived
+provider tokens.
 
-## Required Convex environment variables
+## Environment
 
-Set these in the deployment, never in the desktop app:
+Set these in the backend host's secret manager, never in Sparky Desktop:
 
-- `MCP_SITE_URL`: the Convex HTTP actions base URL.
+- `DATABASE_URL`: Neon Postgres connection string. Keep it out of source control.
+- `MCP_SITE_URL`: public base URL for this service; OAuth callbacks use
+  `${MCP_SITE_URL}/mcp/oauth/callback`.
 - `MCP_TOKEN_ENCRYPTION_KEY`: 32 random bytes encoded as base64url.
-- `MCP_ADMIN_SUBJECT`: the Clerk subject allowed to manage the catalog.
+- `MCP_ADMIN_SUBJECT`: Clerk `sub` claim allowed to manage the catalog.
+- `CLERK_ISSUER`: Clerk issuer URL used to validate desktop bearer tokens.
+- `CLERK_AUDIENCE`: optional Clerk JWT audience.
 - Provider-specific OAuth client IDs and secrets named by each catalog entry's
   `clientIdEnv` and `clientSecretEnv` values.
 
-The catalog stores public metadata and remote logo URLs. OAuth client secrets and
-user access/refresh tokens are never returned by catalog or connection APIs.
+Set `MCP_ALLOWED_ORIGINS` to the exact Sparky web/desktop origins in production.
+The default `*` is intended only for controlled development.
+
+## Database setup
+
+Run `migrations/001_initial.sql` against the Neon database once. The migration
+creates catalog, connection, OAuth state, and session tables. Do not commit a real
+`.env.local` or connection string.
 
 ## Commands
 
 ```sh
 pnpm install
 pnpm run check
-pnpm run deploy
+pnpm run build
+pnpm start
 ```
 
-`convex deployment select` and `convex deploy` update the selected deployment;
-this project does not start a development server.
+Deploy the resulting Node service to the backend host of your choice. Configure the
+same environment variables and run the SQL migration before accepting user OAuth
+connections. The `/mcp/catalog` `POST` endpoint is restricted to
+`MCP_ADMIN_SUBJECT`; users access `GET /mcp/catalog`, OAuth, connections, sessions,
+and the short-lived `/mcp/:pluginSlug` proxy with Clerk bearer tokens.

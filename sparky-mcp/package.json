@@ -1,14 +1,16 @@
 {
   "name": "@sparky/mcp-backend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "deploy": "convex deploy"
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "dependencies": {
-    "convex": "^1.31.7"
+    "jose": "^6.1.0",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
