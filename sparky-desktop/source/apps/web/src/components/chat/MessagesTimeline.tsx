@@ -2079,6 +2079,9 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
+    case "image_view":
+    case "t3-code_image_view":
+      return "eye";
     default:
       return undefined;
   }

@@ -29,6 +29,7 @@ import { getModelSelectionStringOptionValue } from "@sparky/shared/model";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ImageViewRegistry from "../../mcp/ImageViewRegistry.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterProcessError,
@@ -206,6 +207,7 @@ function openCodeEventSessionTitle(event: OpenCodeSubscribedEvent): string | und
 
 interface OpenCodeSessionContext {
   session: ProviderSession;
+  readonly providerInstanceId: ProviderInstanceId;
   readonly client: OpencodeClient;
   readonly server: OpenCodeServerConnection;
   readonly directory: string;
@@ -242,6 +244,69 @@ export interface OpenCodeAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly getImageViewEnabled?: () => Effect.Effect<boolean>;
+}
+
+const IMAGE_VIEW_MODEL = { providerID: "opencode", modelID: "mimo-v2.5-free" } as const;
+const IMAGE_VIEW_TOOL_NAMES = { image_view: true, "t3-code_image_view": true } as const;
+const IMAGE_VIEW_DISABLED_TOOLS = { image_view: false, "t3-code_image_view": false } as const;
+const IMAGE_VIEW_SYSTEM_PROMPT = `ImageView is available as a visual-inspection helper. When you cannot directly inspect an image or browser screenshot, call image_view instead of guessing. Use path for a known local image; omit path to inspect the current collaborative browser tab. Give it the exact visual question you need answered. Treat its response as evidence, keep ownership of the task, and continue with your current model. Verify uncertain or changed page state with another ImageView call before clicking.`;
+
+function imageMimeTypeFromPath(filePath: string): string {
+  switch (pathExtension(filePath)) {
+    case ".avif":
+      return "image/avif";
+    case ".gif":
+      return "image/gif";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".svg":
+      return "image/svg+xml";
+    case ".webp":
+      return "image/webp";
+    default:
+      return "image/png";
+  }
+}
+
+function pathExtension(filePath: string): string {
+  const base = filePath.replaceAll("\\", "/").split("/").at(-1) ?? "";
+  const dot = base.lastIndexOf(".");
+  return dot < 0 ? "" : base.slice(dot).toLowerCase();
+}
+
+function textFromOpenCodeParts(parts: ReadonlyArray<unknown> | undefined): string {
+  return (parts ?? [])
+    .filter(
+      (part): part is { readonly type: "text"; readonly text: string } =>
+        typeof part === "object" &&
+        part !== null &&
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string",
+    )
+    .map((part) => part.text)
+    .join("")
+    .trim();
+}
+
+async function modelSupportsImageInput(
+  client: OpencodeClient,
+  model: { readonly providerID: string; readonly modelID: string },
+): Promise<boolean> {
+  const response = await client.provider.list();
+  const provider = response.data?.all.find((entry) => entry.id === model.providerID);
+  const descriptor = provider?.models[model.modelID] as
+    | {
+        readonly attachment?: boolean;
+        readonly modalities?: { readonly input: ReadonlyArray<string> };
+      }
+    | undefined;
+  return descriptor?.modalities
+    ? descriptor.modalities.input.includes("image")
+    : descriptor?.attachment === true;
 }
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -545,6 +610,10 @@ const stopOpenCodeContext = Effect.fn("stopOpenCodeContext")(function* (
   if (yield* Ref.getAndSet(context.stopped, true)) {
     return false;
   }
+  ImageViewRegistry.unregisterImageViewAnalyzer(
+    context.session.threadId,
+    context.providerInstanceId,
+  );
 
   // Best-effort remote abort. The scope close below tears down the local
   // handles (event-pump fiber, server-exit fiber, event-subscribe fetch),
@@ -1218,7 +1287,7 @@ export function makeOpenCodeAdapter(
                 input.threadId,
                 boundInstanceId,
               );
-              if (mcpSession && !server.external) {
+              if (mcpSession) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
                     name: "t3-code",
@@ -1373,6 +1442,7 @@ export function makeOpenCodeAdapter(
 
         const context: OpenCodeSessionContext = {
           session,
+          providerInstanceId: boundInstanceId,
           client: started.client,
           server: started.server,
           directory,
@@ -1390,6 +1460,69 @@ export function makeOpenCodeAdapter(
           stopped: yield* Ref.make(false),
           sessionScope: started.sessionScope,
         };
+        ImageViewRegistry.registerImageViewAnalyzer(
+          input.threadId,
+          boundInstanceId,
+          async ({ image, question }) => {
+            const enabled = await Effect.runPromise(
+              options?.getImageViewEnabled?.() ?? Effect.succeed(true),
+            );
+            if (!enabled) {
+              throw new Error("ImageView is turned off in Models settings.");
+            }
+            const imageUrl =
+              image.type === "data"
+                ? `data:${image.mimeType};base64,${image.data}`
+                : (() => {
+                    const resolved = path.resolve(image.path);
+                    const allowedRoots = [directory, serverConfig.attachmentsDir].map((root) =>
+                      path.resolve(root),
+                    );
+                    if (
+                      !allowedRoots.some(
+                        (root) => resolved === root || resolved.startsWith(`${root}${path.sep}`),
+                      )
+                    ) {
+                      throw new Error(
+                        "ImageView can only inspect images inside the current workspace or Sparky attachment storage.",
+                      );
+                    }
+                    return Effect.runSync(path.toFileUrl(resolved)).href;
+                  })();
+            const analysisSession = await started.client.session.create({
+              title: "Sparky ImageView",
+              permission: [{ permission: "*", pattern: "*", action: "deny" }],
+            });
+            if (!analysisSession.data)
+              throw new Error("ImageView could not create a vision session.");
+            try {
+              const response = await started.client.session.prompt({
+                sessionID: analysisSession.data.id,
+                model: IMAGE_VIEW_MODEL,
+                parts: [
+                  {
+                    type: "text",
+                    text: `Analyze this image as a read-only visual specialist for another coding agent. Be exhaustive and factual. Include: exact OCR text; page or application identity; visible state; every relevant control and icon; approximate positions using top/center/bottom and left/center/right plus relative relationships; enabled, disabled, selected, loading, error, modal, focus, and scroll state; safe click or cursor targets; what to wait for; and ambiguities or confidence limits. Do not perform the task, make choices for the agent, or claim hidden state. ${question?.trim() ? `The agent specifically needs: ${question.trim()}` : "Describe everything needed for safe browser or UI interaction."}`,
+                  },
+                  {
+                    type: "file",
+                    mime:
+                      image.type === "data" ? image.mimeType : imageMimeTypeFromPath(image.path),
+                    filename: image.type === "path" ? path.basename(image.path) : "browser.png",
+                    url: imageUrl,
+                  },
+                ],
+              });
+              const output = textFromOpenCodeParts(response.data?.parts);
+              if (!output) throw new Error("MiMo‑V2.5 Free returned no visual analysis.");
+              return output;
+            } finally {
+              await started.client.session
+                .delete({ sessionID: analysisSession.data.id })
+                .catch(() => {});
+            }
+          },
+        );
         sessions.set(input.threadId, context);
         yield* startEventPump(context);
 
@@ -1441,7 +1574,7 @@ export function makeOpenCodeAdapter(
       }
 
       const text = input.input?.trim();
-      const fileParts = toOpenCodeFileParts({
+      const candidateFileParts = toOpenCodeFileParts({
         attachments: input.attachments,
         resolveAttachmentPath: (attachment) =>
           resolveAttachmentPath({
@@ -1449,7 +1582,23 @@ export function makeOpenCodeAdapter(
             attachment,
           }),
       });
-      if ((!text || text.length === 0) && fileParts.length === 0) {
+      const attachmentPaths = (input.attachments ?? [])
+        .map((attachment) =>
+          resolveAttachmentPath({ attachmentsDir: serverConfig.attachmentsDir, attachment }),
+        )
+        .filter((attachmentPath): attachmentPath is string => attachmentPath !== null);
+      const imageViewEnabled = yield* (
+        options?.getImageViewEnabled?.() ?? Effect.succeed(true)
+      ).pipe(Effect.orElseSucceed(() => true));
+      const supportsImages = yield* Effect.promise(() =>
+        modelSupportsImageInput(context.client, parsedModel).catch(() => false),
+      );
+      const fileParts = imageViewEnabled && !supportsImages ? [] : candidateFileParts;
+      const attachmentGuidance =
+        candidateFileParts.length > 0 && fileParts.length === 0
+          ? `\n\nThe user attached ${candidateFileParts.length} image file(s). This model cannot inspect them directly. Use image_view with these local paths before answering:\n${attachmentPaths.map((attachmentPath) => `- ${attachmentPath}`).join("\n")}`
+          : "";
+      if ((!text || text.length === 0) && fileParts.length === 0 && !attachmentGuidance) {
         return yield* new ProviderAdapterValidationError({
           provider: PROVIDER,
           operation: "sendTurn",
@@ -1490,7 +1639,17 @@ export function makeOpenCodeAdapter(
           model: parsedModel,
           ...(context.activeAgent ? { agent: context.activeAgent } : {}),
           ...(context.activeVariant ? { variant: context.activeVariant } : {}),
-          parts: [...(text ? [{ type: "text" as const, text }] : []), ...fileParts],
+          ...(imageViewEnabled && !supportsImages
+            ? { system: IMAGE_VIEW_SYSTEM_PROMPT, tools: IMAGE_VIEW_TOOL_NAMES }
+            : imageViewEnabled
+              ? {}
+              : { tools: IMAGE_VIEW_DISABLED_TOOLS }),
+          parts: [
+            ...(text || attachmentGuidance
+              ? [{ type: "text" as const, text: `${text ?? ""}${attachmentGuidance}`.trim() }]
+              : []),
+            ...fileParts,
+          ],
         }),
       ).pipe(
         Effect.mapError(toRequestError),

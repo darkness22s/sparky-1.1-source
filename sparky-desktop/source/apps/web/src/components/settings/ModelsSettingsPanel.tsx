@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from "react";
 import {
   CheckCircle2Icon,
+  EyeIcon,
   KeyRoundIcon,
   LoaderCircleIcon,
   SaveIcon,
@@ -24,6 +25,7 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ClaudeAI, Gemini, OpenAI, OpenCodeIcon } from "../Icons";
 import { Button } from "../ui/button";
+import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 
 type Logo = ComponentType<SVGProps<SVGSVGElement>>;
@@ -208,6 +210,25 @@ export function ModelsSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="Models" icon={<KeyRoundIcon className="size-3.5" />}>
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
+          <div className="flex min-w-0 gap-3">
+            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
+              <EyeIcon className="size-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-[13px] font-semibold text-foreground">ImageView</h3>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground/80">
+                Let models without image input inspect screenshots and local images through
+                MiMo‑V2.5 Free, then continue with the original model.
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={settings.enableImageView}
+            onCheckedChange={(checked) => updateSettings({ enableImageView: Boolean(checked) })}
+            aria-label="Enable ImageView vision fallback"
+          />
+        </div>
         <div className="border-b border-border/60 px-5 py-4">
           <h3 className="text-[13px] font-semibold text-foreground">Sparky model APIs</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground/80">

@@ -137,6 +137,40 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   runOpenCodeCommand: () => Effect.succeed({ stdout: "", stderr: "", code: 0 }),
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
     ({
+      provider: {
+        list: async () => ({
+          data: {
+            connected: ["anthropic", "opencode"],
+            default: {},
+            all: [
+              {
+                id: "anthropic",
+                name: "Anthropic",
+                env: [],
+                models: {
+                  "claude-sonnet-4-5": {
+                    id: "claude-sonnet-4-5",
+                    attachment: true,
+                    modalities: { input: ["text", "image"], output: ["text"] },
+                  },
+                },
+              },
+              {
+                id: "opencode",
+                name: "OpenCode Zen",
+                env: [],
+                models: {
+                  "deepseek-v4-flash": {
+                    id: "deepseek-v4-flash",
+                    attachment: false,
+                    modalities: { input: ["text"], output: ["text"] },
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      },
       session: {
         create: async (input: Record<string, unknown>) => {
           runtimeMock.state.sessionCreateUrls.push(baseUrl);
@@ -320,6 +354,41 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         sessionId: "http://127.0.0.1:9999/session",
       });
 
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("teaches non-vision OpenCode turns to use ImageView without switching models", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-image-view-prompt");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "Inspect the browser and continue.",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode"),
+          "opencode/deepseek-v4-flash",
+        ),
+      });
+
+      const prompt = runtimeMock.state.promptCalls[0] as {
+        readonly model: { readonly providerID: string; readonly modelID: string };
+        readonly system?: string;
+        readonly tools?: Record<string, boolean>;
+      };
+      NodeAssert.deepEqual(prompt.model, {
+        providerID: "opencode",
+        modelID: "deepseek-v4-flash",
+      });
+      NodeAssert.match(prompt.system ?? "", /ImageView/);
+      NodeAssert.equal(prompt.tools?.image_view, true);
+      NodeAssert.equal(prompt.tools?.["t3-code_image_view"], true);
       yield* adapter.stopSession(threadId);
     }),
   );

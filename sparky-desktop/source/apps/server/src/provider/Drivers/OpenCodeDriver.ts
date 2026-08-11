@@ -139,6 +139,11 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       const adapter = yield* makeOpenCodeAdapter(effectiveConfig, {
         instanceId,
         environment: processEnv,
+        getImageViewEnabled: () =>
+          serverSettings.getSettings.pipe(
+            Effect.map((settings) => settings.enableImageView),
+            Effect.orElseSucceed(() => true),
+          ),
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
       const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig, processEnv);
