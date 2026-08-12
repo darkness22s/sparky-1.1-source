@@ -1,10 +1,12 @@
 const COMPOSIO_MCP_URL_ENV = "COMPOSIO_MCP_URL";
 const COMPOSIO_MCP_API_KEY_ENV = "COMPOSIO_MCP_API_KEY";
 const COMPOSIO_MCP_USER_ID_ENV = "COMPOSIO_MCP_USER_ID";
+const COMPOSIO_MCP_HEADER_ENV = "COMPOSIO_MCP_HEADER";
 
 export interface ComposioMcpConfig {
   readonly endpoint: string;
   readonly apiKey: string;
+  readonly apiKeyHeader: string;
 }
 
 /**
@@ -27,7 +29,11 @@ export function readComposioMcpConfig(
     );
   }
 
-  return { endpoint: endpoint.toString(), apiKey };
+  const apiKeyHeader =
+    environment[COMPOSIO_MCP_HEADER_ENV]?.trim() ||
+    (endpoint.hostname === "connect.composio.dev" ? "x-consumer-api-key" : "x-api-key");
+
+  return { endpoint: endpoint.toString(), apiKey, apiKeyHeader };
 }
 
 export function composioAuthorizationHeader(config: ComposioMcpConfig): string {
@@ -35,5 +41,5 @@ export function composioAuthorizationHeader(config: ComposioMcpConfig): string {
 }
 
 export function composioHeaders(config: ComposioMcpConfig): Record<string, string> {
-  return { "x-api-key": config.apiKey };
+  return { [config.apiKeyHeader]: config.apiKey };
 }

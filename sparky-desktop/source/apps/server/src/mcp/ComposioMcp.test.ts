@@ -23,4 +23,14 @@ describe("Composio MCP configuration", () => {
     expect(composioAuthorizationHeader(config!)).toBe("Bearer ak_test");
     expect(composioHeaders(config!)).toEqual({ "x-api-key": "ak_test" });
   });
+
+  it("uses Composio Connect's consumer key header when configured", () => {
+    const config = readComposioMcpConfig({
+      COMPOSIO_MCP_URL: "https://connect.composio.dev/mcp",
+      COMPOSIO_MCP_API_KEY: "consumer_test",
+    });
+
+    expect(config?.endpoint).toBe("https://connect.composio.dev/mcp?user_id=sparky");
+    expect(composioHeaders(config!)).toEqual({ "x-consumer-api-key": "consumer_test" });
+  });
 });

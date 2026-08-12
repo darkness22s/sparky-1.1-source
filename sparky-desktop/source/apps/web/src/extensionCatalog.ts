@@ -11,9 +11,12 @@ export interface PluginCatalogEntry {
   readonly description: string;
   readonly category: PluginCategory;
   readonly logo?: string;
+  readonly logoUrl?: string;
   readonly accent: string;
   readonly featured?: boolean;
   readonly tags: ReadonlyArray<string>;
+  readonly toolsCount?: number;
+  readonly sourceUpdatedAt?: string;
 }
 
 export interface ModCatalogEntry {
@@ -330,6 +333,10 @@ export function searchCatalog<
 
 export function buildExtensionReference(name: string, kind: "plugin" | "Mod"): string {
   return `Use ${name} ${kind}: `;
+}
+
+export function buildPluginReference(entry: Pick<PluginCatalogEntry, "id" | "name">): string {
+  return `${buildExtensionReference(entry.name, "plugin")}Use the Composio toolkit ${composioToolkitForPlugin(entry.id)}: `;
 }
 
 export const CREATE_PLUGIN_PROMPT = `Create a new Sparky plugin for [tool or service].

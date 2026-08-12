@@ -23,6 +23,9 @@ const configuredRelayTracingUrl = repoEnv.VITE_RELAY_OTLP_TRACES_URL?.trim() || 
 const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.trim() || "";
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
+const configuredPluginCatalogUrl =
+  process.env.VITE_SPARKY_PLUGIN_CATALOG_URL?.trim() ||
+  "https://sensible-buffalo-67.eu-west-1.convex.site/plugins/catalog";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
@@ -137,6 +140,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(
         demoBuild ? "latest" : configuredHostedAppChannel,
       ),
+      "import.meta.env.VITE_SPARKY_PLUGIN_CATALOG_URL": JSON.stringify(configuredPluginCatalogUrl),
       "import.meta.env.VITE_SPARKY_DEMO": JSON.stringify(demoBuild ? "true" : "false"),
       "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
     },

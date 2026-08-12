@@ -6,6 +6,7 @@ interface ExtensionIconProps {
   readonly name: string;
   readonly accent: string;
   readonly logo?: string | undefined;
+  readonly logoUrl?: string | undefined;
   readonly size?: "sm" | "md" | "lg";
   readonly className?: string;
 }
@@ -22,7 +23,7 @@ const IMAGE_SIZE_CLASS = {
   lg: "size-6.5",
 } as const;
 
-export function ExtensionIcon({ name, accent, logo, size = "md", className }: ExtensionIconProps) {
+export function ExtensionIcon({ name, accent, logo, logoUrl, size = "md", className }: ExtensionIconProps) {
   return (
     <span
       aria-hidden="true"
@@ -34,11 +35,11 @@ export function ExtensionIcon({ name, accent, logo, size = "md", className }: Ex
       style={{ "--extension-accent": accent } as CSSProperties}
     >
       <span className="absolute inset-x-1.5 bottom-0 h-px bg-[var(--extension-accent)] opacity-70" />
-      {logo ? (
+      {logo || logoUrl ? (
         <img
           alt=""
           className={cn("relative object-contain", IMAGE_SIZE_CLASS[size])}
-          src={`${import.meta.env.BASE_URL}plugin-logos/${logo}.svg`}
+          src={logoUrl ?? `${import.meta.env.BASE_URL}plugin-logos/${logo}.svg`}
         />
       ) : (
         <svg className={cn("relative", IMAGE_SIZE_CLASS[size])} fill="none" viewBox="0 0 24 24">

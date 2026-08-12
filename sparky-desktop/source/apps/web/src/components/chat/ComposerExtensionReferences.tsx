@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 
-import { buildExtensionReference, MOD_CATALOG, PLUGIN_CATALOG } from "../../extensionCatalog";
+import { buildExtensionReference, buildPluginReference, MOD_CATALOG } from "../../extensionCatalog";
 import { useExtensionInstallState } from "../../extensionLibrary";
+import { usePluginCatalog } from "../../pluginCatalogClient";
 import { ExtensionIcon } from "../extensions/ExtensionIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -11,9 +12,10 @@ export function ComposerExtensionReferences({
   readonly onReference: (reference: string) => void;
 }) {
   const { pluginIds, modIds } = useExtensionInstallState();
+  const { catalog: pluginCatalog } = usePluginCatalog();
   const installedPlugins = useMemo(
-    () => PLUGIN_CATALOG.filter((entry) => pluginIds.includes(entry.id)),
-    [pluginIds],
+    () => pluginCatalog.filter((entry) => pluginIds.includes(entry.id)),
+    [pluginCatalog, pluginIds],
   );
   const installedMods = useMemo(
     () => MOD_CATALOG.filter((entry) => modIds.includes(entry.id)),
@@ -38,12 +40,13 @@ export function ComposerExtensionReferences({
                 aria-label={`Reference ${entry.name}`}
                 className="shrink-0 rounded-[10px] outline-none ring-ring transition-transform hover:-translate-y-0.5 focus-visible:ring-2 motion-reduce:transition-none"
                 type="button"
-                onClick={() => onReference(buildExtensionReference(entry.name, "plugin"))}
+                onClick={() => onReference(buildPluginReference(entry))}
               >
                 <ExtensionIcon
                   accent={entry.accent}
                   className="shadow-none"
                   logo={entry.logo}
+                  logoUrl={entry.logoUrl}
                   name={entry.name}
                   size="sm"
                 />

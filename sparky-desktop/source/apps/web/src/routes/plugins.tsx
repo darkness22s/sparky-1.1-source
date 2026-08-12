@@ -16,11 +16,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip"
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import {
   buildExtensionReference,
-  composioToolkitForPlugin,
+  buildPluginReference,
   CREATE_MOD_PROMPT,
   CREATE_PLUGIN_PROMPT,
   MOD_CATALOG,
-  PLUGIN_CATALOG,
   PLUGIN_CATEGORIES,
   searchCatalog,
   type ModCatalogEntry,
@@ -28,6 +27,7 @@ import {
   type PluginCategory,
 } from "../extensionCatalog";
 import { useExtensionInstallState } from "../extensionLibrary";
+import { usePluginCatalog } from "../pluginCatalogClient";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cn } from "../lib/utils";
 import { isElectron } from "../env";
@@ -51,10 +51,12 @@ function PluginsRouteView() {
   const [scope, setScope] = useState<CatalogScope>("public");
   const [query, setQuery] = useState("");
   const { pluginIds, modIds, setPluginInstalled, setModInstalled } = useExtensionInstallState();
+  const { catalog: pluginCatalog, isLoading: isCatalogLoading, lastSyncedAt, error: catalogError } =
+    usePluginCatalog();
 
   const installedPlugins = useMemo(
-    () => PLUGIN_CATALOG.filter((entry) => pluginIds.includes(entry.id)),
-    [pluginIds],
+    () => pluginCatalog.filter((entry) => pluginIds.includes(entry.id)),
+    [pluginCatalog, pluginIds],
   );
   const installedMods = useMemo(
     () => MOD_CATALOG.filter((entry) => modIds.includes(entry.id)),
@@ -90,7 +92,7 @@ function PluginsRouteView() {
   const handleUsePlugin = useCallback(
     (entry: PluginCatalogEntry) => {
       void openEditableDraft(
-        `${buildExtensionReference(entry.name, "plugin")}Use the Composio toolkit ${composioToolkitForPlugin(entry.id)} to [describe what you want Sparky to do].`,
+        `${buildPluginReference(entry)}[describe what you want Sparky to do].`,
       );
     },
     [openEditableDraft],
@@ -117,7 +119,14 @@ function PluginsRouteView() {
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           <div className="mx-auto w-full max-w-6xl px-4 pb-20 pt-9 sm:px-7 sm:pt-12 lg:px-10">
-            <LibraryIntro view={view} query={query} onQueryChange={setQuery} />
+            <LibraryIntro
+              view={view}
+              query={query}
+              onQueryChange={setQuery}
+              isCatalogLoading={isCatalogLoading}
+              lastSyncedAt={lastSyncedAt}
+              catalogError={catalogError}
+            />
 
             <InstalledShelf
               view={view}
@@ -135,6 +144,7 @@ function PluginsRouteView() {
                 scope={scope}
                 query={query}
                 installedIds={pluginIds}
+                catalog={pluginCatalog}
                 onSetInstalled={setPluginInstalled}
                 onUse={handleUsePlugin}
                 onCreate={handleCreate}
@@ -217,10 +227,16 @@ function LibraryIntro({
   view,
   query,
   onQueryChange,
+  isCatalogLoading,
+  lastSyncedAt,
+  catalogError,
 }: {
   readonly view: LibraryView;
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
+  readonly isCatalogLoading?: boolean;
+  readonly lastSyncedAt?: number | null;
+  readonly catalogError?: string | null;
 }) {
   return (
     <section className="max-w-3xl">
@@ -244,6 +260,20 @@ function LibraryIntro({
         <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground/80">
           Plugins run through Composio Connect, which handles provider sign-in when a toolkit is
           first used.
+        </p>
+      ) : null}
+      {view === "plugins" ? (
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground/70">
+          {isCatalogLoading
+            ? "Refreshing the supported app catalog…"
+            : catalogError
+              ? "Showing the last available catalog while refresh retries."
+              : lastSyncedAt
+                ? `Catalog refreshed ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
+                    Math.round((lastSyncedAt - Date.now()) / 60_000),
+                    "minute",
+                  )}.`
+                : "Catalog is ready."}
         </p>
       ) : null}
 
@@ -317,6 +347,7 @@ function InstalledShelf({
                         <ExtensionIcon
                           accent={entry.accent}
                           logo={entry.logo}
+                          logoUrl={entry.logoUrl}
                           name={entry.name}
                           size="lg"
                           className="group-hover:shadow-[0_7px_18px_rgba(0,0,0,0.14)]"
@@ -396,6 +427,7 @@ function CatalogScopePicker({
 }
 
 function PluginLibrary({
+  catalog,
   scope,
   query,
   installedIds,
@@ -403,6 +435,7 @@ function PluginLibrary({
   onUse,
   onCreate,
 }: {
+  readonly catalog: ReadonlyArray<PluginCatalogEntry>;
   readonly scope: CatalogScope;
   readonly query: string;
   readonly installedIds: ReadonlyArray<string>;
@@ -412,8 +445,8 @@ function PluginLibrary({
 }) {
   const scopedEntries =
     scope === "personal"
-      ? PLUGIN_CATALOG.filter((entry) => installedIds.includes(entry.id))
-      : PLUGIN_CATALOG;
+      ? catalog.filter((entry) => installedIds.includes(entry.id))
+      : catalog;
   const results = searchCatalog(scopedEntries, query);
 
   if (results.length === 0) {
@@ -573,7 +606,12 @@ function PluginRow({
 }) {
   return (
     <article className="group flex min-h-24 items-center gap-3.5 border-b border-border/50 py-4">
-      <ExtensionIcon accent={entry.accent} logo={entry.logo} name={entry.name} />
+      <ExtensionIcon
+        accent={entry.accent}
+        logo={entry.logo}
+        logoUrl={entry.logoUrl}
+        name={entry.name}
+      />
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-semibold text-foreground">{entry.name}</h3>
         <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
