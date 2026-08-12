@@ -1017,10 +1017,15 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
         const customInstructions = options.getCustomInstructions
           ? yield* options.getCustomInstructions()
           : "";
-        const mcpSession = McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
+        const browserMcpSession = McpProviderSession.readMcpProviderSession(
+          threadId,
+          options.instanceId,
+        );
+        const externalMcpSession = McpProviderSession.readExternalMcpProviderSessions(threadId)[0];
+        const mcpSession = externalMcpSession ?? browserMcpSession;
         const effectiveInstructions = [
           customInstructions.trim(),
-          ...(mcpSession ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
+          ...(browserMcpSession ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
         ]
           .filter((instructions) => instructions.length > 0)
           .join("\n\n");
