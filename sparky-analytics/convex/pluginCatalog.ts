@@ -113,9 +113,16 @@ export const publicCatalog = internalQuery({
       .order("desc")
       .take(2000);
     const version = plugins.reduce((latest, plugin) => Math.max(latest, plugin.syncedAt), 0);
+    const project = ({
+      _id: _id,
+      _creationTime: _creationTime,
+      syncedAt: _syncedAt,
+      enabled: _enabled,
+      ...plugin
+    }: (typeof plugins)[number]) => plugin;
     return {
       version,
-      plugins: plugins.map(({ syncedAt: _syncedAt, enabled: _enabled, ...plugin }) => plugin),
+      plugins: plugins.map(project),
     };
   },
 });
@@ -141,7 +148,13 @@ export const listAdmin = query({
       .take(2000);
     const rows = [...enabled, ...available];
     const syncedAt = rows.length > 0 ? Math.max(...rows.map((row) => row.syncedAt)) : null;
-    const project = ({ syncedAt: _syncedAt, enabled: _enabled, ...plugin }: (typeof rows)[number]) => plugin;
+    const project = ({
+      _id: _id,
+      _creationTime: _creationTime,
+      syncedAt: _syncedAt,
+      enabled: _enabled,
+      ...plugin
+    }: (typeof rows)[number]) => plugin;
     return { syncedAt, enabled: enabled.map(project), available: available.map(project) };
   },
 });
