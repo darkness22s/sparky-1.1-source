@@ -6,7 +6,7 @@ import {
   SearchIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ExtensionIcon } from "../components/extensions/ExtensionIcon";
 import { Button } from "../components/ui/button";
@@ -30,6 +30,7 @@ import { useExtensionInstallState } from "../extensionLibrary";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cn } from "../lib/utils";
 import { isElectron } from "../env";
+import { listMcpConnections, startMcpOAuth } from "../mcpClient";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 
 type LibraryView = "plugins" | "mods";
@@ -49,7 +50,26 @@ function PluginsRouteView() {
   const [view, setView] = useState<LibraryView>("plugins");
   const [scope, setScope] = useState<CatalogScope>("public");
   const [query, setQuery] = useState("");
+  const [connectedPluginIds, setConnectedPluginIds] = useState<ReadonlyArray<string>>([]);
   const { pluginIds, modIds, setPluginInstalled, setModInstalled } = useExtensionInstallState();
+
+  const refreshConnections = useCallback(() => {
+    void listMcpConnections()
+      .then((connections) => {
+        setConnectedPluginIds(
+          connections
+            .filter((connection) => connection.status === "connected")
+            .map((connection) => connection.pluginSlug),
+        );
+      })
+      .catch(() => setConnectedPluginIds([]));
+  }, []);
+
+  useEffect(() => {
+    refreshConnections();
+    window.addEventListener("focus", refreshConnections);
+    return () => window.removeEventListener("focus", refreshConnections);
+  }, [refreshConnections]);
 
   const installedPlugins = useMemo(
     () => PLUGIN_CATALOG.filter((entry) => pluginIds.includes(entry.id)),
@@ -88,11 +108,35 @@ function PluginsRouteView() {
 
   const handleUsePlugin = useCallback(
     (entry: PluginCatalogEntry) => {
+      if (!connectedPluginIds.includes(entry.id)) {
+        void (async () => {
+          try {
+            const authorizationUrl = await startMcpOAuth(entry.id);
+            window.open(authorizationUrl, "_blank", "noopener,noreferrer");
+            toastManager.add(
+              stackedThreadToast({
+                type: "info",
+                title: `Connect ${entry.name}`,
+                description: "Finish provider sign-in in the new tab, then return to Sparky.",
+              }),
+            );
+          } catch (error) {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: `Could not connect ${entry.name}`,
+                description: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          }
+        })();
+        return;
+      }
       void openEditableDraft(
         `${buildExtensionReference(entry.name, "plugin")}[describe what you want Sparky to do].`,
       );
     },
-    [openEditableDraft],
+    [connectedPluginIds, openEditableDraft],
   );
 
   const handleUseMod = useCallback(
