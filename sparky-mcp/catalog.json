@@ -1,0 +1,123 @@
+[
+  {
+    "slug": "github",
+    "name": "GitHub",
+    "description": "Review pull requests, inspect issues, and work with repositories.",
+    "category": "Developer Tools",
+    "tags": ["code", "pull requests", "issues", "git"],
+    "logoUrl": "https://sparky.llc/plugin-logos/github.svg",
+    "accent": "#181717",
+    "mcpServerUrl": "https://api.githubcopilot.com/mcp/",
+    "auth": {
+      "authorizationEndpoint": "https://github.com/login/oauth/authorize",
+      "tokenEndpoint": "https://github.com/login/oauth/access_token",
+      "clientIdEnv": "GITHUB_MCP_CLIENT_ID",
+      "clientSecretEnv": "GITHUB_MCP_CLIENT_SECRET",
+      "scopes": ["read:user", "repo"]
+    },
+    "enabled": true
+  },
+  {
+    "slug": "vercel",
+    "name": "Vercel",
+    "description": "Inspect deployments, logs, and preview environments.",
+    "category": "Developer Tools",
+    "tags": ["deployments", "hosting", "logs"],
+    "logoUrl": "https://sparky.llc/plugin-logos/vercel.svg",
+    "accent": "#111111",
+    "mcpServerUrl": "https://mcp.vercel.com",
+    "auth": {
+      "metadataUrl": "https://mcp.vercel.com/.well-known/oauth-protected-resource",
+      "clientIdEnv": "VERCEL_MCP_CLIENT_ID",
+      "clientSecretEnv": "VERCEL_MCP_CLIENT_SECRET",
+      "scopes": []
+    },
+    "enabled": true
+  },
+  {
+    "slug": "supabase",
+    "name": "Supabase",
+    "description": "Explore database structure, logs, and project configuration.",
+    "category": "Developer Tools",
+    "tags": ["database", "backend", "postgres"],
+    "logoUrl": "https://sparky.llc/plugin-logos/supabase.svg",
+    "accent": "#3ecf8e",
+    "mcpServerUrl": "https://mcp.supabase.com/mcp",
+    "auth": {
+      "metadataUrl": "https://mcp.supabase.com/.well-known/oauth-protected-resource",
+      "clientIdEnv": "SUPABASE_MCP_CLIENT_ID",
+      "clientSecretEnv": "SUPABASE_MCP_CLIENT_SECRET",
+      "scopes": []
+    },
+    "enabled": true
+  },
+  {
+    "slug": "linear",
+    "name": "Linear",
+    "description": "Triage issues, shape projects, and keep cycles moving.",
+    "category": "Productivity",
+    "tags": ["issues", "projects", "planning"],
+    "logoUrl": "https://sparky.llc/plugin-logos/linear.svg",
+    "accent": "#5e6ad2",
+    "mcpServerUrl": "https://mcp.linear.app/mcp",
+    "auth": {
+      "metadataUrl": "https://mcp.linear.app/.well-known/oauth-protected-resource",
+      "clientIdEnv": "LINEAR_MCP_CLIENT_ID",
+      "clientSecretEnv": "LINEAR_MCP_CLIENT_SECRET",
+      "scopes": ["read"]
+    },
+    "enabled": true
+  },
+  {
+    "slug": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Understand availability and prepare meetings with context.",
+    "category": "Productivity",
+    "tags": ["calendar", "meetings", "schedule"],
+    "logoUrl": "https://sparky.llc/plugin-logos/googlecalendar.svg",
+    "accent": "#4285f4",
+    "mcpServerUrl": "https://calendarmcp.googleapis.com/mcp/v1",
+    "auth": {
+      "authorizationEndpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+      "tokenEndpoint": "https://oauth2.googleapis.com/token",
+      "clientIdEnv": "GOOGLE_MCP_CLIENT_ID",
+      "clientSecretEnv": "GOOGLE_MCP_CLIENT_SECRET",
+      "scopes": ["openid", "email", "profile", "https://www.googleapis.com/auth/calendar"]
+    },
+    "enabled": true
+  },
+  {
+    "slug": "notion",
+    "name": "Notion",
+    "description": "Search team knowledge and turn conversations into documents.",
+    "category": "Productivity",
+    "tags": ["docs", "wiki", "knowledge"],
+    "logoUrl": "https://sparky.llc/plugin-logos/notion.svg",
+    "accent": "#111111",
+    "mcpServerUrl": "https://mcp.notion.com/mcp",
+    "auth": {
+      "metadataUrl": "https://mcp.notion.com/.well-known/oauth-protected-resource",
+      "clientIdEnv": "NOTION_MCP_CLIENT_ID",
+      "clientSecretEnv": "NOTION_MCP_CLIENT_SECRET",
+      "scopes": []
+    },
+    "enabled": true
+  },
+  {
+    "slug": "figma",
+    "name": "Figma",
+    "description": "Inspect design context and turn feedback into clear actions.",
+    "category": "Creativity",
+    "tags": ["design", "prototypes", "comments"],
+    "logoUrl": "https://sparky.llc/plugin-logos/figma.svg",
+    "accent": "#a259ff",
+    "mcpServerUrl": "https://mcp.figma.com/mcp",
+    "auth": {
+      "metadataUrl": "https://mcp.figma.com/.well-known/oauth-protected-resource",
+      "clientIdEnv": "FIGMA_MCP_CLIENT_ID",
+      "clientSecretEnv": "FIGMA_MCP_CLIENT_SECRET",
+      "scopes": ["mcp:connect"]
+    },
+    "enabled": true
+  }
+]

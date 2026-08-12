@@ -1,8 +1,10 @@
 import postgres from "postgres";
 
 export interface PluginAuthConfig {
-  authorizationEndpoint: string;
-  tokenEndpoint: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  metadataUrl?: string;
+  registrationEndpoint?: string;
   clientIdEnv: string;
   clientSecretEnv: string;
   scopes: string[];
@@ -27,6 +29,8 @@ export interface ConnectionRecord {
   status: "connected" | "revoked";
   encryptedAccessToken: string;
   encryptedRefreshToken: string | null;
+  clientId: string | null;
+  encryptedClientSecret: string | null;
   tokenType: string;
   expiresAt: Date | null;
 }
@@ -114,7 +118,7 @@ export async function revokeConnection(userSubject: string, pluginSlug: string) 
 
 export async function getConnection(userSubject: string, pluginSlug: string): Promise<ConnectionRecord | null> {
   const rows = await sql<ConnectionRecord[]>`
-    SELECT "pluginSlug", status, "encryptedAccessToken", "encryptedRefreshToken", "tokenType", "expiresAt"
+    SELECT "pluginSlug", status, "encryptedAccessToken", "encryptedRefreshToken", "clientId", "encryptedClientSecret", "tokenType", "expiresAt"
     FROM mcp_connections
     WHERE "userSubject" = ${userSubject} AND "pluginSlug" = ${pluginSlug}
     LIMIT 1
@@ -127,11 +131,16 @@ export async function saveOAuthState(input: {
   userSubject: string;
   pluginSlug: string;
   codeVerifier: string;
+  clientId?: string;
+  encryptedClientSecret?: string;
   expiresAt: Date;
 }) {
   await sql`
-    INSERT INTO mcp_oauth_states (state, "userSubject", "pluginSlug", "codeVerifier", "expiresAt")
-    VALUES (${input.state}, ${input.userSubject}, ${input.pluginSlug}, ${input.codeVerifier}, ${input.expiresAt})
+    INSERT INTO mcp_oauth_states
+      (state, "userSubject", "pluginSlug", "codeVerifier", "clientId", "encryptedClientSecret", "expiresAt")
+    VALUES
+      (${input.state}, ${input.userSubject}, ${input.pluginSlug}, ${input.codeVerifier},
+       ${input.clientId ?? null}, ${input.encryptedClientSecret ?? null}, ${input.expiresAt})
   `;
 }
 
@@ -142,9 +151,11 @@ export async function getOAuthState(state: string) {
     userSubject: string;
     pluginSlug: string;
     codeVerifier: string;
+    clientId: string | null;
+    encryptedClientSecret: string | null;
     expiresAt: Date;
   }>>`
-    SELECT id, state, "userSubject", "pluginSlug", "codeVerifier", "expiresAt"
+    SELECT id, state, "userSubject", "pluginSlug", "codeVerifier", "clientId", "encryptedClientSecret", "expiresAt"
     FROM mcp_oauth_states
     WHERE state = ${state}
     LIMIT 1
@@ -161,19 +172,24 @@ export async function saveConnection(input: {
   pluginSlug: string;
   encryptedAccessToken: string;
   encryptedRefreshToken?: string;
+  clientId?: string;
+  encryptedClientSecret?: string;
   tokenType: string;
   expiresAt?: Date;
 }) {
   await sql`
     INSERT INTO mcp_connections
-      ("userSubject", "pluginSlug", status, "encryptedAccessToken", "encryptedRefreshToken", "tokenType", "expiresAt", "createdAt", "updatedAt")
+      ("userSubject", "pluginSlug", status, "encryptedAccessToken", "encryptedRefreshToken", "clientId", "encryptedClientSecret", "tokenType", "expiresAt", "createdAt", "updatedAt")
     VALUES
       (${input.userSubject}, ${input.pluginSlug}, 'connected', ${input.encryptedAccessToken},
-       ${input.encryptedRefreshToken ?? null}, ${input.tokenType}, ${input.expiresAt ?? null}, NOW(), NOW())
+       ${input.encryptedRefreshToken ?? null}, ${input.clientId ?? null}, ${input.encryptedClientSecret ?? null},
+       ${input.tokenType}, ${input.expiresAt ?? null}, NOW(), NOW())
     ON CONFLICT ("userSubject", "pluginSlug") DO UPDATE SET
       status = 'connected',
       "encryptedAccessToken" = EXCLUDED."encryptedAccessToken",
       "encryptedRefreshToken" = EXCLUDED."encryptedRefreshToken",
+      "clientId" = EXCLUDED."clientId",
+      "encryptedClientSecret" = EXCLUDED."encryptedClientSecret",
       "tokenType" = EXCLUDED."tokenType",
       "expiresAt" = EXCLUDED."expiresAt",
       "updatedAt" = NOW()

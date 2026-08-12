@@ -103,11 +103,110 @@ function requireAdmin(userSubject: string) {
   if (!adminSubject || userSubject !== adminSubject) throw new HttpError(403, "MCP catalog administration is required.");
 }
 
-function oauthClient(plugin: PluginRecord) {
-  const clientId = process.env[plugin.auth.clientIdEnv];
-  const clientSecret = process.env[plugin.auth.clientSecretEnv];
-  if (!clientId || !clientSecret) throw new Error(`OAuth credentials are not configured for ${plugin.slug}.`);
-  return { clientId, clientSecret };
+interface OAuthEndpoints {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  registrationEndpoint?: string;
+}
+
+interface OAuthClient {
+  clientId: string;
+  clientSecret?: string;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+async function readJsonResponse(response: Response, description: string): Promise<Record<string, unknown>> {
+  if (!response.ok) throw new HttpError(502, `${description} failed (${response.status}).`);
+  const value: unknown = await response.json();
+  if (!isRecord(value)) throw new HttpError(502, `${description} returned invalid JSON.`);
+  return value;
+}
+
+async function resolveOAuthEndpoints(plugin: PluginRecord): Promise<OAuthEndpoints> {
+  const configuredAuthorization = nonEmptyString(plugin.auth.authorizationEndpoint);
+  const configuredToken = nonEmptyString(plugin.auth.tokenEndpoint);
+  if (configuredAuthorization && configuredToken) {
+    return {
+      authorizationEndpoint: configuredAuthorization,
+      tokenEndpoint: configuredToken,
+      ...(nonEmptyString(plugin.auth.registrationEndpoint)
+        ? { registrationEndpoint: nonEmptyString(plugin.auth.registrationEndpoint) }
+        : {}),
+    };
+  }
+
+  const metadataUrl = nonEmptyString(plugin.auth.metadataUrl);
+  if (!metadataUrl) throw new HttpError(503, `OAuth metadata is not configured for ${plugin.slug}.`);
+  const protectedResource = await readJsonResponse(
+    await fetch(metadataUrl, { headers: { Accept: "application/json" } }),
+    `OAuth metadata discovery for ${plugin.slug}`,
+  );
+  const authorizationServer = nonEmptyString(protectedResource.authorization_server)
+    ?? (Array.isArray(protectedResource.authorization_servers)
+      ? nonEmptyString(protectedResource.authorization_servers[0])
+      : undefined);
+  const metadataCandidates = [
+    metadataUrl,
+    ...(authorizationServer
+      ? [
+          `${authorizationServer.replace(/\/$/u, "")}/.well-known/oauth-authorization-server`,
+          `${authorizationServer.replace(/\/$/u, "")}/.well-known/openid-configuration`,
+        ]
+      : []),
+  ];
+  for (const candidate of metadataCandidates) {
+    const response = await fetch(candidate, { headers: { Accept: "application/json" } });
+    if (!response.ok) continue;
+    const metadata = await response.json() as unknown;
+    if (!isRecord(metadata)) continue;
+    const authorizationEndpoint = nonEmptyString(metadata.authorization_endpoint);
+    const tokenEndpoint = nonEmptyString(metadata.token_endpoint);
+    if (!authorizationEndpoint || !tokenEndpoint) continue;
+    const registrationEndpoint = nonEmptyString(metadata.registration_endpoint);
+    return {
+      authorizationEndpoint,
+      tokenEndpoint,
+      ...(registrationEndpoint ? { registrationEndpoint } : {}),
+    };
+  }
+  throw new HttpError(503, `OAuth endpoints could not be discovered for ${plugin.slug}.`);
+}
+
+async function registerOAuthClient(plugin: PluginRecord, endpoints: OAuthEndpoints): Promise<OAuthClient> {
+  if (!endpoints.registrationEndpoint) {
+    throw new HttpError(503, `OAuth credentials are not configured for ${plugin.slug}.`);
+  }
+  const response = await fetch(endpoints.registrationEndpoint, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_name: "Sparky",
+      redirect_uris: [`${siteUrl()}/mcp/oauth/callback`],
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+      scope: plugin.auth.scopes.join(" "),
+    }),
+  });
+  const payload = await readJsonResponse(response, `OAuth client registration for ${plugin.slug}`);
+  const clientId = nonEmptyString(payload.client_id);
+  if (!clientId) throw new HttpError(502, `OAuth client registration did not return a client ID for ${plugin.slug}.`);
+  const clientSecret = nonEmptyString(payload.client_secret);
+  return { clientId, ...(clientSecret ? { clientSecret } : {}) };
+}
+
+function configuredOAuthClient(plugin: PluginRecord): OAuthClient | null {
+  const clientId = nonEmptyString(process.env[plugin.auth.clientIdEnv]);
+  if (!clientId) return null;
+  const clientSecret = nonEmptyString(process.env[plugin.auth.clientSecretEnv]);
+  return { clientId, ...(clientSecret ? { clientSecret } : {}) };
+}
+
+async function resolveOAuthClient(plugin: PluginRecord, endpoints: OAuthEndpoints): Promise<OAuthClient> {
+  return configuredOAuthClient(plugin) ?? registerOAuthClient(plugin, endpoints);
 }
 
 function pkceChallenge(verifier: string): string {
@@ -119,7 +218,8 @@ async function startOAuth(request: IncomingMessage) {
   const body = await readJson(request);
   const plugin = await getPlugin(stringField(body, "pluginSlug"));
   if (!plugin?.enabled) throw new HttpError(404, "MCP plugin is unavailable.");
-  const { clientId } = oauthClient(plugin);
+  const endpoints = await resolveOAuthEndpoints(plugin);
+  const client = await resolveOAuthClient(plugin, endpoints);
   const verifier = randomToken();
   const state = randomToken();
   await saveOAuthState({
@@ -127,10 +227,12 @@ async function startOAuth(request: IncomingMessage) {
     userSubject,
     pluginSlug: plugin.slug,
     codeVerifier: verifier,
+    clientId: client.clientId,
+    ...(client.clientSecret ? { encryptedClientSecret: encryptSecret(client.clientSecret) } : {}),
     expiresAt: new Date(Date.now() + oauthStateLifetimeMs),
   });
-  const authorizationUrl = new URL(plugin.auth.authorizationEndpoint);
-  authorizationUrl.searchParams.set("client_id", clientId);
+  const authorizationUrl = new URL(endpoints.authorizationEndpoint);
+  authorizationUrl.searchParams.set("client_id", client.clientId);
   authorizationUrl.searchParams.set("redirect_uri", `${siteUrl()}/mcp/oauth/callback`);
   authorizationUrl.searchParams.set("response_type", "code");
   authorizationUrl.searchParams.set("state", state);
@@ -149,18 +251,24 @@ async function completeOAuth(url: URL) {
   if (!oauthState || oauthState.expiresAt.getTime() < Date.now()) throw new HttpError(400, "OAuth state is invalid or expired.");
   const plugin = await getPlugin(oauthState.pluginSlug);
   if (!plugin) throw new HttpError(404, "MCP plugin is unavailable.");
-  const { clientId, clientSecret } = oauthClient(plugin);
-  const response = await fetch(plugin.auth.tokenEndpoint, {
+  const endpoints = await resolveOAuthEndpoints(plugin);
+  const clientId = oauthState.clientId ?? configuredOAuthClient(plugin)?.clientId;
+  const clientSecret = oauthState.encryptedClientSecret
+    ? decryptSecret(oauthState.encryptedClientSecret)
+    : configuredOAuthClient(plugin)?.clientSecret;
+  if (!clientId) throw new HttpError(502, `OAuth client configuration is missing for ${plugin.slug}.`);
+  const tokenParams = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: clientId,
+    redirect_uri: `${siteUrl()}/mcp/oauth/callback`,
+    code_verifier: oauthState.codeVerifier,
+  });
+  if (clientSecret) tokenParams.set("client_secret", clientSecret);
+  const response = await fetch(endpoints.tokenEndpoint, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: `${siteUrl()}/mcp/oauth/callback`,
-      code_verifier: oauthState.codeVerifier,
-    }),
+    body: tokenParams,
   });
   if (!response.ok) throw new HttpError(502, `OAuth token exchange failed (${response.status}).`);
   const token = (await response.json()) as Record<string, unknown>;
@@ -170,6 +278,8 @@ async function completeOAuth(url: URL) {
     pluginSlug: oauthState.pluginSlug,
     encryptedAccessToken: encryptSecret(token.access_token),
     ...(typeof token.refresh_token === "string" ? { encryptedRefreshToken: encryptSecret(token.refresh_token) } : {}),
+    clientId,
+    ...(clientSecret ? { encryptedClientSecret: encryptSecret(clientSecret) } : {}),
     tokenType: typeof token.token_type === "string" ? token.token_type : "Bearer",
     ...(typeof token.expires_in === "number" ? { expiresAt: new Date(Date.now() + token.expires_in * 1000) } : {}),
   });
@@ -179,17 +289,23 @@ async function completeOAuth(url: URL) {
 
 async function refreshConnection(userSubject: string, plugin: PluginRecord, connection: NonNullable<Awaited<ReturnType<typeof getConnection>>>) {
   if (!connection.encryptedRefreshToken) throw new HttpError(409, "Reconnect this MCP plugin.");
-  const { clientId, clientSecret } = oauthClient(plugin);
+  const clientId = connection.clientId ?? configuredOAuthClient(plugin)?.clientId;
+  const clientSecret = connection.encryptedClientSecret
+    ? decryptSecret(connection.encryptedClientSecret)
+    : configuredOAuthClient(plugin)?.clientSecret;
+  const endpoints = await resolveOAuthEndpoints(plugin);
+  if (!clientId) throw new HttpError(409, "Reconnect this MCP plugin.");
   const refreshToken = decryptSecret(connection.encryptedRefreshToken);
-  const response = await fetch(plugin.auth.tokenEndpoint, {
+  const tokenParams = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: clientId,
+  });
+  if (clientSecret) tokenParams.set("client_secret", clientSecret);
+  const response = await fetch(endpoints.tokenEndpoint, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
+    body: tokenParams,
   });
   if (!response.ok) throw new HttpError(409, "Reconnect this MCP plugin.");
   const token = (await response.json()) as Record<string, unknown>;
@@ -206,6 +322,8 @@ async function refreshConnection(userSubject: string, plugin: PluginRecord, conn
     pluginSlug: plugin.slug,
     encryptedAccessToken: refreshed.encryptedAccessToken,
     encryptedRefreshToken: refreshed.encryptedRefreshToken ?? undefined,
+    clientId: refreshed.clientId ?? undefined,
+    encryptedClientSecret: refreshed.encryptedClientSecret ?? undefined,
     tokenType: refreshed.tokenType,
     expiresAt: refreshed.expiresAt ?? undefined,
   });
@@ -271,6 +389,12 @@ function parsePluginInput(body: Record<string, unknown>): Omit<PluginRecord, "up
   if (!isRecord(authValue)) throw new HttpError(400, "auth is required.");
   const scopes = authValue.scopes;
   if (!Array.isArray(scopes) || scopes.some((value) => typeof value !== "string")) throw new HttpError(400, "auth.scopes is invalid.");
+  const authorizationEndpoint = nonEmptyString(authValue.authorizationEndpoint);
+  const tokenEndpoint = nonEmptyString(authValue.tokenEndpoint);
+  const metadataUrl = nonEmptyString(authValue.metadataUrl);
+  if ((!authorizationEndpoint || !tokenEndpoint) && !metadataUrl) {
+    throw new HttpError(400, "auth endpoints or auth.metadataUrl are required.");
+  }
   return {
     slug: stringField(body, "slug"),
     name: stringField(body, "name"),
@@ -281,8 +405,12 @@ function parsePluginInput(body: Record<string, unknown>): Omit<PluginRecord, "up
     accent: stringField(body, "accent"),
     mcpServerUrl: stringField(body, "mcpServerUrl"),
     auth: {
-      authorizationEndpoint: stringField(authValue, "authorizationEndpoint"),
-      tokenEndpoint: stringField(authValue, "tokenEndpoint"),
+      ...(authorizationEndpoint ? { authorizationEndpoint } : {}),
+      ...(tokenEndpoint ? { tokenEndpoint } : {}),
+      ...(metadataUrl ? { metadataUrl } : {}),
+      ...(nonEmptyString(authValue.registrationEndpoint)
+        ? { registrationEndpoint: nonEmptyString(authValue.registrationEndpoint) }
+        : {}),
       clientIdEnv: stringField(authValue, "clientIdEnv"),
       clientSecretEnv: stringField(authValue, "clientSecretEnv"),
       scopes,
@@ -301,7 +429,7 @@ function html(response: ServerResponse, status: number, title: string, message: 
   response.end(payload);
 }
 
-async function route(request: IncomingMessage, response: ServerResponse) {
+export async function route(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   if (request.method === "OPTIONS") {
     response.writeHead(204, corsHeaders(request.headers.origin));
@@ -358,29 +486,39 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   json(response, 404, { error: "Not found." }, corsHeaders(request.headers.origin));
 }
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(readonly statusCode: number, message: string) {
     super(message);
   }
 }
 
-const server = createServer((request, response) => {
-  void route(request, response).catch((error: unknown) => {
+export async function handleRequest(request: IncomingMessage, response: ServerResponse) {
+  try {
+    await route(request, response);
+  } catch (error: unknown) {
     const status = error instanceof HttpAuthError || error instanceof HttpError ? error.statusCode : 500;
     const message = status >= 500 ? "Internal MCP backend error." : error instanceof Error ? error.message : "Request failed.";
     if (!response.headersSent) json(response, status, { error: message }, corsHeaders(request.headers.origin));
     else response.end();
-  });
-});
-
-server.listen(port, () => {
-  console.log(`Sparky MCP backend listening on port ${port}`);
-});
-
-async function shutdown() {
-  await sql.end({ timeout: 5 });
-  server.close();
+  }
 }
 
-process.once("SIGINT", () => void shutdown());
-process.once("SIGTERM", () => void shutdown());
+function startStandaloneServer() {
+  const server = createServer((request, response) => {
+    void handleRequest(request, response);
+  });
+
+  server.listen(port, () => {
+    console.log(`Sparky MCP backend listening on port ${port}`);
+  });
+
+  async function shutdown() {
+    await sql.end({ timeout: 5 });
+    server.close();
+  }
+
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+}
+
+if (process.env.VERCEL !== "1") startStandaloneServer();

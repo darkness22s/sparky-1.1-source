@@ -24,9 +24,20 @@ The default `*` is intended only for controlled development.
 
 ## Database setup
 
-Run `migrations/001_initial.sql` against the Neon database once. The migration
-creates catalog, connection, OAuth state, and session tables. Do not commit a real
-`.env.local` or connection string.
+Run `migrations/001_initial.sql` and then `migrations/002_oauth_client_state.sql`
+against the Neon database once. The migrations create catalog, connection, OAuth
+state, and session tables. Do not commit a real `.env.local` or connection string.
+
+Seed the supported remote MCP catalog after the migrations:
+
+```sh
+pnpm run seed:catalog
+```
+
+Providers that publish OAuth metadata are registered through dynamic client
+registration when the provider allows it. Providers that require a pre-registered
+OAuth application read their client ID and secret from the provider-specific
+environment variables in `.env.example`.
 
 ## Commands
 

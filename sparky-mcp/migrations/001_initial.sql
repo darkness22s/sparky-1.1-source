@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS mcp_connections (
   status TEXT NOT NULL CHECK (status IN ('connected', 'revoked')),
   "encryptedAccessToken" TEXT NOT NULL,
   "encryptedRefreshToken" TEXT,
+  "clientId" TEXT,
+  "encryptedClientSecret" TEXT,
   "tokenType" TEXT NOT NULL DEFAULT 'Bearer',
   "expiresAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -34,6 +36,8 @@ CREATE TABLE IF NOT EXISTS mcp_oauth_states (
   "userSubject" TEXT NOT NULL,
   "pluginSlug" TEXT NOT NULL REFERENCES mcp_catalog(slug) ON DELETE CASCADE,
   "codeVerifier" TEXT NOT NULL,
+  "clientId" TEXT,
+  "encryptedClientSecret" TEXT,
   "expiresAt" TIMESTAMPTZ NOT NULL
 );
 
