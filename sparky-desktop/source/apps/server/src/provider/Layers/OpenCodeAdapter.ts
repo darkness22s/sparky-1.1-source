@@ -1218,6 +1218,7 @@ export function makeOpenCodeAdapter(
                 input.threadId,
                 boundInstanceId,
               );
+              const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
               if (mcpSession && !server.external) {
                 yield* runOpenCodeSdk("mcp.add", () =>
                   client.mcp.add({
@@ -1231,6 +1232,24 @@ export function makeOpenCodeAdapter(
                       oauth: false,
                     },
                   }),
+                );
+              }
+              if (externalMcpSessions.length > 0 && !server.external) {
+                yield* Effect.forEach(
+                  externalMcpSessions,
+                  (session, index) =>
+                    runOpenCodeSdk("mcp.add", () =>
+                      client.mcp.add({
+                        name: McpProviderSession.externalMcpServerName(session.pluginSlug, index),
+                        config: {
+                          type: "remote",
+                          url: session.endpoint,
+                          headers: { Authorization: session.authorizationHeader },
+                          oauth: false,
+                        },
+                      }),
+                    ),
+                  { discard: true },
                 );
               }
               // Resume: re-adopt the session named by the durable cursor —

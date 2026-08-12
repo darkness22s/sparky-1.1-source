@@ -3511,6 +3511,17 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(ultracode ? { ultracode: true } : {}),
       };
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId, boundInstanceId);
+      const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
+      const externalMcpServers = Object.fromEntries(
+        externalMcpSessions.map((session, index) => [
+          McpProviderSession.externalMcpServerName(session.pluginSlug, index),
+          {
+            type: "http" as const,
+            url: session.endpoint,
+            headers: { Authorization: session.authorizationHeader },
+          },
+        ]),
+      );
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -3536,16 +3547,21 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: claudeEnvironment,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
-        ...(mcpSession
+        ...(mcpSession || externalMcpSessions.length > 0
           ? {
               mcpServers: {
-                "t3-code": {
-                  type: "http",
-                  url: mcpSession.endpoint,
-                  headers: {
-                    Authorization: mcpSession.authorizationHeader,
-                  },
-                },
+                ...(mcpSession
+                  ? {
+                      "t3-code": {
+                        type: "http",
+                        url: mcpSession.endpoint,
+                        headers: {
+                          Authorization: mcpSession.authorizationHeader,
+                        },
+                      },
+                    }
+                  : {}),
+                ...externalMcpServers,
               },
             }
           : {}),

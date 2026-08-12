@@ -3,6 +3,8 @@ import * as Effect from "effect/Effect";
 import { managedRelaySessionAtom } from "@sparky/client-runtime/relay";
 
 import { appAtomRegistry } from "./rpc/atomRegistry";
+import { fetchPrimaryEnvironment } from "./environments/primary/httpLayer";
+import { resolvePrimaryEnvironmentHttpUrl } from "./environments/primary/target";
 
 const defaultMcpServiceUrl = "https://sparky-mcp-service.vercel.app";
 
@@ -11,6 +13,13 @@ export interface McpConnection {
   readonly status: "connected" | "revoked";
   readonly expiresAt: string | null;
   readonly updatedAt: string;
+}
+
+export interface McpProviderSession {
+  readonly pluginSlug: string;
+  readonly endpoint: string;
+  readonly authorizationHeader: string;
+  readonly expiresAt: number;
 }
 
 function serviceUrl(): string {
@@ -52,4 +61,40 @@ export async function startMcpOAuth(pluginSlug: string): Promise<string> {
   });
   const result = await readJson<{ authorizationUrl: string }>(response);
   return result.authorizationUrl;
+}
+
+export async function createMcpProviderSession(pluginSlug: string): Promise<McpProviderSession> {
+  const response = await authenticatedRequest("/mcp/session", {
+    method: "POST",
+    body: JSON.stringify({ pluginSlug }),
+  });
+  const result = await readJson<{
+    token: string;
+    endpointPath: string;
+    expiresAt: string;
+  }>(response);
+  return {
+    pluginSlug,
+    endpoint: `${serviceUrl()}${result.endpointPath}`,
+    authorizationHeader: `Bearer ${result.token}`,
+    expiresAt: Date.parse(result.expiresAt),
+  };
+}
+
+export async function registerMcpProviderSessions(
+  threadId: string,
+  sessions: ReadonlyArray<McpProviderSession>,
+): Promise<void> {
+  const response = await fetchPrimaryEnvironment(
+    resolvePrimaryEnvironmentHttpUrl("/api/mcp/external-session"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId, sessions }),
+    },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || `Could not register MCP session (${response.status}).`);
+  }
 }

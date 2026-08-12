@@ -1430,6 +1430,22 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           input.threadId,
           boundInstanceId,
         );
+        const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
+        const externalMcpEnvironment = Object.fromEntries(
+          externalMcpSessions.map((session, index) => [
+            `SPARKY_MCP_TOKEN_${index}`,
+            session.authorizationHeader.replace(/^Bearer\s+/u, ""),
+          ]),
+        );
+        const externalMcpArgs = externalMcpSessions.flatMap((session, index) => {
+          const name = McpProviderSession.externalMcpServerName(session.pluginSlug, index);
+          return [
+            "-c",
+            `mcp_servers.${name}.url=${session.endpoint}`,
+            "-c",
+            `mcp_servers.${name}.bearer_token_env_var="SPARKY_MCP_TOKEN_${index}"`,
+          ];
+        });
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
@@ -1459,6 +1475,25 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
                   "-c",
                   'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                ],
+              }
+            : {}),
+          ...(externalMcpSessions.length > 0
+            ? {
+                environment: {
+                  ...(options?.environment ?? process.env),
+                  ...externalMcpEnvironment,
+                },
+                appServerArgs: [
+                  ...(mcpSession
+                    ? [
+                        "-c",
+                        `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
+                        "-c",
+                        'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                      ]
+                    : []),
+                  ...externalMcpArgs,
                 ],
               }
             : {}),

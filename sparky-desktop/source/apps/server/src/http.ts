@@ -5,6 +5,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  ThreadId,
 } from "@sparky/contracts";
 import { decodeOtlpTraceRecords } from "@sparky/shared/observability";
 import * as Data from "effect/Data";
@@ -39,6 +40,7 @@ import {
 } from "./auth/http.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import { browserApiCorsAllowedHeaders, browserApiCorsAllowedMethods } from "./httpCors.ts";
+import * as McpProviderSession from "./mcp/McpProviderSession.ts";
 
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -49,6 +51,7 @@ const DESKTOP_RENDERER_ORIGINS = [
   "sparky-dev://app",
 ];
 const SPARKY_CODEX_AUTH_ROUTE = "/api/sparky/codex-auth";
+const EXTERNAL_MCP_SESSION_ROUTE = "/api/mcp/external-session";
 
 export const browserApiCorsLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -198,6 +201,52 @@ export const sparkyCodexAuthRouteLayer = Layer.mergeAll(
       return yield* sparkyCodexAuthResponse("--codex-logout");
     }),
   ),
+);
+
+export const externalMcpSessionRouteLayer = HttpRouter.add(
+  "POST",
+  EXTERNAL_MCP_SESSION_ROUTE,
+  Effect.gen(function* () {
+    yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const body = yield* request.json;
+    if (typeof body !== "object" || body === null) {
+      return HttpServerResponse.jsonUnsafe({ error: "Invalid MCP session payload." }, { status: 400 });
+    }
+    const input = body as {
+      readonly threadId?: unknown;
+      readonly sessions?: unknown;
+    };
+    if (typeof input.threadId !== "string" || input.threadId.trim().length === 0 || !Array.isArray(input.sessions)) {
+      return HttpServerResponse.jsonUnsafe({ error: "threadId and sessions are required." }, { status: 400 });
+    }
+    const sessions: McpProviderSession.ExternalMcpProviderSessionConfig[] = [];
+    for (const candidate of input.sessions) {
+      if (typeof candidate !== "object" || candidate === null) {
+        return HttpServerResponse.jsonUnsafe({ error: "Invalid MCP session entry." }, { status: 400 });
+      }
+      const session = candidate as Record<string, unknown>;
+      if (
+        typeof session.pluginSlug !== "string" ||
+        typeof session.endpoint !== "string" ||
+        !/^https?:\/\//u.test(session.endpoint) ||
+        typeof session.authorizationHeader !== "string" ||
+        !/^Bearer\s+\S+/u.test(session.authorizationHeader) ||
+        typeof session.expiresAt !== "number" ||
+        !Number.isFinite(session.expiresAt)
+      ) {
+        return HttpServerResponse.jsonUnsafe({ error: "Invalid MCP session entry." }, { status: 400 });
+      }
+      sessions.push({
+        pluginSlug: session.pluginSlug,
+        endpoint: session.endpoint,
+        authorizationHeader: session.authorizationHeader,
+        expiresAt: session.expiresAt,
+      });
+    }
+    McpProviderSession.setExternalMcpProviderSessions(ThreadId.make(input.threadId), sessions);
+    return HttpServerResponse.empty({ status: 204 });
+  }),
 );
 
 export const serverEnvironmentHttpApiLayer = HttpApiBuilder.group(

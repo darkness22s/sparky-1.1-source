@@ -30,7 +30,12 @@ import { useExtensionInstallState } from "../extensionLibrary";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cn } from "../lib/utils";
 import { isElectron } from "../env";
-import { listMcpConnections, startMcpOAuth } from "../mcpClient";
+import {
+  createMcpProviderSession,
+  listMcpConnections,
+  registerMcpProviderSessions,
+  startMcpOAuth,
+} from "../mcpClient";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 
 type LibraryView = "plugins" | "mods";
@@ -81,7 +86,7 @@ function PluginsRouteView() {
   );
 
   const openEditableDraft = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, pluginSlug?: string) => {
       if (!defaultProjectRef) {
         toastManager.add(
           stackedThreadToast({
@@ -97,6 +102,14 @@ function PluginsRouteView() {
       await handleNewThread(defaultProjectRef, {
         forceNew: true,
         initialPrompt: prompt,
+        ...(pluginSlug
+          ? {
+              beforeNavigate: async (threadId: string) => {
+                const session = await createMcpProviderSession(pluginSlug);
+                await registerMcpProviderSessions(threadId, [session]);
+              },
+            }
+          : {}),
       });
     },
     [defaultProjectRef, handleNewThread, navigate],
@@ -134,6 +147,7 @@ function PluginsRouteView() {
       }
       void openEditableDraft(
         `${buildExtensionReference(entry.name, "plugin")}[describe what you want Sparky to do].`,
+        entry.id,
       );
     },
     [connectedPluginIds, openEditableDraft],

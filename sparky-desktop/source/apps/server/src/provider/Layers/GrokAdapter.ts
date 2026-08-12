@@ -573,6 +573,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             input.threadId,
             boundInstanceId,
           );
+          const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
             ...(options?.environment ? { environment: options.environment } : {}),
@@ -580,20 +581,35 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
             clientInfo: { name: "t3-code", version: "0.0.0" },
-            ...(mcpSession
+            ...(mcpSession || externalMcpSessions.length > 0
               ? {
                   mcpServers: [
-                    {
+                    ...(mcpSession
+                      ? [
+                          {
+                            type: "http" as const,
+                            name: "t3-code",
+                            url: mcpSession.endpoint,
+                            headers: [
+                              {
+                                name: "Authorization",
+                                value: mcpSession.authorizationHeader,
+                              },
+                            ],
+                          },
+                        ]
+                      : []),
+                    ...externalMcpSessions.map((session, index) => ({
                       type: "http" as const,
-                      name: "t3-code",
-                      url: mcpSession.endpoint,
+                      name: McpProviderSession.externalMcpServerName(session.pluginSlug, index),
+                      url: session.endpoint,
                       headers: [
                         {
                           name: "Authorization",
-                          value: mcpSession.authorizationHeader,
+                          value: session.authorizationHeader,
                         },
                       ],
-                    },
+                    })),
                   ],
                 }
               : {}),
