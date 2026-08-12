@@ -1094,7 +1094,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const routed = yield* resolveRoutableSession({
           threadId: input.threadId,
           operation: "ProviderService.interruptTurn",
-          allowRecovery: true,
+          // Interrupt is a local control operation. Never start a new provider
+          // session just to interrupt a turn whose in-memory session vanished.
+          allowRecovery: false,
         });
         metricProvider = routed.adapter.provider;
         yield* Effect.annotateCurrentSpan({
@@ -1103,9 +1105,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.thread_id": input.threadId,
           "provider.turn_id": input.turnId,
         });
-        yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        if (routed.isActive) {
+          yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        }
         yield* analytics.record("provider.turn.interrupted", {
           provider: routed.adapter.provider,
+          providerSessionActive: routed.isActive,
         });
       }).pipe(
         withMetrics({

@@ -1234,7 +1234,6 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   );
                 },
                 onToolCompleted: (event) => {
-                  if (isTurnCancelled()) return;
                   if (isHiddenSparkyControlTool(event.toolName)) return;
                   const toolItemId = RuntimeItemId.make(event.toolCallId);
                   const presentation =

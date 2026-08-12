@@ -928,6 +928,38 @@ routing.layer("ProviderServiceLive routing", (it) => {
     }),
   );
 
+  it.effect("settles interrupt without recovering a missing provider session", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-interrupt-without-resume");
+      const session = yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+
+      // Simulate a process/session disappearing before the first turn has
+      // emitted a durable provider resume cursor.
+      yield* directory.upsert({
+        threadId,
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        status: "running",
+        resumeCursor: null,
+      });
+      yield* routing.codex.stopSession(threadId);
+      routing.codex.interruptTurn.mockClear();
+
+      yield* provider.interruptTurn({ threadId, turnId: asTurnId("turn-missing-session") });
+
+      assert.deepEqual(routing.codex.interruptTurn.mock.calls, []);
+      assert.equal(session.threadId, threadId);
+    }),
+  );
+
   it.effect("persists provider-observed context through stop and same-thread recovery", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
