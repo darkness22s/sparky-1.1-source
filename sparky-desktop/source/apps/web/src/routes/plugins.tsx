@@ -6,9 +6,9 @@ import {
   SearchIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
-import { ExtensionIcon } from "../components/extensions/ExtensionIcon";
+import { ExtensionIcon, ExtensionsPageMark } from "../components/extensions/ExtensionIcon";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { SidebarInset } from "../components/ui/sidebar";
@@ -16,6 +16,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip"
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import {
   buildExtensionReference,
+  composioToolkitForPlugin,
   CREATE_MOD_PROMPT,
   CREATE_PLUGIN_PROMPT,
   MOD_CATALOG,
@@ -30,12 +31,6 @@ import { useExtensionInstallState } from "../extensionLibrary";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cn } from "../lib/utils";
 import { isElectron } from "../env";
-import {
-  createMcpProviderSession,
-  listMcpConnections,
-  registerMcpProviderSessions,
-  startMcpOAuth,
-} from "../mcpClient";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
 
 type LibraryView = "plugins" | "mods";
@@ -55,26 +50,7 @@ function PluginsRouteView() {
   const [view, setView] = useState<LibraryView>("plugins");
   const [scope, setScope] = useState<CatalogScope>("public");
   const [query, setQuery] = useState("");
-  const [connectedPluginIds, setConnectedPluginIds] = useState<ReadonlyArray<string>>([]);
   const { pluginIds, modIds, setPluginInstalled, setModInstalled } = useExtensionInstallState();
-
-  const refreshConnections = useCallback(() => {
-    void listMcpConnections()
-      .then((connections) => {
-        setConnectedPluginIds(
-          connections
-            .filter((connection) => connection.status === "connected")
-            .map((connection) => connection.pluginSlug),
-        );
-      })
-      .catch(() => setConnectedPluginIds([]));
-  }, []);
-
-  useEffect(() => {
-    refreshConnections();
-    window.addEventListener("focus", refreshConnections);
-    return () => window.removeEventListener("focus", refreshConnections);
-  }, [refreshConnections]);
 
   const installedPlugins = useMemo(
     () => PLUGIN_CATALOG.filter((entry) => pluginIds.includes(entry.id)),
@@ -86,7 +62,7 @@ function PluginsRouteView() {
   );
 
   const openEditableDraft = useCallback(
-    async (prompt: string, pluginSlug?: string) => {
+    async (prompt: string) => {
       if (!defaultProjectRef) {
         toastManager.add(
           stackedThreadToast({
@@ -102,14 +78,6 @@ function PluginsRouteView() {
       await handleNewThread(defaultProjectRef, {
         forceNew: true,
         initialPrompt: prompt,
-        ...(pluginSlug
-          ? {
-              beforeNavigate: async (threadId: string) => {
-                const session = await createMcpProviderSession(pluginSlug);
-                await registerMcpProviderSessions(threadId, [session]);
-              },
-            }
-          : {}),
       });
     },
     [defaultProjectRef, handleNewThread, navigate],
@@ -121,36 +89,11 @@ function PluginsRouteView() {
 
   const handleUsePlugin = useCallback(
     (entry: PluginCatalogEntry) => {
-      if (!connectedPluginIds.includes(entry.id)) {
-        void (async () => {
-          try {
-            const authorizationUrl = await startMcpOAuth(entry.id);
-            window.open(authorizationUrl, "_blank", "noopener,noreferrer");
-            toastManager.add(
-              stackedThreadToast({
-                type: "info",
-                title: `Connect ${entry.name}`,
-                description: "Finish provider sign-in in the new tab, then return to Sparky.",
-              }),
-            );
-          } catch (error) {
-            toastManager.add(
-              stackedThreadToast({
-                type: "error",
-                title: `Could not connect ${entry.name}`,
-                description: error instanceof Error ? error.message : String(error),
-              }),
-            );
-          }
-        })();
-        return;
-      }
       void openEditableDraft(
-        `${buildExtensionReference(entry.name, "plugin")}[describe what you want Sparky to do].`,
-        entry.id,
+        `${buildExtensionReference(entry.name, "plugin")}Use the Composio toolkit ${composioToolkitForPlugin(entry.id)} to [describe what you want Sparky to do].`,
       );
     },
-    [connectedPluginIds, openEditableDraft],
+    [openEditableDraft],
   );
 
   const handleUseMod = useCallback(
@@ -230,6 +173,13 @@ function LibraryHeader({
         isElectron && "drag-region",
       )}
     >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ExtensionsPageMark />
+        <span className="hidden text-sm font-semibold tracking-[-0.01em] text-foreground sm:block">
+          Extensions
+        </span>
+      </div>
+
       <div
         aria-label="Extension type"
         className="no-drag absolute left-1/2 flex -translate-x-1/2 items-center rounded-lg bg-muted/70 p-0.5 ring-1 ring-border/45"
@@ -290,6 +240,12 @@ function LibraryIntro({
           ? "Adding a plugin makes it referenceable. Its MCP connection and credentials are configured when you use it."
           : "Adding a Mod makes its skill and MCP recipe referenceable; external credentials remain separate."}
       </p>
+      {view === "plugins" ? (
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground/80">
+          Plugins run through Composio Connect, which handles provider sign-in when a toolkit is
+          first used.
+        </p>
+      ) : null}
 
       <label className="relative mt-7 block max-w-2xl">
         <span className="sr-only">Search {view}</span>

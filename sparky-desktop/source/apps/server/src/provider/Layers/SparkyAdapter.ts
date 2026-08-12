@@ -41,6 +41,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import type { ProviderAdapterShape, ProviderThreadSnapshot } from "../Services/ProviderAdapter.ts";
 import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
@@ -1017,15 +1018,17 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
         const customInstructions = options.getCustomInstructions
           ? yield* options.getCustomInstructions()
           : "";
-        const browserMcpSession = McpProviderSession.readMcpProviderSession(
-          threadId,
-          options.instanceId,
-        );
-        const externalMcpSession = McpProviderSession.readExternalMcpProviderSessions(threadId)[0];
-        const mcpSession = externalMcpSession ?? browserMcpSession;
+        const mcpSession = McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
+        const composioMcp = ComposioMcp.readComposioMcpConfig();
+        const activeMcp = composioMcp
+          ? {
+              endpoint: composioMcp.endpoint,
+              authorizationHeader: ComposioMcp.composioAuthorizationHeader(composioMcp),
+            }
+          : mcpSession;
         const effectiveInstructions = [
           customInstructions.trim(),
-          ...(browserMcpSession ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
+          ...(mcpSession && !composioMcp ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
         ]
           .filter((instructions) => instructions.length > 0)
           .join("\n\n");
@@ -1112,7 +1115,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               model,
               cwd,
               hasSession: sessionId !== undefined,
-              hasMcpSession: mcpSession !== undefined,
+              hasMcpSession: activeMcp !== undefined,
             });
             const result = yield* runSparky({
               binaryPath: options.binaryPath,
@@ -1123,10 +1126,10 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               reasoningEffort,
               contextWindow,
               interactionMode,
-              environment: mcpSession
+              environment: activeMcp
                 ? {
                     ...options.environment,
-                    [T3_MCP_BEARER_TOKEN_ENV_VAR]: mcpSession.authorizationHeader.replace(
+                    [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
                       /^Bearer\s+/u,
                       "",
                     ),
@@ -1137,9 +1140,9 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               sessionId,
               customInstructions: effectiveInstructions,
               isCancelled: isTurnCancelled,
-              ...(mcpSession
+              ...(activeMcp
                 ? {
-                    mcpUrl: mcpSession.endpoint,
+                    mcpUrl: activeMcp.endpoint,
                     mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
                   }
                 : {}),

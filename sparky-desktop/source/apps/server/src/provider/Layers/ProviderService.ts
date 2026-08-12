@@ -320,12 +320,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   const clearMcpSession = (threadId: ThreadId) =>
     McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
-          McpProviderSession.clearMcpProviderSession(threadId);
-          McpProviderSession.clearExternalMcpProviderSessions(threadId);
-        }),
-      ),
+      Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
     );
 
   const publishRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>

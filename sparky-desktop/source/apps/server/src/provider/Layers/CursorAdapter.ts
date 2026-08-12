@@ -43,6 +43,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -535,7 +536,7 @@ export function makeCursorAdapter(
             input.threadId,
             boundInstanceId,
           );
-          const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
+          const composioMcp = ComposioMcp.readComposioMcpConfig();
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
             ...(options?.environment ? { environment: options.environment } : {}),
@@ -543,7 +544,7 @@ export function makeCursorAdapter(
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),
             clientInfo: { name: "t3-code", version: "0.0.0" },
-            ...(mcpSession || externalMcpSessions.length > 0
+            ...(mcpSession || composioMcp
               ? {
                   mcpServers: [
                     ...(mcpSession
@@ -553,25 +554,23 @@ export function makeCursorAdapter(
                             name: "t3-code",
                             url: mcpSession.endpoint,
                             headers: [
-                              {
-                                name: "Authorization",
-                                value: mcpSession.authorizationHeader,
-                              },
+                              { name: "Authorization", value: mcpSession.authorizationHeader },
                             ],
                           },
                         ]
                       : []),
-                    ...externalMcpSessions.map((session, index) => ({
-                      type: "http" as const,
-                      name: McpProviderSession.externalMcpServerName(session.pluginSlug, index),
-                      url: session.endpoint,
-                      headers: [
-                        {
-                          name: "Authorization",
-                          value: session.authorizationHeader,
-                        },
-                      ],
-                    })),
+                    ...(composioMcp
+                      ? [
+                          {
+                            type: "http" as const,
+                            name: "composio",
+                            url: composioMcp.endpoint,
+                            headers: Object.entries(ComposioMcp.composioHeaders(composioMcp)).map(
+                              ([name, value]) => ({ name, value }),
+                            ),
+                          },
+                        ]
+                      : []),
                   ],
                 }
               : {}),

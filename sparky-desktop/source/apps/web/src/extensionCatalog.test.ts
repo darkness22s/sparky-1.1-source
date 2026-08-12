@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildExtensionReference,
+  COMPOSIO_PLUGIN_TOOLKITS,
   MOD_CATALOG,
   PLUGIN_CATALOG,
   searchCatalog,
@@ -12,6 +13,10 @@ describe("extension catalog", () => {
   it("ships a curated 20-plugin catalog with unique identifiers", () => {
     expect(PLUGIN_CATALOG).toHaveLength(20);
     expect(new Set(PLUGIN_CATALOG.map((plugin) => plugin.id)).size).toBe(20);
+    expect(Object.keys(COMPOSIO_PLUGIN_TOOLKITS)).toHaveLength(20);
+    expect(PLUGIN_CATALOG.map((plugin) => plugin.id).sort()).toEqual(
+      Object.keys(COMPOSIO_PLUGIN_TOOLKITS).sort(),
+    );
   });
 
   it("models every Mod as an MCP server plus a guiding skill", () => {

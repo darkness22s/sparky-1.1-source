@@ -40,6 +40,7 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 import { getModelSelectionStringOptionValue } from "@sparky/shared/model";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 
 import {
@@ -1430,22 +1431,37 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           input.threadId,
           boundInstanceId,
         );
-        const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
-        const externalMcpEnvironment = Object.fromEntries(
-          externalMcpSessions.map((session, index) => [
-            `SPARKY_MCP_TOKEN_${index}`,
-            session.authorizationHeader.replace(/^Bearer\s+/u, ""),
-          ]),
-        );
-        const externalMcpArgs = externalMcpSessions.flatMap((session, index) => {
-          const name = McpProviderSession.externalMcpServerName(session.pluginSlug, index);
-          return [
-            "-c",
-            `mcp_servers.${name}.url=${session.endpoint}`,
-            "-c",
-            `mcp_servers.${name}.bearer_token_env_var="SPARKY_MCP_TOKEN_${index}"`,
-          ];
+        const composioMcp = ComposioMcp.readComposioMcpConfig({
+          ...process.env,
+          ...(options?.environment ?? {}),
         });
+        const mcpEnvironment = {
+          ...(options?.environment ?? process.env),
+          ...(composioMcp
+            ? { SPARKY_COMPOSIO_MCP_API_KEY: composioMcp.apiKey }
+            : {}),
+          ...(mcpSession
+            ? { T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, "") }
+            : {}),
+        };
+        const mcpAppServerArgs = [
+          ...(mcpSession
+            ? [
+                "-c",
+                `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
+                "-c",
+                'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+              ]
+            : []),
+          ...(composioMcp
+            ? [
+                "-c",
+                `mcp_servers.composio.url=${composioMcp.endpoint}`,
+                "-c",
+                'mcp_servers.composio.bearer_token_env_var="SPARKY_COMPOSIO_MCP_API_KEY"',
+              ]
+            : []),
+        ];
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
@@ -1466,36 +1482,12 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ...(isCodexOAuthModel(selectedModel) ? { contextWindowSource: "oauth" as const } : {}),
           ...(mcpSession
             ? {
-                environment: {
-                  ...(options?.environment ?? process.env),
-                  T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
-                },
-                appServerArgs: [
-                  "-c",
-                  `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
-                  "-c",
-                  'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
-                ],
+                environment: mcpEnvironment,
+                appServerArgs: mcpAppServerArgs,
               }
             : {}),
-          ...(externalMcpSessions.length > 0
-            ? {
-                environment: {
-                  ...(options?.environment ?? process.env),
-                  ...externalMcpEnvironment,
-                },
-                appServerArgs: [
-                  ...(mcpSession
-                    ? [
-                        "-c",
-                        `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
-                        "-c",
-                        'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
-                      ]
-                    : []),
-                  ...externalMcpArgs,
-                ],
-              }
+          ...(composioMcp && !mcpSession
+            ? { environment: mcpEnvironment, appServerArgs: mcpAppServerArgs }
             : {}),
         };
         const sessionScope = yield* Scope.make("sequential");

@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
 interface ExtensionIconProps {
   readonly name: string;
   readonly accent: string;
-  readonly logo?: string;
+  readonly logo?: string | undefined;
   readonly size?: "sm" | "md" | "lg";
   readonly className?: string;
 }

@@ -10,7 +10,6 @@ import {
   assetRouteLayer,
   serverEnvironmentHttpApiLayer,
   sparkyCodexAuthRouteLayer,
-  externalMcpSessionRouteLayer,
   staticAndDevRouteLayer,
   browserApiCorsLayer,
 } from "./http.ts";
@@ -359,7 +358,6 @@ export const makeRoutesLayer = Layer.mergeAll(
     ),
     otlpTracesProxyRouteLayer,
     sparkyCodexAuthRouteLayer,
-    externalMcpSessionRouteLayer,
     assetRouteLayer,
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,

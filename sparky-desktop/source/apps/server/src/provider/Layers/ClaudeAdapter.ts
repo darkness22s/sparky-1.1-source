@@ -70,6 +70,7 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
@@ -3511,17 +3512,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(ultracode ? { ultracode: true } : {}),
       };
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId, boundInstanceId);
-      const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
-      const externalMcpServers = Object.fromEntries(
-        externalMcpSessions.map((session, index) => [
-          McpProviderSession.externalMcpServerName(session.pluginSlug, index),
-          {
-            type: "http" as const,
-            url: session.endpoint,
-            headers: { Authorization: session.authorizationHeader },
-          },
-        ]),
-      );
+      const composioMcp = ComposioMcp.readComposioMcpConfig();
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
@@ -3547,21 +3538,27 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         env: claudeEnvironment,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
-        ...(mcpSession || externalMcpSessions.length > 0
+        ...(mcpSession || composioMcp
           ? {
               mcpServers: {
                 ...(mcpSession
                   ? {
                       "t3-code": {
-                        type: "http",
+                        type: "http" as const,
                         url: mcpSession.endpoint,
-                        headers: {
-                          Authorization: mcpSession.authorizationHeader,
-                        },
+                        headers: { Authorization: mcpSession.authorizationHeader },
                       },
                     }
                   : {}),
-                ...externalMcpServers,
+                ...(composioMcp
+                  ? {
+                      composio: {
+                        type: "http" as const,
+                        url: composioMcp.endpoint,
+                        headers: ComposioMcp.composioHeaders(composioMcp),
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),

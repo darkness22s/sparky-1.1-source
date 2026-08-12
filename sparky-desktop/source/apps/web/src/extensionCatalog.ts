@@ -10,7 +10,7 @@ export interface PluginCatalogEntry {
   readonly name: string;
   readonly description: string;
   readonly category: PluginCategory;
-  readonly logo: string;
+  readonly logo?: string;
   readonly accent: string;
   readonly featured?: boolean;
   readonly tags: ReadonlyArray<string>;
@@ -58,14 +58,13 @@ export const PLUGIN_CATALOG: ReadonlyArray<PluginCatalogEntry> = [
     tags: ["email", "inbox", "google"],
   },
   {
-    id: "zapier",
-    name: "Zapier",
-    description: "Trigger workflows across the tools your team already uses.",
+    id: "slack",
+    name: "Slack",
+    description: "Search team conversations and coordinate follow-ups in context.",
     category: "Automation & Data",
-    logo: "zapier",
-    accent: "#ff4f00",
+    accent: "#4a154b",
     featured: true,
-    tags: ["automation", "workflows", "actions"],
+    tags: ["messages", "teams", "communication"],
   },
   {
     id: "linear",
@@ -179,13 +178,12 @@ export const PLUGIN_CATALOG: ReadonlyArray<PluginCatalogEntry> = [
     tags: ["payments", "billing", "finance"],
   },
   {
-    id: "shopify",
-    name: "Shopify",
-    description: "Work with products, orders, and storefront operations.",
+    id: "google-drive",
+    name: "Google Drive",
+    description: "Find shared files and pull the right documents into a task.",
     category: "Automation & Data",
-    logo: "shopify",
-    accent: "#7ab55c",
-    tags: ["commerce", "orders", "products"],
+    accent: "#1fa463",
+    tags: ["files", "documents", "google"],
   },
   {
     id: "discord",
@@ -206,13 +204,12 @@ export const PLUGIN_CATALOG: ReadonlyArray<PluginCatalogEntry> = [
     tags: ["errors", "monitoring", "debugging"],
   },
   {
-    id: "vercel",
-    name: "Vercel",
-    description: "Inspect deployments, logs, and preview environments.",
+    id: "outlook",
+    name: "Microsoft Outlook",
+    description: "Search mail and calendar context across Microsoft 365.",
     category: "Developer Tools",
-    logo: "vercel",
-    accent: "#111111",
-    tags: ["deployments", "hosting", "logs"],
+    accent: "#0078d4",
+    tags: ["email", "calendar", "microsoft"],
   },
   {
     id: "supabase",
@@ -224,6 +221,33 @@ export const PLUGIN_CATALOG: ReadonlyArray<PluginCatalogEntry> = [
     tags: ["database", "backend", "postgres"],
   },
 ];
+
+export const COMPOSIO_PLUGIN_TOOLKITS: Readonly<Record<string, string>> = {
+  github: "github",
+  gmail: "gmail",
+  slack: "slack",
+  linear: "linear",
+  notion: "notion",
+  "google-calendar": "googlecalendar",
+  asana: "asana",
+  jira: "jira",
+  trello: "trello",
+  dropbox: "dropbox",
+  figma: "figma",
+  miro: "miro",
+  airtable: "airtable",
+  hubspot: "hubspot",
+  stripe: "stripe",
+  "google-drive": "googledrive",
+  discord: "discord",
+  sentry: "sentry",
+  outlook: "outlook",
+  supabase: "supabase",
+};
+
+export function composioToolkitForPlugin(pluginId: string): string {
+  return COMPOSIO_PLUGIN_TOOLKITS[pluginId] ?? pluginId;
+}
 
 export const MOD_CATALOG: ReadonlyArray<ModCatalogEntry> = [
   {

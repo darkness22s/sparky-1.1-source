@@ -50,7 +50,6 @@ export function useNewThreadHandler() {
         replace?: boolean;
         forceNew?: boolean;
         initialPrompt?: string;
-        beforeNavigate?: (threadId: string) => Promise<void>;
       },
     ): Promise<void> => {
       const {
@@ -186,10 +185,6 @@ export function useNewThreadHandler() {
         applyStickyState(draftId);
         if (options?.initialPrompt !== undefined) {
           setPrompt(draftId, options.initialPrompt);
-        }
-
-        if (options?.beforeNavigate) {
-          await options.beforeNavigate(threadId);
         }
 
         await router.navigate({

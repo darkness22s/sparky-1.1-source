@@ -29,6 +29,7 @@ import { getModelSelectionStringOptionValue } from "@sparky/shared/model";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterProcessError,
@@ -1218,39 +1219,34 @@ export function makeOpenCodeAdapter(
                 input.threadId,
                 boundInstanceId,
               );
-              const externalMcpSessions = McpProviderSession.readExternalMcpProviderSessions(input.threadId);
-              if (mcpSession && !server.external) {
-                yield* runOpenCodeSdk("mcp.add", () =>
-                  client.mcp.add({
-                    name: "t3-code",
-                    config: {
-                      type: "remote",
-                      url: mcpSession.endpoint,
-                      headers: {
-                        Authorization: mcpSession.authorizationHeader,
+              const composioMcp = ComposioMcp.readComposioMcpConfig();
+              if (!server.external) {
+                if (mcpSession) {
+                  yield* runOpenCodeSdk("mcp.add", () =>
+                    client.mcp.add({
+                      name: "t3-code",
+                      config: {
+                        type: "remote",
+                        url: mcpSession.endpoint,
+                        headers: { Authorization: mcpSession.authorizationHeader },
+                        oauth: false,
                       },
-                      oauth: false,
-                    },
-                  }),
-                );
-              }
-              if (externalMcpSessions.length > 0 && !server.external) {
-                yield* Effect.forEach(
-                  externalMcpSessions,
-                  (session, index) =>
-                    runOpenCodeSdk("mcp.add", () =>
-                      client.mcp.add({
-                        name: McpProviderSession.externalMcpServerName(session.pluginSlug, index),
-                        config: {
-                          type: "remote",
-                          url: session.endpoint,
-                          headers: { Authorization: session.authorizationHeader },
-                          oauth: false,
-                        },
-                      }),
-                    ),
-                  { discard: true },
-                );
+                    }),
+                  );
+                }
+                if (composioMcp) {
+                  yield* runOpenCodeSdk("mcp.add", () =>
+                    client.mcp.add({
+                      name: "composio",
+                      config: {
+                        type: "remote",
+                        url: composioMcp.endpoint,
+                        headers: ComposioMcp.composioHeaders(composioMcp),
+                        oauth: false,
+                      },
+                    }),
+                  );
+                }
               }
               // Resume: re-adopt the session named by the durable cursor —
               // OpenCode scopes history by session id. The probe recovers only
