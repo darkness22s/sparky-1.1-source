@@ -386,6 +386,22 @@ describe("Sparky session continuity", () => {
     expect(args.join(" ")).not.toContain("Bearer ");
   });
 
+  it("passes Composio Connect's custom consumer header without exposing its key", () => {
+    const args = makeSparkyProcessArgs({
+      cwd: "C:\\workspace",
+      prompt: "Use Gmail",
+      model: "openai/gpt-4o",
+      mcpUrl: "https://connect.composio.dev/mcp?user_id=sparky",
+      mcpHeaderName: "x-consumer-api-key",
+      mcpHeaderEnvVar: "T3_MCP_HEADER_VALUE",
+    });
+
+    expect(args).toContain("--mcp-header-name");
+    expect(args.at(args.indexOf("--mcp-header-name") + 1)).toBe("x-consumer-api-key");
+    expect(args.at(args.indexOf("--mcp-header-env-var") + 1)).toBe("T3_MCP_HEADER_VALUE");
+    expect(args.join(" ")).not.toContain("ck_");
+  });
+
   it("sends only the new follow-up while resuming the exact existing session", () => {
     const args = makeSparkyProcessArgs({
       cwd: "C:\\workspace",

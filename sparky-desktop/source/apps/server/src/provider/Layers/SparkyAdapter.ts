@@ -47,6 +47,7 @@ import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("sparky");
 const T3_MCP_BEARER_TOKEN_ENV_VAR = "T3_MCP_BEARER_TOKEN";
+const T3_MCP_HEADER_VALUE_ENV_VAR = "T3_MCP_HEADER_VALUE";
 const HIDDEN_SPARKY_CONTROL_TOOLS = new Set(["end_task"]);
 const SPARKY_BROWSER_INSTRUCTIONS = `You are running inside Sparky Desktop. The t3-code MCP tools named preview_* control the collaborative browser shared with the user.
 For browser work, first call preview_status. If no automation-capable preview is attached, call preview_open. Then use preview_navigate, preview_snapshot, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
@@ -707,6 +708,8 @@ export function makeSparkyProcessArgs(input: {
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
+  readonly mcpHeaderName?: string | undefined;
+  readonly mcpHeaderEnvVar?: string | undefined;
 }): string[] {
   const selection = parseModelSelection(input.model);
   const args = [
@@ -745,6 +748,14 @@ export function makeSparkyProcessArgs(input: {
   if (input.mcpUrl?.trim() && input.mcpBearerTokenEnvVar?.trim()) {
     args.push("--mcp-url", input.mcpUrl.trim());
     args.push("--mcp-bearer-token-env-var", input.mcpBearerTokenEnvVar.trim());
+  } else if (
+    input.mcpUrl?.trim() &&
+    input.mcpHeaderName?.trim() &&
+    input.mcpHeaderEnvVar?.trim()
+  ) {
+    args.push("--mcp-url", input.mcpUrl.trim());
+    args.push("--mcp-header-name", input.mcpHeaderName.trim());
+    args.push("--mcp-header-env-var", input.mcpHeaderEnvVar.trim());
   }
   return args;
 }
@@ -767,6 +778,8 @@ function runSparky(input: {
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
+  readonly mcpHeaderName?: string | undefined;
+  readonly mcpHeaderEnvVar?: string | undefined;
 }) {
   return Effect.tryPromise({
     try: () =>
@@ -1020,10 +1033,17 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           : "";
         const mcpSession = McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
         const composioMcp = ComposioMcp.readComposioMcpConfig();
-        const activeMcp = composioMcp
+        const activeMcp: {
+          readonly endpoint: string;
+          readonly authorizationHeader: string;
+          readonly headerName?: string;
+          readonly headerValue?: string;
+        } | undefined = composioMcp
           ? {
               endpoint: composioMcp.endpoint,
               authorizationHeader: ComposioMcp.composioAuthorizationHeader(composioMcp),
+              headerName: composioMcp.apiKeyHeader,
+              headerValue: composioMcp.apiKey,
             }
           : mcpSession;
         const effectiveInstructions = [
@@ -1129,10 +1149,14 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               environment: activeMcp
                 ? {
                     ...options.environment,
-                    [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
-                      /^Bearer\s+/u,
-                      "",
-                    ),
+                    ...(activeMcp.headerName && activeMcp.headerValue
+                      ? { [T3_MCP_HEADER_VALUE_ENV_VAR]: activeMcp.headerValue }
+                      : {
+                          [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
+                            /^Bearer\s+/u,
+                            "",
+                          ),
+                        }),
                   }
                 : options.environment,
               activeChildren,
@@ -1141,10 +1165,16 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               customInstructions: effectiveInstructions,
               isCancelled: isTurnCancelled,
               ...(activeMcp
-                ? {
-                    mcpUrl: activeMcp.endpoint,
-                    mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
-                  }
+                ? activeMcp.headerName && activeMcp.headerValue
+                  ? {
+                      mcpUrl: activeMcp.endpoint,
+                      mcpHeaderName: activeMcp.headerName,
+                      mcpHeaderEnvVar: T3_MCP_HEADER_VALUE_ENV_VAR,
+                    }
+                  : {
+                      mcpUrl: activeMcp.endpoint,
+                      mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
+                    }
                 : {}),
               callbacks: {
                 onDelta: (delta) => {

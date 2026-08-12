@@ -26,8 +26,8 @@ describe("Composio MCP configuration", () => {
 
   it("uses Composio Connect's consumer key header when configured", () => {
     const config = readComposioMcpConfig({
-      COMPOSIO_MCP_URL: "https://connect.composio.dev/mcp",
-      COMPOSIO_MCP_API_KEY: "consumer_test",
+      COMPOSIO_CONNECT_API_KEY: "consumer_test",
+      COMPOSIO_MCP_URL: "https://backend.composio.dev/v3.1/mcp/project-server",
     });
 
     expect(config?.endpoint).toBe("https://connect.composio.dev/mcp?user_id=sparky");

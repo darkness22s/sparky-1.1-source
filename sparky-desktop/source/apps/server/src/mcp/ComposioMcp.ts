@@ -1,7 +1,9 @@
 const COMPOSIO_MCP_URL_ENV = "COMPOSIO_MCP_URL";
 const COMPOSIO_MCP_API_KEY_ENV = "COMPOSIO_MCP_API_KEY";
+const COMPOSIO_CONNECT_API_KEY_ENV = "COMPOSIO_CONNECT_API_KEY";
 const COMPOSIO_MCP_USER_ID_ENV = "COMPOSIO_MCP_USER_ID";
 const COMPOSIO_MCP_HEADER_ENV = "COMPOSIO_MCP_HEADER";
+const COMPOSIO_CONNECT_URL = "https://connect.composio.dev/mcp";
 
 export interface ComposioMcpConfig {
   readonly endpoint: string;
@@ -17,8 +19,11 @@ export interface ComposioMcpConfig {
 export function readComposioMcpConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): ComposioMcpConfig | undefined {
-  const apiKey = environment[COMPOSIO_MCP_API_KEY_ENV]?.trim();
-  const configuredUrl = environment[COMPOSIO_MCP_URL_ENV]?.trim();
+  const connectApiKey = environment[COMPOSIO_CONNECT_API_KEY_ENV]?.trim();
+  const projectApiKey = environment[COMPOSIO_MCP_API_KEY_ENV]?.trim();
+  const configuredMcpUrl = environment[COMPOSIO_MCP_URL_ENV]?.trim();
+  const configuredUrl = connectApiKey ? COMPOSIO_CONNECT_URL : configuredMcpUrl;
+  const apiKey = connectApiKey || projectApiKey;
   if (!apiKey || !configuredUrl) return undefined;
 
   const endpoint = new URL(configuredUrl);
