@@ -53,6 +53,13 @@ const SPARKY_BROWSER_INSTRUCTIONS = `You are running inside Sparky Desktop. The 
 For browser work, first call preview_status. If no automation-capable preview is attached, call preview_open. Then use preview_navigate, preview_snapshot, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 Do not open the user's external browser or start a replacement browser automation stack when the preview_* tools are available.`;
 
+// Stream callbacks are synchronous by contract, so publish their events with
+// a small module-level runner rather than nesting Effect.runSync in the turn
+// effect. This keeps callback ordering while satisfying Effect diagnostics.
+function runEffectSync(effect: Effect.Effect<void>): void {
+  Effect.runSync(effect);
+}
+
 export interface SparkyAdapterOptions {
   readonly instanceId: ProviderInstanceId;
   readonly binaryPath: string;
@@ -993,7 +1000,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
         });
         const assistantSegments = makeSparkyAssistantSegmenter({
           onStarted: (segmentId) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "item.started",
                 ...stamp(threadId, turnId),
@@ -1003,7 +1010,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onDelta: (segmentId, delta) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "content.delta",
                 ...stamp(threadId, turnId),
@@ -1013,7 +1020,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onCompleted: (segmentId, text) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "item.completed",
                 ...stamp(threadId, turnId),
@@ -1058,7 +1065,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           try {
             captureSparkySessionIdentity(state, cwd, threadId, nextSessionId);
           } catch (cause) {
-            Effect.runSync(
+            runEffectSync(
               Effect.logWarning("failed to persist early Sparky thread session binding", {
                 threadId,
                 sessionId: nextSessionId,
@@ -1185,7 +1192,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                 onSessionId: captureSessionIdentity,
                 onUsage: (usage) => {
                   if (isTurnCancelled()) return;
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "thread.token-usage.updated",
                       ...stamp(threadId, turnId),
@@ -1219,7 +1226,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   const presentation = sparkyToolPresentation(event.toolName, event.arguments);
                   toolPresentations.set(event.toolCallId, presentation);
                   const data = { ...presentation.data, toolCallId: event.toolCallId };
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "item.started",
                       ...stamp(threadId, turnId),
@@ -1240,7 +1247,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                     toolPresentations.get(event.toolCallId) ??
                     sparkyToolPresentation(event.toolName, {});
                   toolPresentations.delete(event.toolCallId);
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "item.completed",
                       ...stamp(threadId, turnId),

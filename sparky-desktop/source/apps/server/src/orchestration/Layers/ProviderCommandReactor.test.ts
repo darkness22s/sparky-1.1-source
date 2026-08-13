@@ -1857,7 +1857,14 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
     harness.interruptTurn.mockImplementation(
-      () => Effect.fail(new Error("interrupt unavailable")) as never,
+      () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: "codex",
+            method: "thread.turn.interrupt",
+            detail: "interrupt unavailable",
+          }),
+        ) as never,
     );
 
     await Effect.runPromise(
@@ -2364,7 +2371,14 @@ describe("ProviderCommandReactor", () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
     harness.stopSession.mockImplementation(
-      () => Effect.fail(new Error("stop unavailable")) as never,
+      () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: "codex",
+            method: "thread.session.stop",
+            detail: "stop unavailable",
+          }),
+        ) as never,
     );
 
     await Effect.runPromise(

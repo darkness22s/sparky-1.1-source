@@ -554,10 +554,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
     event: ProviderRuntimeEvent,
   ): Effect.Effect<void> =>
-    Effect.sync(() => correlateRuntimeEventWithInstance(source, event))
-      .pipe(
-        Effect.flatMap((canonicalEvent) =>
-          observeTurnLatency(canonicalEvent).pipe(
+    Effect.flatMap(
+      Effect.sync(() => correlateRuntimeEventWithInstance(source, event)),
+      (canonicalEvent) =>
+        observeTurnLatency(canonicalEvent).pipe(
             Effect.andThen(
               increment(providerRuntimeEventsTotal, {
                 provider: canonicalEvent.provider,
@@ -577,9 +577,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
                 : Effect.void,
             ),
           ),
-        ),
-      )
-      .pipe(
+    ).pipe(
         withMetrics({
           timer: providerRuntimeEventProcessingDuration,
           attributes: {
