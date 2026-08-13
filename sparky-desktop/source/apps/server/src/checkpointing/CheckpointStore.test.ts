@@ -115,6 +115,56 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
   });
 
   describe("diffCheckpoints", () => {
+    it.effect("does not include Sparky runtime state in workspace diffs", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        yield* initRepoWithCommit(tmp);
+        const fileSystem = yield* FileSystem.FileSystem;
+        const checkpointStore = yield* CheckpointStore.CheckpointStore;
+        const threadId = ThreadId.make("thread-checkpoint-runtime-state");
+        const fromCheckpointRef = checkpointRefForThreadTurn(threadId, 0);
+        const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
+
+        yield* checkpointStore.captureCheckpoint({
+          cwd: tmp,
+          checkpointRef: fromCheckpointRef,
+        });
+        yield* fileSystem.makeDirectory(
+          NodePath.join(tmp, ".t3-ultra-dev", "userdata", "logs"),
+          { recursive: true },
+        );
+        yield* fileSystem.makeDirectory(NodePath.join(tmp, ".Sparky", "userdata"), {
+          recursive: true,
+        });
+        yield* writeTextFile(
+          NodePath.join(tmp, ".t3-ultra-dev", "userdata", "logs", "server.trace.ndjson"),
+          "runtime log\n",
+        );
+        yield* writeTextFile(
+          NodePath.join(tmp, ".Sparky", "userdata", "state.sqlite"),
+          "runtime database\n",
+        );
+        yield* writeTextFile(NodePath.join(tmp, "agent-change.txt"), "workspace change\n");
+        yield* checkpointStore.captureCheckpoint({
+          cwd: tmp,
+          checkpointRef: toCheckpointRef,
+        });
+
+        const diff = yield* checkpointStore.diffCheckpoints({
+          cwd: tmp,
+          fromCheckpointRef,
+          toCheckpointRef,
+          ignoreWhitespace: true,
+        });
+
+        expect(diff).toContain("agent-change.txt");
+        expect(diff).not.toContain(".t3-ultra-dev");
+        expect(diff).not.toContain("server.trace.ndjson");
+        expect(diff).not.toContain(".Sparky");
+        expect(diff).not.toContain("state.sqlite");
+      }),
+    );
+
     it.effect("returns full oversized checkpoint diffs without truncation", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();

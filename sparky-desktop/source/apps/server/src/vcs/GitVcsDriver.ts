@@ -277,6 +277,24 @@ const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
   "core.untrackedCache=false",
 ] as const;
 
+// Sparky runtime state is not workspace state. Checkpoints use an isolated
+// Git index, so exclude these homes explicitly instead of relying on the
+// repository's ignore rules. The glob forms cover development homes such as
+// `.t3-ultra-dev` as well as the installed desktop homes.
+const CHECKPOINT_RUNTIME_EXCLUDES = [
+  ":(glob,exclude).t3",
+  ":(glob,exclude).t3/**",
+  ":(glob,exclude).t3-*/**",
+  ":(glob,exclude).sparky",
+  ":(glob,exclude).sparky/**",
+  ":(glob,exclude).sparky-*/**",
+  ":(glob,exclude).Sparky",
+  ":(glob,exclude).Sparky/**",
+  ":(glob,exclude).Sparky-*/**",
+] as const;
+
+const checkpointPathspec = [".", ...CHECKPOINT_RUNTIME_EXCLUDES] as const;
+
 const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
   const now = yield* DateTime.now;
   return {
@@ -683,7 +701,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         yield* execute({
           operation,
           cwd: input.cwd,
-          args: ["add", "-A", "--", "."],
+          args: ["add", "-A", "--", ...checkpointPathspec],
           env: commitEnv,
           timeoutMs: 300_000,
         });
@@ -755,12 +773,20 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       yield* execute({
         operation,
         cwd: input.cwd,
-        args: ["restore", "--source", commitOid, "--worktree", "--staged", "--", "."],
+        args: [
+          "restore",
+          "--source",
+          commitOid,
+          "--worktree",
+          "--staged",
+          "--",
+          ...checkpointPathspec,
+        ],
       });
       yield* execute({
         operation,
         cwd: input.cwd,
-        args: ["clean", "-fd", "--", "."],
+        args: ["clean", "-fd", "--", ...checkpointPathspec],
       });
 
       const headExists = yield* hasHeadCommit(input.cwd);
@@ -768,7 +794,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         yield* execute({
           operation,
           cwd: input.cwd,
-          args: ["reset", "--quiet", "--", "."],
+          args: ["reset", "--quiet", "--", ...checkpointPathspec],
         });
       }
 
