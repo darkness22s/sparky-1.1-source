@@ -573,6 +573,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           turnCount: command.turnCount,
+          ...(command.checkpointRef ? { checkpointRef: command.checkpointRef } : {}),
+          ...(command.mode ? { mode: command.mode } : {}),
           createdAt: command.createdAt,
         },
       };
@@ -740,6 +742,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           turnCount: command.turnCount,
+          ...(command.checkpointRef ? { checkpointRef: command.checkpointRef } : {}),
+          ...(command.mode ? { mode: command.mode } : {}),
+          ...(command.conversationState !== undefined
+            ? { conversationState: command.conversationState }
+            : {}),
+          ...(command.safetyCheckpointRef
+            ? { safetyCheckpointRef: command.safetyCheckpointRef }
+            : {}),
         },
       };
     }
