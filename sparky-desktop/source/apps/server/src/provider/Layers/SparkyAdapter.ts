@@ -1089,6 +1089,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           maxRetries: SPARKY_RECONNECT_RETRY_COUNT,
           ...(error
             ? {
+                errorTag: errorTag(error),
                 reason: sanitizeSparkyLogDetail(
                   error instanceof Error ? error.message : String(error),
                 ),

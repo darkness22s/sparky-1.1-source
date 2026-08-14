@@ -1378,6 +1378,18 @@ function ChatViewContent(props: ChatViewProps) {
   const threadError = isServerThread
     ? (localServerError ?? serverThread?.session?.lastError ?? null)
     : localDraftError;
+  const hasInlineRuntimeError = Boolean(
+    isServerThread &&
+    threadError &&
+    activeThread?.latestTurn &&
+    activeThread.activities.some(
+      (activity) =>
+        activity.kind === "runtime.error" &&
+        activity.turnId !== null &&
+        activity.turnId === activeThread.latestTurn?.turnId,
+    ),
+  );
+  const visibleThreadError = hasInlineRuntimeError ? null : threadError;
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
@@ -5354,7 +5366,7 @@ function ChatViewContent(props: ChatViewProps) {
         {/* Error banner */}
         <ProviderStatusBanner status={activeProviderStatus} />
         <ThreadErrorBanner
-          error={threadError}
+          error={visibleThreadError}
           onDismiss={() => setThreadError(activeThread.id, null)}
         />
         {/* Main content area with optional plan sidebar */}

@@ -23,6 +23,7 @@ import {
 } from "@sparky/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Duration from "effect/Duration";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as PubSub from "effect/PubSub";
@@ -215,12 +216,29 @@ describe("ProviderCommandReactor", () => {
       runtimeSessions.push(session);
       return Effect.succeed(session);
     });
-    const sendTurn = vi.fn((_: unknown) =>
-      Effect.succeed({
-        threadId: ThreadId.make("thread-1"),
-        turnId: asTurnId("turn-1"),
-      }),
-    );
+    const sendTurn = vi.fn((_: unknown) => {
+      const turnId = asTurnId("turn-1");
+      // The reactor now waits for a terminal provider event before asking
+      // the provider for a metadata title. Mirror that lifecycle in the
+      // harness so title tests do not rely on a timing race.
+      return Effect.sleep(Duration.millis(1)).pipe(
+        Effect.andThen(
+          PubSub.publish(runtimeEventPubSub, {
+            eventId: EventId.make("evt-provider-turn-completed"),
+            provider: ProviderDriverKind.make("codex"),
+            threadId: ThreadId.make("thread-1"),
+            turnId,
+            createdAt: now,
+            type: "turn.completed",
+            payload: { state: "completed" },
+          } satisfies ProviderRuntimeEvent),
+        ),
+        Effect.as({
+          threadId: ThreadId.make("thread-1"),
+          turnId,
+        }),
+      );
+    });
     const interruptTurn = vi.fn((_: unknown) => Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);

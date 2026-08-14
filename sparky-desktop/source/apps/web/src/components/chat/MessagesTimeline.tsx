@@ -2034,6 +2034,30 @@ function workEntryRawCommand(
   return rawCommand === workEntry.command.trim() ? null : rawCommand;
 }
 
+function dynamicToolCallExpandedBody(data: unknown): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+
+  const record = data as Record<string, unknown>;
+  const metadata: string[] = [];
+  if (typeof record.provider === "string" && record.provider.trim()) {
+    metadata.push(`Provider: ${record.provider.trim()}`);
+  }
+  if (typeof record.errorTag === "string" && record.errorTag.trim()) {
+    metadata.push(`Error type: ${record.errorTag.trim()}`);
+  }
+  if (typeof record.retryCount === "number" && typeof record.maxRetries === "number") {
+    metadata.push(`Retry: ${record.retryCount}/${record.maxRetries}`);
+  }
+
+  const reason = typeof record.reason === "string" ? record.reason.trim() : "";
+  if (reason) {
+    return [metadata.join("\n"), `Error\n${reason}`].filter(Boolean).join("\n\n");
+  }
+  return metadata.length > 0 ? metadata.join("\n") : null;
+}
+
 function buildToolCallExpandedBody(
   workEntry: TimelineWorkEntry,
   workspaceRoot: string | undefined,
@@ -2041,6 +2065,12 @@ function buildToolCallExpandedBody(
   const blocks: string[] = [];
   if (workEntry.itemType === "mcp_tool_call" && workEntry.toolData !== undefined) {
     blocks.push(`MCP call\n${JSON.stringify(workEntry.toolData, null, 2)}`);
+  }
+  if (workEntry.itemType === "dynamic_tool_call" && workEntry.toolData !== undefined) {
+    const dynamicDetails = dynamicToolCallExpandedBody(workEntry.toolData);
+    if (dynamicDetails) {
+      blocks.push(dynamicDetails);
+    }
   }
   const raw = workEntryRawCommand(workEntry);
   if (raw?.trim()) {
@@ -2217,6 +2247,7 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
         role: "button" as const,
         tabIndex: 0 as const,
         "aria-label": displayText,
+        "aria-expanded": expanded,
         onClick: () => setExpanded((v) => !v),
         onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
           if (e.key === "Enter" || e.key === " ") {

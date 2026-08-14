@@ -9,6 +9,7 @@ import {
   type ProjectId,
   type OrchestrationSession,
   type OrchestrationThread,
+  type ProviderRuntimeEvent,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -23,6 +24,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -70,6 +72,19 @@ type ProviderIntentEvent = Extract<
       | "thread.session-stop-requested";
   }
 >;
+
+type ThreadTitleGenerationInput = {
+  readonly threadId: ThreadId;
+  readonly cwd: string;
+  readonly messageText: string;
+  readonly attachments?: ReadonlyArray<ChatAttachment>;
+  readonly titleSeed?: string;
+  readonly modelSelection: ModelSelection;
+};
+
+type PendingThreadTitleGeneration = ThreadTitleGenerationInput & {
+  readonly turnId?: TurnId;
+};
 
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
@@ -240,6 +255,7 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
+  const pendingThreadTitleGenerations = new Map<string, PendingThreadTitleGeneration>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -970,31 +986,54 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const applyFallbackThreadTitle = Effect.fn("applyFallbackThreadTitle")(function* (
+    input: ThreadTitleGenerationInput,
+  ) {
+    const fallbackTitle = sanitizeThreadTitle(input.messageText);
+    if (fallbackTitle === DEFAULT_THREAD_TITLE) return;
+
+    const thread = yield* resolveThread(input.threadId);
+    if (!thread) return;
+
+    const canReplaceTitle = (currentTitle: string) =>
+      canReplaceThreadTitle(currentTitle, input.titleSeed) || currentTitle.trim() === fallbackTitle;
+    if (!canReplaceTitle(thread.title)) return;
+
+    yield* orchestrationEngine.dispatch({
+      type: "thread.meta.update",
+      commandId: yield* serverCommandId("thread-title-fallback"),
+      threadId: input.threadId,
+      title: fallbackTitle,
+    });
+  });
+
   const maybeGenerateThreadTitleForFirstTurn = Effect.fn("maybeGenerateThreadTitleForFirstTurn")(
-    function* (input: {
-      readonly threadId: ThreadId;
-      readonly cwd: string;
-      readonly messageText: string;
-      readonly attachments?: ReadonlyArray<ChatAttachment>;
-      readonly titleSeed?: string;
-      readonly modelSelection: ModelSelection;
-    }) {
+    function* (input: ThreadTitleGenerationInput) {
       const attachments = input.attachments ?? [];
+      const fallbackTitle = sanitizeThreadTitle(input.messageText);
+      const canReplaceTitle = (currentTitle: string) =>
+        canReplaceThreadTitle(currentTitle, input.titleSeed) ||
+        (fallbackTitle !== DEFAULT_THREAD_TITLE && currentTitle.trim() === fallbackTitle);
+
       yield* Effect.gen(function* () {
-        const generated = yield* textGeneration.generateThreadTitle({
-          cwd: input.cwd,
-          message: input.messageText,
-          ...(attachments.length > 0 ? { attachments } : {}),
-          modelSelection: input.modelSelection,
-        });
-        if (!generated) return;
+        const generated = yield* textGeneration
+          .generateThreadTitle({
+            cwd: input.cwd,
+            message: input.messageText,
+            ...(attachments.length > 0 ? { attachments } : {}),
+            modelSelection: input.modelSelection,
+          })
+          .pipe(Effect.timeout(Duration.seconds(30)));
 
         const generatedTitle = sanitizeThreadTitle(generated.title);
-        if (generatedTitle === DEFAULT_THREAD_TITLE) return;
+        if (generatedTitle === DEFAULT_THREAD_TITLE) {
+          yield* applyFallbackThreadTitle(input);
+          return;
+        }
 
         const thread = yield* resolveThread(input.threadId);
         if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+        if (!canReplaceTitle(thread.title)) {
           return;
         }
 
@@ -1016,33 +1055,45 @@ const make = Effect.gen(function* () {
               },
             );
 
-            const fallbackTitle = sanitizeThreadTitle(input.messageText);
-            if (fallbackTitle === DEFAULT_THREAD_TITLE) return;
-
-            const thread = yield* resolveThread(input.threadId);
-            if (!thread || !canReplaceThreadTitle(thread.title, input.titleSeed)) return;
-
-            yield* orchestrationEngine
-              .dispatch({
-                type: "thread.meta.update",
-                commandId: yield* serverCommandId("thread-title-fallback"),
-                threadId: input.threadId,
-                title: fallbackTitle,
-              })
-              .pipe(
-                Effect.catchCause((fallbackCause) =>
-                  Effect.logWarning("provider command reactor failed to apply fallback thread title", {
+            yield* applyFallbackThreadTitle(input).pipe(
+              Effect.catchCause((fallbackCause) =>
+                Effect.logWarning(
+                  "provider command reactor failed to apply fallback thread title",
+                  {
                     threadId: input.threadId,
                     cwd: input.cwd,
                     cause: Cause.pretty(fallbackCause),
-                  }),
+                  },
                 ),
-              );
+              ),
+            );
           }),
         ),
       );
     },
   );
+
+  const processProviderRuntimeEvent = (event: ProviderRuntimeEvent) => {
+    if (event.type !== "turn.completed" && event.type !== "turn.aborted") {
+      return Effect.void;
+    }
+
+    const key = String(event.threadId);
+    const pending = pendingThreadTitleGenerations.get(key);
+    if (
+      pending === undefined ||
+      (pending.turnId !== undefined && pending.turnId !== event.turnId)
+    ) {
+      return Effect.void;
+    }
+
+    pendingThreadTitleGenerations.delete(key);
+    return maybeGenerateThreadTitleForFirstTurn(pending).pipe(
+      // Metadata generation must never hold the runtime event fan-out open.
+      Effect.forkScoped,
+      Effect.asVoid,
+    );
+  };
 
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
@@ -1072,34 +1123,26 @@ const make = Effect.gen(function* () {
 
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
+    let generationInput: ThreadTitleGenerationInput | undefined;
     if (isFirstUserMessageTurn) {
       const project = yield* resolveProject(thread.projectId);
       const generationCwd =
-        resolveThreadWorkspaceCwd({
-          thread,
-          projects: project ? [project] : [],
-        }) ?? process.cwd();
-      const generationInput = {
+        resolveThreadWorkspaceCwd({ thread, projects: project ? [project] : [] }) ?? process.cwd();
+      generationInput = {
+        threadId: event.payload.threadId,
+        cwd: generationCwd,
         messageText: message.text,
         ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
         ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
         modelSelection: event.payload.modelSelection ?? thread.modelSelection,
       };
+      const firstTurnGenerationInput = generationInput;
 
       yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-        threadId: event.payload.threadId,
         branch: thread.branch,
         worktreePath: thread.worktreePath,
-        ...generationInput,
+        ...firstTurnGenerationInput,
       }).pipe(Effect.forkScoped);
-
-      if (canReplaceThreadTitle(thread.title, event.payload.titleSeed)) {
-        yield* maybeGenerateThreadTitleForFirstTurn({
-          threadId: event.payload.threadId,
-          cwd: generationCwd,
-          ...generationInput,
-        }).pipe(Effect.forkScoped);
-      }
     }
 
     const handleTurnStartFailure = (cause: Cause.Cause<unknown>) => {
@@ -1156,9 +1199,53 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    const titleInput =
+      generationInput !== undefined && canReplaceThreadTitle(thread.title, event.payload.titleSeed)
+        ? generationInput
+        : undefined;
+    if (titleInput !== undefined) {
+      // Put a deterministic local title in place immediately. The provider
+      // title request is intentionally deferred until the real turn reaches a
+      // terminal runtime event, so metadata generation cannot compete with a
+      // free-model turn or consume its rate limit.
+      yield* applyFallbackThreadTitle(titleInput).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            "provider command reactor failed to apply immediate fallback thread title",
+            {
+              threadId: titleInput.threadId,
+              cause: Cause.pretty(cause),
+            },
+          ),
+        ),
+      );
+      pendingThreadTitleGenerations.set(String(titleInput.threadId), titleInput);
+    }
+
+    const providerTurn = providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap((turn) =>
+        titleInput === undefined
+          ? Effect.void
+          : Effect.sync(() => {
+              const pending = pendingThreadTitleGenerations.get(String(titleInput.threadId));
+              if (pending !== undefined) {
+                pendingThreadTitleGenerations.set(String(titleInput.threadId), {
+                  ...pending,
+                  turnId: turn.turnId,
+                });
+              }
+            }),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          if (titleInput !== undefined) {
+            pendingThreadTitleGenerations.delete(String(titleInput.threadId));
+          }
+        }).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
+      ),
+    );
+
+    yield* providerTurn.pipe(Effect.forkScoped);
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
@@ -1184,21 +1271,21 @@ const make = Effect.gen(function* () {
     // session. Always settle the local lifecycle even when the provider RPC
     // cannot return (for example, a dead app-server child).
     const turnId = event.payload.turnId ?? thread.session?.activeTurnId ?? null;
-    const [failureDetail] = yield* Effect.all(
-      [
-        runProviderControl(providerService.interruptTurn({ threadId: event.payload.threadId })),
-        settleProviderControl({
-          thread,
-          status: "interrupted",
-          createdAt: event.payload.createdAt,
-          failureDetail: null,
-          activityKind: "provider.turn.interrupt.failed",
-          activitySummary: "Provider turn interrupt failed",
-          turnId,
-        }),
-      ],
-      { concurrency: "unbounded" },
+    const settlementFiber = yield* Effect.forkScoped(
+      settleProviderControl({
+        thread,
+        status: "interrupted",
+        createdAt: event.payload.createdAt,
+        failureDetail: null,
+        activityKind: "provider.turn.interrupt.failed",
+        activitySummary: "Provider turn interrupt failed",
+        turnId,
+      }),
     );
+    const failureDetail = yield* runProviderControl(
+      providerService.interruptTurn({ threadId: event.payload.threadId }),
+    );
+    yield* Fiber.join(settlementFiber);
 
     if (failureDetail !== null) {
       yield* settleProviderControl({
@@ -1418,6 +1505,10 @@ const make = Effect.gen(function* () {
     yield* Effect.forkScoped(
       Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent),
     );
+    const providerEvents = providerService.subscribeEvents
+      ? Stream.fromSubscription(yield* providerService.subscribeEvents)
+      : providerService.streamEvents;
+    yield* Effect.forkScoped(Stream.runForEach(providerEvents, processProviderRuntimeEvent));
   });
 
   return {
