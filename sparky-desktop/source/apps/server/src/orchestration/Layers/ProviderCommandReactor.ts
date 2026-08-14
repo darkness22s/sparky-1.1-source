@@ -24,7 +24,6 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
-import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -1271,21 +1270,21 @@ const make = Effect.gen(function* () {
     // session. Always settle the local lifecycle even when the provider RPC
     // cannot return (for example, a dead app-server child).
     const turnId = event.payload.turnId ?? thread.session?.activeTurnId ?? null;
-    const settlementFiber = yield* Effect.forkScoped(
-      settleProviderControl({
-        thread,
-        status: "interrupted",
-        createdAt: event.payload.createdAt,
-        failureDetail: null,
-        activityKind: "provider.turn.interrupt.failed",
-        activitySummary: "Provider turn interrupt failed",
-        turnId,
-      }),
+    const [failureDetail] = yield* Effect.all(
+      [
+        runProviderControl(providerService.interruptTurn({ threadId: event.payload.threadId })),
+        settleProviderControl({
+          thread,
+          status: "interrupted",
+          createdAt: event.payload.createdAt,
+          failureDetail: null,
+          activityKind: "provider.turn.interrupt.failed",
+          activitySummary: "Provider turn interrupt failed",
+          turnId,
+        }),
+      ],
+      { concurrency: "unbounded" },
     );
-    const failureDetail = yield* runProviderControl(
-      providerService.interruptTurn({ threadId: event.payload.threadId }),
-    );
-    yield* Fiber.join(settlementFiber);
 
     if (failureDetail !== null) {
       yield* settleProviderControl({
