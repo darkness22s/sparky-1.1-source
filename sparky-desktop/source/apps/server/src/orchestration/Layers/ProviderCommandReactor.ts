@@ -81,10 +81,6 @@ type ThreadTitleGenerationInput = {
   readonly modelSelection: ModelSelection;
 };
 
-type PendingThreadTitleGeneration = ThreadTitleGenerationInput & {
-  readonly turnId?: TurnId;
-};
-
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
@@ -254,7 +250,6 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
-  const pendingThreadTitleGenerations = new Map<string, PendingThreadTitleGeneration>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -1072,28 +1067,6 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const processProviderRuntimeEvent = (event: ProviderRuntimeEvent) => {
-    if (event.type !== "turn.completed" && event.type !== "turn.aborted") {
-      return Effect.void;
-    }
-
-    const key = String(event.threadId);
-    const pending = pendingThreadTitleGenerations.get(key);
-    if (
-      pending === undefined ||
-      (pending.turnId !== undefined && pending.turnId !== event.turnId)
-    ) {
-      return Effect.void;
-    }
-
-    pendingThreadTitleGenerations.delete(key);
-    return maybeGenerateThreadTitleForFirstTurn(pending).pipe(
-      // Metadata generation must never hold the runtime event fan-out open.
-      Effect.forkScoped,
-      Effect.asVoid,
-    );
-  };
-
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
@@ -1203,10 +1176,9 @@ const make = Effect.gen(function* () {
         ? generationInput
         : undefined;
     if (titleInput !== undefined) {
-      // Put a deterministic local title in place immediately. The provider
-      // title request is intentionally deferred until the real turn reaches a
-      // terminal runtime event, so metadata generation cannot compete with a
-      // free-model turn or consume its rate limit.
+      // Put a deterministic local title in place immediately, then run title
+      // generation as an independent text-only request using the exact model
+      // selection. It can finish while the real turn is still streaming.
       yield* applyFallbackThreadTitle(titleInput).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(
@@ -1218,34 +1190,24 @@ const make = Effect.gen(function* () {
           ),
         ),
       );
-      pendingThreadTitleGenerations.set(String(titleInput.threadId), titleInput);
+      yield* maybeGenerateThreadTitleForFirstTurn(titleInput).pipe(
+        // Metadata generation must never hold the turn-start worker open.
+        Effect.forkScoped,
+        Effect.asVoid,
+      );
     }
 
-    const providerTurn = providerService.sendTurn(sendTurnRequest.value).pipe(
-      Effect.tap((turn) =>
-        titleInput === undefined
-          ? Effect.void
-          : Effect.sync(() => {
-              const pending = pendingThreadTitleGenerations.get(String(titleInput.threadId));
-              if (pending !== undefined) {
-                pendingThreadTitleGenerations.set(String(titleInput.threadId), {
-                  ...pending,
-                  turnId: turn.turnId,
-                });
-              }
-            }),
-      ),
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          if (titleInput !== undefined) {
-            pendingThreadTitleGenerations.delete(String(titleInput.threadId));
-          }
-        }).pipe(Effect.andThen(recoverTurnStartFailure(cause))),
-      ),
-    );
+    const providerTurn = providerService
+      .sendTurn(sendTurnRequest.value)
+      .pipe(Effect.catchCause((cause) => recoverTurnStartFailure(cause)));
 
     yield* providerTurn.pipe(Effect.forkScoped);
   });
+
+  // Keep the provider event subscription alive for adapters that use the
+  // subscription as part of their runtime lifecycle. Title generation no
+  // longer waits on these events, but the stream remains an adapter boundary.
+  const processProviderRuntimeEvent = (_event: ProviderRuntimeEvent) => Effect.void;
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-interrupt-requested" }>,
