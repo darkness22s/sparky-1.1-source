@@ -1115,6 +1115,8 @@ export default function GitActionsControl({
     !activeServerThread &&
     activeDraftThread?.envMode === "worktree" &&
     activeDraftThread.worktreePath === null;
+  const isSharedCheckout =
+    (activeServerThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null) === null;
 
   useEffect(() => {
     if (isGitActionRunning || isSelectingWorktreeBase) {
@@ -1124,6 +1126,7 @@ export default function GitActionsControl({
     const branchUpdate = resolveLiveThreadBranchUpdate({
       threadBranch: activeServerThread?.branch ?? activeDraftThread?.branch ?? null,
       gitStatus: gitStatusForActions,
+      isSharedCheckout,
     });
     if (!branchUpdate) {
       return;
@@ -1136,6 +1139,7 @@ export default function GitActionsControl({
     gitStatusForActions,
     isGitActionRunning,
     isSelectingWorktreeBase,
+    isSharedCheckout,
     persistThreadBranchSync,
   ]);
 
