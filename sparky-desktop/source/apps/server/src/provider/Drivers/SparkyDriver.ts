@@ -14,6 +14,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import type * as TextGeneration from "../../textGeneration/TextGeneration.ts";
+import { sanitizeThreadTitle } from "../../textGeneration/TextGenerationUtils.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
@@ -179,7 +180,12 @@ function makeTextGeneration(input: {
         request.modelSelection.model,
         `Return at most 4 short words or 3 long ones for: ${request.message}. Output only the title, nothing else.`,
       ).pipe(
-        Effect.map((result) => ({ title: result.response.trim().split("\n")[0] || "Sparky task" })),
+        Effect.map((result) => {
+          const parsed = parseJsonObject(result.response);
+          const rawTitle =
+            typeof parsed?.title === "string" ? parsed.title : result.response;
+          return { title: sanitizeThreadTitle(rawTitle) };
+        }),
       ),
   };
 }

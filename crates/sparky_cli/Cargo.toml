@@ -19,6 +19,7 @@ sparky_extensions = { path = "../sparky_extensions" }
 sparky_agent = { path = "../sparky_agent" }
 sparky_config = { path = "../sparky_config" }
 tokio.workspace = true
+futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true

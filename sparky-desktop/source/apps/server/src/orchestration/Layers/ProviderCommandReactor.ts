@@ -35,6 +35,7 @@ import { increment, orchestrationEventsProcessedTotal } from "../../observabilit
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
 import type { ProviderServiceError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
+import { sanitizeThreadTitle } from "../../textGeneration/TextGenerationUtils.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -988,6 +989,9 @@ const make = Effect.gen(function* () {
         });
         if (!generated) return;
 
+        const generatedTitle = sanitizeThreadTitle(generated.title);
+        if (generatedTitle === DEFAULT_THREAD_TITLE) return;
+
         const thread = yield* resolveThread(input.threadId);
         if (!thread) return;
         if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
@@ -998,14 +1002,42 @@ const make = Effect.gen(function* () {
           type: "thread.meta.update",
           commandId: yield* serverCommandId("thread-title-rename"),
           threadId: input.threadId,
-          title: generated.title,
+          title: generatedTitle,
         });
       }).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("provider command reactor failed to generate or rename thread title", {
-            threadId: input.threadId,
-            cwd: input.cwd,
-            cause: Cause.pretty(cause),
+          Effect.gen(function* () {
+            yield* Effect.logWarning(
+              "provider command reactor failed to generate or rename thread title",
+              {
+                threadId: input.threadId,
+                cwd: input.cwd,
+                cause: Cause.pretty(cause),
+              },
+            );
+
+            const fallbackTitle = sanitizeThreadTitle(input.messageText);
+            if (fallbackTitle === DEFAULT_THREAD_TITLE) return;
+
+            const thread = yield* resolveThread(input.threadId);
+            if (!thread || !canReplaceThreadTitle(thread.title, input.titleSeed)) return;
+
+            yield* orchestrationEngine
+              .dispatch({
+                type: "thread.meta.update",
+                commandId: yield* serverCommandId("thread-title-fallback"),
+                threadId: input.threadId,
+                title: fallbackTitle,
+              })
+              .pipe(
+                Effect.catchCause((fallbackCause) =>
+                  Effect.logWarning("provider command reactor failed to apply fallback thread title", {
+                    threadId: input.threadId,
+                    cwd: input.cwd,
+                    cause: Cause.pretty(fallbackCause),
+                  }),
+                ),
+              );
           }),
         ),
       );

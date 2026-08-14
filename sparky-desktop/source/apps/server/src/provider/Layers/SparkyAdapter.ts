@@ -707,6 +707,7 @@ export function makeSparkyProcessArgs(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
+  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
@@ -731,6 +732,9 @@ export function makeSparkyProcessArgs(input: {
   ];
   if (selection.baseUrl) {
     args.push("--base-url", selection.baseUrl);
+  }
+  if (input.textOnly) {
+    args.push("--text-only");
   }
   if (input.sessionId) {
     args.push("--session", input.sessionId);
@@ -772,6 +776,7 @@ function runSparky(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
+  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
@@ -1705,4 +1710,5 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
     return adapter;
   });
 
-export const runSparkyTextGeneration = runSparky;
+export const runSparkyTextGeneration = (input: Parameters<typeof runSparky>[0]) =>
+  runSparky({ ...input, textOnly: true });

@@ -125,6 +125,10 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         const fromCheckpointRef = checkpointRefForThreadTurn(threadId, 0);
         const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
 
+        // Keep the ignored runtime directory in the repository so this test
+        // also exercises Git's ignored-path behavior during checkpointing.
+        yield* writeTextFile(NodePath.join(tmp, ".gitignore"), "/.sparky/\n");
+
         yield* checkpointStore.captureCheckpoint({
           cwd: tmp,
           checkpointRef: fromCheckpointRef,
@@ -133,7 +137,14 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           NodePath.join(tmp, ".t3-ultra-dev", "userdata", "logs"),
           { recursive: true },
         );
+        yield* fileSystem.makeDirectory(
+          NodePath.join(tmp, "nested", ".t3-ultra-dev", "userdata", "logs"),
+          { recursive: true },
+        );
         yield* fileSystem.makeDirectory(NodePath.join(tmp, ".Sparky", "userdata"), {
+          recursive: true,
+        });
+        yield* fileSystem.makeDirectory(NodePath.join(tmp, ".sparky", "userdata"), {
           recursive: true,
         });
         yield* writeTextFile(
@@ -141,7 +152,22 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
           "runtime log\n",
         );
         yield* writeTextFile(
+          NodePath.join(
+            tmp,
+            "nested",
+            ".t3-ultra-dev",
+            "userdata",
+            "logs",
+            "nested.trace.ndjson",
+          ),
+          "nested runtime log\n",
+        );
+        yield* writeTextFile(
           NodePath.join(tmp, ".Sparky", "userdata", "state.sqlite"),
+          "runtime database\n",
+        );
+        yield* writeTextFile(
+          NodePath.join(tmp, ".sparky", "userdata", "state.sqlite"),
           "runtime database\n",
         );
         yield* writeTextFile(NodePath.join(tmp, "agent-change.txt"), "workspace change\n");
@@ -161,6 +187,8 @@ it.layer(TestLayer)("CheckpointStore.layer", (it) => {
         expect(diff).not.toContain(".t3-ultra-dev");
         expect(diff).not.toContain("server.trace.ndjson");
         expect(diff).not.toContain(".Sparky");
+        expect(diff).not.toContain(".sparky");
+        expect(diff).not.toContain("nested.trace.ndjson");
         expect(diff).not.toContain("state.sqlite");
       }),
     );

@@ -560,6 +560,45 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("uses the first message as a safe fallback when title generation fails", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-title-fallback"),
+        threadId: ThreadId.make("thread-1"),
+        title: "New thread",
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-title-fallback"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-title-fallback"),
+          role: "user",
+          text: "Fix the reconnect spinner after restarting the app.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      return (
+        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
+        "Fix the reconnect"
+      );
+    });
+  });
+
   it("does not overwrite an existing custom thread title on the first turn", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
@@ -642,13 +681,13 @@ describe("ProviderCommandReactor", () => {
       const readModel = await harness.readModel();
       return (
         readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
-        "Reconnect spinner resume bug"
+        "Reconnect spinner resume"
       );
     });
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.title).toBe("Reconnect spinner resume bug");
+    expect(thread?.title).toBe("Reconnect spinner resume");
   });
 
   it("generates a worktree branch name for the first turn", async () => {
