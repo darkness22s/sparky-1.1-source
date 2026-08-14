@@ -63,15 +63,15 @@ const claudeCaps: ModelCapabilities = createModelCapabilities({
 
 describe("descriptor helpers", () => {
   it("applies selection values to capability descriptors", () => {
-    expect(
-      getProviderOptionDescriptors({
-        caps: claudeCaps,
-        selections: [
-          { id: "effort", value: "medium" },
-          { id: "contextWindow", value: "200k" },
-        ],
-      }),
-    ).toEqual([
+    const descriptors = getProviderOptionDescriptors({
+      caps: claudeCaps,
+      selections: [
+        { id: "effort", value: "medium" },
+        { id: "contextWindow", value: "200k" },
+      ],
+    });
+
+    expect(descriptors).toEqual([
       {
         id: "effort",
         label: "Reasoning",
@@ -80,6 +80,11 @@ describe("descriptor helpers", () => {
           { id: "medium", label: "Medium" },
           { id: "high", label: "High", isDefault: true },
           { id: "ultrathink", label: "Ultrathink" },
+          {
+            id: "ultra",
+            label: "Ultra",
+            description: "Delegate this task through a generated multi-agent workflow.",
+          },
         ],
         currentValue: "medium",
         promptInjectedValues: ["ultrathink"],
@@ -97,6 +102,25 @@ describe("descriptor helpers", () => {
     ]);
   });
 
+  it("adds Ultra to the first selectable provider option without mutating capabilities", () => {
+    const descriptors = getProviderOptionDescriptors({ caps: codexCaps });
+
+    expect(descriptors[0]).toMatchObject({
+      id: "reasoningEffort",
+      options: [
+        { id: "xhigh", label: "Extra High" },
+        { id: "high", label: "High", isDefault: true },
+        {
+          id: "ultra",
+          label: "Ultra",
+          description: "Delegate this task through a generated multi-agent workflow.",
+        },
+      ],
+    });
+    expect(codexCaps.optionDescriptors?.[0]).toMatchObject({
+      options: [{ id: "xhigh" }, { id: "high" }],
+    });
+  });
   it("builds wire-format option selections from descriptors", () => {
     const descriptors = getProviderOptionDescriptors({
       caps: codexCaps,

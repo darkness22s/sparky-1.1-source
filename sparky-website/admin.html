@@ -34,7 +34,7 @@
       <div class="admin-layout">
         <aside class="sidebar" aria-label="Sparky Admin navigation">
           <a class="brand sidebar-brand" href="admin.html"><span class="brand-mark"></span><span>Sparky</span></a>
-          <div class="sidebar-section"><span class="sidebar-label">WORKSPACE</span><button class="sidebar-link active" type="button" data-workspace="analytics-workspace"><span class="sidebar-icon">◈</span>Overview</button><button class="sidebar-link" type="button" data-workspace="releases-workspace"><span class="sidebar-icon">↗</span>Releases</button></div>
+          <div class="sidebar-section"><span class="sidebar-label">WORKSPACE</span><button class="sidebar-link active" type="button" data-workspace="analytics-workspace"><span class="sidebar-icon">◈</span>Overview</button><button class="sidebar-link" type="button" data-workspace="plugins-workspace"><span class="sidebar-icon">✦</span>Plugins</button><button class="sidebar-link" type="button" data-workspace="releases-workspace"><span class="sidebar-icon">↗</span>Releases</button></div>
           <div class="sidebar-section"><span class="sidebar-label">SIGNALS</span><span class="sidebar-note">Anonymous product telemetry, enriched at the edge.</span></div>
           <div class="sidebar-footer"><span class="status-dot"></span><span>Live workspace</span></div>
         </aside>
@@ -49,6 +49,7 @@
 
       <nav class="workspace-tabs" aria-label="Admin workspace">
         <button class="workspace-tab active" type="button" data-workspace="analytics-workspace">Analytics</button>
+        <button class="workspace-tab" type="button" data-workspace="plugins-workspace">Plugins</button>
         <button class="workspace-tab" type="button" data-workspace="releases-workspace">Releases &amp; changelog</button>
       </nav>
 
@@ -65,6 +66,30 @@
           <article class="panel activity-panel"><div class="panel-heading"><div><span class="eyebrow">ACTIVITY</span><h2>Latest evidence</h2></div><span class="live-dot">Live</span></div><div id="activity-list" class="activity-list"></div></article>
         </section>
         <section class="precision-banner"><span class="precision-icon">✓</span><div><strong>What this dashboard can prove</strong><p>Anonymous IDs connect events within a browser profile. The edge router confirms request outcomes, platform, release, file, country, and normalized environment. No IP addresses or names are stored.</p></div><span class="precision-status">Privacy-aware</span></section>
+      </div>
+
+      <div id="plugins-workspace" class="workspace-view" hidden>
+        <section class="release-hero">
+          <div>
+            <span class="eyebrow"><i></i> COMPOSIO CATALOG</span>
+            <h2>Publish a new integration.</h2>
+            <p>Sync the complete Composio toolkit list, then add only the integrations you want Sparky users to see. New entries are categorized from Composio metadata.</p>
+          </div>
+          <div class="published-release plugin-sync-status" id="plugin-sync-status">Catalog has not been synced yet.</div>
+        </section>
+        <section class="plugin-admin-grid">
+          <article class="panel release-panel">
+            <div class="panel-heading"><div><span class="eyebrow">AVAILABLE TO ADD</span><h2>Composio toolkits</h2></div><button id="sync-plugins" class="text-button" type="button">Sync newest list</button></div>
+            <p class="panel-subtitle">Already-added plugins are removed from this list. Search by provider, category, or capability.</p>
+            <label class="field"><span>Search available toolkits</span><input id="plugin-search" type="search" placeholder="Search 1,000+ Composio toolkits" /></label>
+            <div id="plugin-available-list" class="plugin-admin-list"><div class="empty-activity">Sync Composio to load available toolkits.</div></div>
+          </article>
+          <article class="panel releases-panel">
+            <div class="panel-heading"><div><span class="eyebrow">VISIBLE TO USERS</span><h2>Published plugins</h2></div><span class="live-dot">Live feed</span></div>
+            <p class="panel-subtitle">Changes are published to the desktop catalog feed immediately after the mutation commits.</p>
+            <div id="plugin-enabled-list" class="plugin-admin-list"><div class="empty-activity">No plugins published yet.</div></div>
+          </article>
+        </section>
       </div>
 
       <div id="releases-workspace" class="workspace-view" hidden>

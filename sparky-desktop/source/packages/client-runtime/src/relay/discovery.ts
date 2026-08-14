@@ -45,7 +45,7 @@ export class RelayEnvironmentDiscovery extends Context.Service<
     readonly state: SubscriptionRef.SubscriptionRef<RelayEnvironmentDiscoveryState>;
     readonly refresh: Effect.Effect<void>;
   }
->()("@t3tools/client-runtime/relay/discovery/RelayEnvironmentDiscovery") {}
+>()("@sparky/client-runtime/relay/discovery/RelayEnvironmentDiscovery") {}
 
 export const EMPTY_RELAY_ENVIRONMENT_DISCOVERY_STATE: RelayEnvironmentDiscoveryState = {
   environments: new Map(),
@@ -240,7 +240,7 @@ export const make = Effect.fn("RelayEnvironmentDiscovery.make")(function* () {
           }));
           return;
         }
-        return yield* Effect.fail(failure);
+        return yield* failure;
       }
       const clerkToken = tokenResult.success;
       if ((yield* Ref.get(accountGeneration)) !== generation) {

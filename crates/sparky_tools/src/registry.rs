@@ -25,6 +25,7 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
+    const PLAN_ONLY_TOOL_NAMES: [&'static str; 1] = ["update_plan"];
     const PLAN_TOOL_NAMES: [&'static str; 9] = [
         "read",
         "ls",
@@ -86,6 +87,9 @@ impl ToolRegistry {
         if plan_mode && !Self::PLAN_TOOL_NAMES.contains(&name) {
             return None;
         }
+        if !plan_mode && Self::PLAN_ONLY_TOOL_NAMES.contains(&name) {
+            return None;
+        }
         if plan_mode {
             return self.plan_tools.get(name).cloned();
         }
@@ -107,7 +111,13 @@ impl ToolRegistry {
         if plan_mode {
             return self.schemas_for_names(Self::PLAN_TOOL_NAMES.iter().copied(), &self.plan_tools);
         }
-        self.get_schemas()
+        self.schemas_for_names(
+            self.tools
+                .keys()
+                .map(String::as_str)
+                .filter(|name| !Self::PLAN_ONLY_TOOL_NAMES.contains(name)),
+            &self.tools,
+        )
     }
 
     fn schemas_for_names<'a, I>(
@@ -159,6 +169,20 @@ mod tests {
         assert!(registry.get_for_mode("read", true).is_some());
         assert!(registry.get_for_mode("write", true).is_none());
         assert!(registry.get_for_mode("write", false).is_some());
+        assert!(registry.get_for_mode("update_plan", true).is_some());
+        assert!(registry.get_for_mode("update_plan", false).is_none());
+        assert!(!registry
+            .get_schemas_for_mode(false)
+            .iter()
+            .any(|schema| schema.name == "update_plan"));
+    }
+
+    #[test]
+    fn build_mode_does_not_expose_plan_only_tools_to_the_model() {
+        let registry = ToolRegistry::new();
+
+        assert!(registry.get("update_plan").is_some());
+        assert!(registry.get_for_mode("update_plan", false).is_none());
     }
 
     #[tokio::test]

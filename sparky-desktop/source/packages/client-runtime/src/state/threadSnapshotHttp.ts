@@ -74,7 +74,7 @@ export class ThreadSnapshotLoader extends Context.Service<
       threadId: ThreadId,
     ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>>;
   }
->()("@t3tools/client-runtime/state/threadSnapshotHttp/ThreadSnapshotLoader") {}
+>()("@sparky/client-runtime/state/threadSnapshotHttp/ThreadSnapshotLoader") {}
 
 export const threadSnapshotLoaderLayer: Layer.Layer<
   ThreadSnapshotLoader,

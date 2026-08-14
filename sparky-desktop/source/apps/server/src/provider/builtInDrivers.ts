@@ -21,7 +21,7 @@
  * The aggregated `BuiltInDriversEnv` type is the union of every driver's
  * env requirement — the registry layer's `R` is this type, and the runtime
  * layer (ChildProcessSpawner, FileSystem, Path, ServerConfig,
- * OpenCodeRuntime, …) must satisfy it.
+ * must satisfy it.
  *
  * @module provider/builtInDrivers
  */

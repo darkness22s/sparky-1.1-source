@@ -211,9 +211,10 @@ export function ModelsSettingsPanel() {
         <div className="border-b border-border/60 px-5 py-4">
           <h3 className="text-[13px] font-semibold text-foreground">Sparky model APIs</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground/80">
-            Sparky is the only coding runtime. Add one or more API keys to make that provider&apos;s
-            models available in the existing model picker. Keys are encrypted by the local desktop
-            backend and never returned to this page.
+            Sparky is the only coding runtime. Add provider-specific API keys here to make those
+            models available in the existing model picker. A ChatGPT subscription is separate from
+            the OpenAI API and does not authenticate Claude, Gemini, or OpenCode. Keys are encrypted
+            by the local desktop backend and never returned to this page.
           </p>
         </div>
 

@@ -57,7 +57,7 @@ export class ElectronMenu extends Context.Service<
     ) => Effect.Effect<Option.Option<string>>;
     readonly popupTemplate: (input: ElectronMenuTemplateInput) => Effect.Effect<void>;
   }
->()("@t3tools/desktop/electron/ElectronMenu") {}
+>()("@sparky/desktop/electron/ElectronMenu") {}
 
 function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextMenuItem[] {
   const normalizedItems: ContextMenuItem[] = [];
