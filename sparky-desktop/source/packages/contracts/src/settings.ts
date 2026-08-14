@@ -17,6 +17,10 @@ export const StreamingTextAnimation = Schema.Literals(["lift", "words"]);
 export type StreamingTextAnimation = typeof StreamingTextAnimation.Type;
 export const DEFAULT_STREAMING_TEXT_ANIMATION: StreamingTextAnimation = "lift";
 
+export const ModelSelectorStyle = Schema.Literals(["menu", "slider"]);
+export type ModelSelectorStyle = typeof ModelSelectorStyle.Type;
+export const DEFAULT_MODEL_SELECTOR_STYLE: ModelSelectorStyle = "menu";
+
 export const SidebarProjectSortOrder = Schema.Literals(["updated_at", "created_at", "manual"]);
 export type SidebarProjectSortOrder = typeof SidebarProjectSortOrder.Type;
 export const DEFAULT_SIDEBAR_PROJECT_SORT_ORDER: SidebarProjectSortOrder = "updated_at";
@@ -100,6 +104,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   streamingTextAnimation: StreamingTextAnimation.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_STREAMING_TEXT_ANIMATION)),
+  ),
+  modelSelectorStyle: ModelSelectorStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_MODEL_SELECTOR_STYLE)),
   ),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });

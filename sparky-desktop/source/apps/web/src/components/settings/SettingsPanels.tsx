@@ -63,6 +63,7 @@ import { Button } from "../ui/button";
 import { DraftInput } from "../ui/draft-input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
@@ -409,6 +410,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.streamingTextAnimation !== DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation
         ? ["Streaming text animation"]
         : []),
+      ...(settings.modelSelectorStyle !== DEFAULT_UNIFIED_SETTINGS.modelSelectorStyle
+        ? ["Model selector style"]
+        : []),
       ...(Duration.toMillis(settings.automaticGitFetchInterval) !==
       Duration.toMillis(DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval)
         ? ["Automatic Git fetch interval"]
@@ -425,6 +429,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.modelSelectorStyle,
       settings.streamingTextAnimation,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
@@ -451,6 +456,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
       streamingTextAnimation: DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation,
+      modelSelectorStyle: DEFAULT_UNIFIED_SETTINGS.modelSelectorStyle,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
@@ -695,6 +701,41 @@ export function GeneralSettingsPanel() {
                 ))}
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Model selector style"
+          description="Switch between the full nested menu and the quick effort slider in the composer."
+          resetAction={
+            settings.modelSelectorStyle !== DEFAULT_UNIFIED_SETTINGS.modelSelectorStyle ? (
+              <SettingResetButton
+                label="model selector style"
+                onClick={() =>
+                  updateSettings({
+                    modelSelectorStyle: DEFAULT_UNIFIED_SETTINGS.modelSelectorStyle,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <ToggleGroup
+              aria-label="Model selector style"
+              className="shrink-0"
+              variant="outline"
+              size="sm"
+              value={[settings.modelSelectorStyle]}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (next === "menu" || next === "slider") {
+                  updateSettings({ modelSelectorStyle: next });
+                }
+              }}
+            >
+              <Toggle value="menu">Menu</Toggle>
+              <Toggle value="slider">Slider</Toggle>
+            </ToggleGroup>
           }
         />
 
