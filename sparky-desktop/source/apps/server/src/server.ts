@@ -286,6 +286,10 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(OrchestrationLayerLive),
 );
 
+const AutomationServiceLayerLive = AutomationService.AutomationServiceLive.pipe(
+  Layer.provideMerge(OrchestrationLayerLive),
+);
+
 const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // Core Services
   Layer.provideMerge(CheckpointingLayerLive),
@@ -295,7 +299,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ProviderRuntimeLayerLive),
   Layer.provideMerge(
     Layer.mergeAll(
-      AutomationService.AutomationServiceLive,
+      AutomationServiceLayerLive,
       TerminalLayerLive,
       PreviewLayerLive,
     ),

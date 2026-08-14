@@ -1,6 +1,7 @@
 import {
   Automation,
   AutomationCreateInput,
+  AutomationExecutionMode,
   AutomationId,
   AutomationSchedule,
   AutomationStatus,
@@ -47,6 +48,8 @@ type AutomationRow = {
   readonly timezone: string;
   readonly enabled: number;
   readonly status: AutomationStatus;
+  readonly executionMode: AutomationExecutionMode;
+  readonly notificationsEnabled: number;
   readonly modelSelectionJson: string | null;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
@@ -58,7 +61,10 @@ type AutomationRow = {
 
 const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 
-export function nextAutomationOccurrence(schedule: AutomationSchedule, from: string): string | null {
+export function nextAutomationOccurrence(
+  schedule: AutomationSchedule,
+  from: string,
+): string | null {
   if (schedule === "once") return null;
   const current = DateTime.makeUnsafe(from);
   if (schedule === "weekly") {
@@ -97,6 +103,8 @@ function toAutomation(row: AutomationRow): Automation {
     timezone: row.timezone,
     enabled: row.enabled === 1,
     status: row.status,
+    executionMode: row.executionMode,
+    notificationsEnabled: row.notificationsEnabled === 1,
     modelSelection,
     runtimeMode: row.runtimeMode,
     interactionMode: row.interactionMode,
@@ -149,6 +157,7 @@ export const AutomationServiceLive = Layer.effect(
           SELECT id, environment_id AS "environmentId", thread_id AS "threadId",
             provider_instance_id AS "providerInstanceId", title, prompt, schedule,
             run_at AS "runAt", next_run_at AS "nextRunAt", timezone, enabled, status,
+            execution_mode AS "executionMode", notifications_enabled AS "notificationsEnabled",
             model_selection_json AS "modelSelectionJson", runtime_mode AS "runtimeMode",
             interaction_mode AS "interactionMode", created_at AS "createdAt",
             updated_at AS "updatedAt", last_run_at AS "lastRunAt", last_error AS "lastError"
@@ -162,6 +171,7 @@ export const AutomationServiceLive = Layer.effect(
           SELECT id, environment_id AS "environmentId", thread_id AS "threadId",
             provider_instance_id AS "providerInstanceId", title, prompt, schedule,
             run_at AS "runAt", next_run_at AS "nextRunAt", timezone, enabled, status,
+            execution_mode AS "executionMode", notifications_enabled AS "notificationsEnabled",
             model_selection_json AS "modelSelectionJson", runtime_mode AS "runtimeMode",
             interaction_mode AS "interactionMode", created_at AS "createdAt",
             updated_at AS "updatedAt", last_run_at AS "lastRunAt", last_error AS "lastError"
@@ -191,16 +201,18 @@ export const AutomationServiceLive = Layer.effect(
         const modelSelectionJson =
           input.modelSelection === null
             ? null
-            : yield* Schema.encodeEffect(Schema.fromJsonString(ModelSelection))(input.modelSelection);
+            : yield* Schema.encodeEffect(Schema.fromJsonString(ModelSelection))(
+                input.modelSelection,
+              );
         yield* sql`
           INSERT INTO automations (
             id, environment_id, thread_id, provider_instance_id, title, prompt,
             schedule, run_at, next_run_at, timezone, enabled, status,
-            model_selection_json, runtime_mode, interaction_mode, created_at, updated_at
+            execution_mode, notifications_enabled, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at
           ) VALUES (
             ${id}, ${environmentId}, ${input.threadId}, ${input.providerInstanceId}, ${input.title}, ${input.prompt},
             ${input.schedule}, ${input.runAt}, ${input.runAt}, ${input.timezone}, 1, 'active',
-            ${modelSelectionJson},
+            ${input.executionMode}, ${input.notificationsEnabled ? 1 : 0}, ${modelSelectionJson},
             ${input.runtimeMode}, ${input.interactionMode}, ${createdAt}, ${createdAt}
           )
         `;
@@ -314,7 +326,12 @@ export const AutomationServiceLive = Layer.effect(
 
     const runNow: AutomationServiceShape["runNow"] = (id) =>
       requireAutomation(id).pipe(
-        Effect.tap(execute),
+        Effect.flatMap((automation) =>
+          sql`UPDATE automations SET status = 'running', updated_at = ${nowIso()} WHERE id = ${id}`.pipe(
+            Effect.flatMap(() => execute(automation)),
+            Effect.as(automation),
+          ),
+        ),
         Effect.flatMap((automation) => {
           const runAt = nowIso();
           const nextRunAt = nextAutomationOccurrence(automation.schedule, runAt);
@@ -338,6 +355,7 @@ export const AutomationServiceLive = Layer.effect(
           SELECT id, environment_id AS "environmentId", thread_id AS "threadId",
             provider_instance_id AS "providerInstanceId", title, prompt, schedule,
             run_at AS "runAt", next_run_at AS "nextRunAt", timezone, enabled, status,
+            execution_mode AS "executionMode", notifications_enabled AS "notificationsEnabled",
             model_selection_json AS "modelSelectionJson", runtime_mode AS "runtimeMode",
             interaction_mode AS "interactionMode", created_at AS "createdAt",
             updated_at AS "updatedAt", last_run_at AS "lastRunAt", last_error AS "lastError"

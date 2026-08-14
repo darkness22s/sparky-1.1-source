@@ -10,7 +10,16 @@ export type AutomationId = typeof AutomationId.Type;
 export const AutomationSchedule = Schema.Literals(["once", "daily", "weekdays", "weekly"]);
 export type AutomationSchedule = typeof AutomationSchedule.Type;
 
-export const AutomationStatus = Schema.Literals(["active", "paused", "completed", "failed"]);
+export const AutomationExecutionMode = Schema.Literals(["chat", "background"]);
+export type AutomationExecutionMode = typeof AutomationExecutionMode.Type;
+
+export const AutomationStatus = Schema.Literals([
+  "active",
+  "running",
+  "paused",
+  "completed",
+  "failed",
+]);
 export type AutomationStatus = typeof AutomationStatus.Type;
 
 export const Automation = Schema.Struct({
@@ -26,6 +35,8 @@ export const Automation = Schema.Struct({
   timezone: TrimmedNonEmptyString,
   enabled: Schema.Boolean,
   status: AutomationStatus,
+  executionMode: AutomationExecutionMode,
+  notificationsEnabled: Schema.Boolean,
   modelSelection: Schema.NullOr(ModelSelection),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
@@ -45,6 +56,8 @@ export const AutomationCreateInput = Schema.Struct({
   runAt: IsoDateTime,
   timezone: TrimmedNonEmptyString,
   modelSelection: Schema.NullOr(ModelSelection),
+  executionMode: AutomationExecutionMode,
+  notificationsEnabled: Schema.Boolean,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
 });
