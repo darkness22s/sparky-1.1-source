@@ -384,9 +384,65 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("whitespace-nowrap");
     expect(markup).toContain("!size-[22px]");
     expect(markup).toContain("size-3");
-    expect(markup).toContain('aria-label="Collapse all"');
-    expect(markup).toContain('aria-label="View diff"');
+    expect(markup).toContain('aria-label="View all 1 changed file in diff panel"');
+    expect(markup).not.toContain('aria-label="Collapse all"');
     expect(markup).toContain("1 changed file");
+  });
+
+  it("shows only the first three changed files and links the full turn to the diff panel", async () => {
+    const assistantMessageId = MessageId.make("message-assistant-with-many-files");
+    const turnId = TurnId.make("turn-with-many-files");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        timelineEntries={[
+          {
+            id: "entry-assistant-with-many-files",
+            kind: "message",
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: assistantMessageId,
+              role: "assistant",
+              text: "Updated several fixtures.",
+              turnId,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: false,
+            },
+          },
+        ]}
+        turnDiffSummaryByAssistantMessageId={
+          new Map([
+            [
+              assistantMessageId,
+              {
+                turnId,
+                checkpointTurnCount: 1,
+                checkpointRef: CheckpointRef.make("checkpoint-with-many-files"),
+                status: "ready",
+                files: [
+                  { path: "first.ts", kind: "modified", additions: 1, deletions: 0 },
+                  { path: "second.ts", kind: "modified", additions: 2, deletions: 0 },
+                  { path: "third.ts", kind: "modified", additions: 3, deletions: 0 },
+                  { path: "fourth.ts", kind: "modified", additions: 4, deletions: 0 },
+                  { path: "fifth.ts", kind: "modified", additions: 5, deletions: 0 },
+                ],
+                assistantMessageId,
+                completedAt: MESSAGE_CREATED_AT,
+              },
+            ],
+          ])
+        }
+      />,
+    );
+
+    expect(markup).toContain("5 changed files");
+    expect(markup).toContain('aria-label="View all 5 changed files in diff panel"');
+    expect(markup).toContain("first.ts");
+    expect(markup).toContain("second.ts");
+    expect(markup).toContain("third.ts");
+    expect(markup).not.toContain("fourth.ts");
+    expect(markup).not.toContain("fifth.ts");
   });
 
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {
