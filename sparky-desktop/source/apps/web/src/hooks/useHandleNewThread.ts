@@ -50,7 +50,6 @@ export function useNewThreadHandler() {
         initialPrompt?: string;
         replace?: boolean;
         forceNew?: boolean;
-        initialPrompt?: string;
       },
     ): Promise<void> => {
       const {
