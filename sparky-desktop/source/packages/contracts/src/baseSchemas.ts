@@ -31,6 +31,11 @@ export const ThreadId = makeEntityId("ThreadId");
 export type ThreadId = typeof ThreadId.Type;
 export const ProjectId = makeEntityId("ProjectId");
 export type ProjectId = typeof ProjectId.Type;
+
+/** Stable installation-level project used by projectless chats. */
+export const PROJECTLESS_PROJECT_ID = ProjectId.make("sparky-projectless");
+export const isProjectlessProjectId = (projectId: ProjectId): boolean =>
+  projectId === PROJECTLESS_PROJECT_ID;
 export const EnvironmentId = makeEntityId("EnvironmentId");
 export type EnvironmentId = typeof EnvironmentId.Type;
 export const CommandId = makeEntityId("CommandId");

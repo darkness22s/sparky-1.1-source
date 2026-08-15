@@ -1,4 +1,4 @@
-import type { ScopedProjectRef } from "@sparky/contracts";
+import { isProjectlessProjectId, type ScopedProjectRef } from "@sparky/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@sparky/client-runtime/environment";
 import { FolderPlusIcon } from "lucide-react";
 import { useMemo } from "react";
@@ -26,7 +26,7 @@ export function DraftHeroHeadline({
   activeProjectRef,
   activeProjectTitle,
 }: DraftHeroHeadlineProps) {
-  const projects = useProjects();
+  const projects = useProjects().filter((project) => !isProjectlessProjectId(project.id));
   const threads = useThreadShells();
   const handleNewThread = useNewThreadHandler();
   const openAddProject = useOpenAddProjectCommandPalette();
@@ -105,9 +105,9 @@ export function DraftHeroHeadline({
       {hasResolvedProject ? (
         <>What should we build in {projectSelector}?</>
       ) : canChooseProject ? (
-        <>{projectSelector} to start</>
+        <>Start a chat without a project, or {projectSelector}</>
       ) : (
-        <>Add a project to start</>
+        <>Start a chat without a project</>
       )}
     </h1>
   );

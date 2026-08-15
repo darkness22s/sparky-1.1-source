@@ -4,12 +4,13 @@ import {
   scopeThreadRef,
 } from "@sparky/client-runtime/environment";
 import {
-  DEFAULT_RUNTIME_MODE,
   DEFAULT_SERVER_SETTINGS,
+  DEFAULT_RUNTIME_MODE,
+  PROJECTLESS_PROJECT_ID,
   type ScopedProjectRef,
 } from "@sparky/contracts";
 import { useParams, useRouter } from "@tanstack/react-router";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import {
   markPromotedDraftThreadByRef,
   type DraftThreadEnvMode,
@@ -17,17 +18,15 @@ import {
   useComposerDraftStore,
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
-import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
-  getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { readThreadShell, useProjects, useServerConfigs, useThread } from "../state/entities";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import { resolveThreadRouteTarget } from "../threadRoutes";
-import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { usePrimaryEnvironmentId } from "../state/environments";
 
 export function useNewThreadHandler() {
   const projects = useProjects();
@@ -205,7 +204,6 @@ export function useNewThreadHandler() {
 }
 
 export function useHandleNewThread() {
-  const projectOrder = useUiStateStore((store) => store.projectOrder);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -220,25 +218,14 @@ export function useHandleNewThread() {
         : useComposerDraftStore.getState().getDraftSession(routeTarget.draftId)
       : null,
   );
-  const projects = useProjects();
-  const orderedProjects = useMemo(() => {
-    return orderItemsByPreferredIds({
-      items: projects,
-      preferredIds: projectOrder,
-      getId: getProjectOrderKey,
-      getPreferenceIds: (project) => [
-        getProjectOrderKey(project),
-        legacyProjectCwdPreferenceKey(project.workspaceRoot),
-      ],
-    });
-  }, [projectOrder, projects]);
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const handleNewThread = useNewThreadHandler();
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: orderedProjects[0]
-      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
+    defaultProjectRef: primaryEnvironmentId
+      ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
       : null,
     handleNewThread,
     routeThreadRef,
