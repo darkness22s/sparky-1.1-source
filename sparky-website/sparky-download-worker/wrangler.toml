@@ -51,3 +51,6 @@ RELEASE_MAC_X64_BLOCKMAP_SHA256 = "8B94EDCE81F2CF82AC95BB7749B585F2869E6DC1425EA
 RELEASE_MAC_X64_YML_NAME = "latest-mac-x64.yml"
 RELEASE_MAC_X64_YML_SIZE = "470"
 RELEASE_MAC_X64_YML_SHA256 = "B42012E3C577174795008285B1E79113E00983D5222ACEE4E0A250F230F62CB1"
+# Keep the rebuilt release private to the public download surface until launch.
+# Set this to "true" for the one-step launch, then redeploy the worker.
+RELEASE_LAUNCHED = "false"

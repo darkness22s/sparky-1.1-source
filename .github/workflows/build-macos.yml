@@ -235,10 +235,10 @@ jobs:
             exit 1
           fi
           key_path="$RUNNER_TEMP/sparky-linux-signing-key.asc"
-          if [[ "$SPARKY_LINUX_GPG_PRIVATE_KEY" == "-----BEGIN"* ]]; then
-            printf '%s' "$SPARKY_LINUX_GPG_PRIVATE_KEY" > "$key_path"
+          if [[ "$SPARKY_LINUX_GPG_PRIVATE_KEY" == *"BEGIN PGP PRIVATE KEY BLOCK"* ]]; then
+            printf '%s\n' "$SPARKY_LINUX_GPG_PRIVATE_KEY" > "$key_path"
           else
-            printf '%s' "$SPARKY_LINUX_GPG_PRIVATE_KEY" | base64 --decode > "$key_path"
+            printf '%s' "$SPARKY_LINUX_GPG_PRIVATE_KEY" | base64 --decode --ignore-garbage > "$key_path"
           fi
           GNUPGHOME="$RUNNER_TEMP/gnupg"; export GNUPGHOME
           mkdir -m 700 "$GNUPGHOME"
