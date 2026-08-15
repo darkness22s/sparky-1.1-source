@@ -1,5 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@sparky/contracts";
+import {
+  DEFAULT_MODEL,
+  PROJECTLESS_PROJECT_ID,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@sparky/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -122,6 +128,47 @@ it.effect("resolveWelcomeBase derives cwd and project name from server config", 
   }),
 );
 
+it.effect("ensureProjectlessProject creates the installation-level chat project", () =>
+  Effect.gen(function* () {
+    const dispatched = yield* Ref.make<unknown[]>([]);
+    yield* ServerRuntimeStartup.ensureProjectlessProject.pipe(
+      Effect.provideService(ServerConfig.ServerConfig, { baseDir: "/tmp/.sparky" } as never),
+      Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getProjectShellById: () => Effect.succeed(Option.none()),
+      } as never),
+      Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+        readEvents: () => Stream.empty,
+        dispatch: (command) =>
+          Ref.update(dispatched, (calls) => [...calls, command]).pipe(Effect.as({ sequence: 1 })),
+        streamDomainEvents: Stream.empty,
+        latestSequence: Effect.succeed(0),
+      } satisfies OrchestrationEngine.OrchestrationEngineService["Service"]),
+      Effect.provide(NodeServices.layer),
+    );
+
+    const [command] = yield* Ref.get(dispatched);
+    const projectCreate = command as {
+      readonly type: string;
+      readonly projectId: string;
+      readonly title: string;
+      readonly workspaceRoot: string;
+    };
+    assert.deepStrictEqual(
+      {
+        type: projectCreate.type,
+        projectId: projectCreate.projectId,
+        title: projectCreate.title,
+        workspaceRoot: projectCreate.workspaceRoot,
+      },
+      {
+        type: "project.create",
+        projectId: PROJECTLESS_PROJECT_ID,
+        title: "Sparky chats",
+        workspaceRoot: "/tmp/.sparky",
+      },
+    );
+  }),
+);
 it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and thread ids", () => {
   const bootstrapProjectId = ProjectId.make("project-startup-bootstrap");
   const bootstrapThreadId = ThreadId.make("thread-startup-bootstrap");

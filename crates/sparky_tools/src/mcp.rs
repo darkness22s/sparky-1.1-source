@@ -1,6 +1,6 @@
 use crate::{Tool, ToolExecutionResult, ToolRegistry};
 use async_trait::async_trait;
-use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -17,7 +17,8 @@ struct HttpMcpClient {
 
 struct HttpMcpClientInner {
     endpoint: String,
-    authorization_header: String,
+    auth_header_name: String,
+    auth_header_value: String,
     session_id: String,
     client: reqwest::Client,
     next_request_id: AtomicU64,
@@ -72,7 +73,11 @@ fn json_rpc_result(response: Value) -> anyhow::Result<Value> {
 }
 
 impl HttpMcpClient {
-    async fn connect(endpoint: &str, authorization_header: &str) -> anyhow::Result<Self> {
+    async fn connect(
+        endpoint: &str,
+        auth_header_name: &str,
+        auth_header_value: &str,
+    ) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(45))
             .build()?;
@@ -88,7 +93,7 @@ impl HttpMcpClient {
         });
         let response = client
             .post(endpoint)
-            .header(AUTHORIZATION, authorization_header)
+            .header(auth_header_name, auth_header_value)
             .header(CONTENT_TYPE, "application/json")
             .header(ACCEPT, "application/json, text/event-stream")
             .json(&initialize)
@@ -115,7 +120,8 @@ impl HttpMcpClient {
         Ok(Self {
             inner: Arc::new(HttpMcpClientInner {
                 endpoint: endpoint.to_string(),
-                authorization_header: authorization_header.to_string(),
+                auth_header_name: auth_header_name.to_string(),
+                auth_header_value: auth_header_value.to_string(),
                 session_id,
                 client,
                 next_request_id: AtomicU64::new(2),
@@ -129,7 +135,7 @@ impl HttpMcpClient {
             .inner
             .client
             .post(&self.inner.endpoint)
-            .header(AUTHORIZATION, &self.inner.authorization_header)
+            .header(&self.inner.auth_header_name, &self.inner.auth_header_value)
             .header(CONTENT_TYPE, "application/json")
             .header(ACCEPT, "application/json, text/event-stream")
             .header("mcp-session-id", &self.inner.session_id)
@@ -283,7 +289,19 @@ pub async fn register_http_mcp_tools(
     endpoint: &str,
     authorization_header: &str,
 ) -> anyhow::Result<usize> {
-    let client = HttpMcpClient::connect(endpoint, authorization_header).await?;
+    register_http_mcp_tools_with_header(registry, endpoint, "Authorization", authorization_header)
+        .await
+}
+
+/// Discover and register HTTP MCP tools using an arbitrary authentication
+/// header, such as Composio Connect's `x-consumer-api-key`.
+pub async fn register_http_mcp_tools_with_header(
+    registry: &mut ToolRegistry,
+    endpoint: &str,
+    auth_header_name: &str,
+    auth_header_value: &str,
+) -> anyhow::Result<usize> {
+    let client = HttpMcpClient::connect(endpoint, auth_header_name, auth_header_value).await?;
     let tools = client.list_tools().await?;
     let count = tools.len();
     for tool in tools {

@@ -41,19 +41,37 @@ test("failed AWS drafts can be resumed without a misleading publish retry", () =
   assert.doesNotMatch(script, /Retry AWS publish/u);
 });
 
+test("admin Plugins workspace syncs, publishes, and separates Composio toolkits", () => {
+  assert.match(html, /id="plugins-workspace"/u);
+  assert.match(html, /id="sync-plugins"/u);
+  assert.match(html, /id="plugin-available-list"/u);
+  assert.match(html, /id="plugin-enabled-list"/u);
+  assert.match(script, /pluginCatalog:syncComposioToolkits/u);
+  assert.match(script, /pluginCatalog:\$\{action\}/u);
+  assert.match(script, /action !== "add" && action !== "remove"/u);
+  assert.match(html, /Already-added plugins are removed/u);
+});
+
 test("redesigned Docs and Changelog survive a production build", async () => {
   const dist = new URL("./dist/", import.meta.url);
   const styles = await readFile(new URL("styles.css", dist), "utf8");
   const changelog = await readFile(new URL("changelog.html", dist), "utf8");
+  const changelogScript = await readFile(new URL("changelog.js", dist), "utf8");
+  const releaseNotes = await readFile(new URL("release-notes/1.1.2.txt", dist), "utf8");
   const docs = await readFile(new URL("docs/overview.html", dist), "utf8");
 
   assert.match(styles, /Shared pages from the current Sparky redesign/u);
   assert.match(styles, /\.docs-layout/u);
   assert.match(styles, /\.cl-entry/u);
+  assert.match(styles, /\.cl-dialog/u);
   assert.doesNotMatch(changelog, /legacy-pages/u);
   assert.doesNotMatch(docs, /legacy-pages/u);
   assert.match(changelog, /\/assets\/[^"]+\.css/u);
   assert.match(docs, /\/assets\/[^"]+\.css/u);
+  assert.match(changelogScript, /Memory, Plan mode, images, and more/u);
+  assert.match(changelogScript, /Read full blog post/u);
+  assert.match(releaseNotes, /^Persistent Memory/u);
+  assert.match(releaseNotes, /Desktop product identity remains Sparky\.\s*$/u);
 
   for (const name of ["styles.css", "script.js", "changelog.js", "logo.svg", "hero-iridescent.png"]) {
     const file = new URL(name, dist);

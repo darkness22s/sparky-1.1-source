@@ -28,8 +28,7 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
     isDemoRenderer() ||
     !status ||
     status.status === "ready" ||
-    status.status === "disabled" ||
-    status.status === "warning"
+    status.status === "disabled"
   ) {
     return null;
   }
@@ -51,9 +50,9 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
       <div
         className={cn(
           "inline-flex items-center gap-3 rounded-xl border px-3.5 py-3 text-card-foreground text-sm",
-          status.status === "warning"
-            ? "border-warning/32 bg-warning/4 [&_svg]:text-warning"
-            : "border-destructive/32 bg-destructive/4 text-destructive-foreground [&_svg]:text-destructive",
+          status.status === "error"
+            ? "border-destructive/32 bg-destructive/4 text-destructive-foreground [&_svg]:text-destructive"
+            : "border-warning/32 bg-warning/4 [&_svg]:text-warning",
         )}
         role="alert"
       >

@@ -8,8 +8,6 @@ import packageJson from "./package.json" with { type: "json" };
 const bundledPackagePrefixes = [
   "@pierre/diffs",
   "@sparky/",
-  "effect-acp",
-  "effect-codex-app-server",
 ];
 
 export function shouldBundleCliDependency(id: string): boolean {

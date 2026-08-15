@@ -1,0 +1,50 @@
+const COMPOSIO_MCP_URL_ENV = "COMPOSIO_MCP_URL";
+const COMPOSIO_MCP_API_KEY_ENV = "COMPOSIO_MCP_API_KEY";
+const COMPOSIO_CONNECT_API_KEY_ENV = "COMPOSIO_CONNECT_API_KEY";
+const COMPOSIO_MCP_USER_ID_ENV = "COMPOSIO_MCP_USER_ID";
+const COMPOSIO_MCP_HEADER_ENV = "COMPOSIO_MCP_HEADER";
+const COMPOSIO_CONNECT_URL = "https://connect.composio.dev/mcp";
+
+export interface ComposioMcpConfig {
+  readonly endpoint: string;
+  readonly apiKey: string;
+  readonly apiKeyHeader: string;
+}
+
+/**
+ * Resolve the configured Composio MCP server without persisting credentials.
+ * The API key is intentionally kept out of URLs and returned only for the
+ * provider launch path that must attach it to the MCP request.
+ */
+export function readComposioMcpConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): ComposioMcpConfig | undefined {
+  const connectApiKey = environment[COMPOSIO_CONNECT_API_KEY_ENV]?.trim();
+  const projectApiKey = environment[COMPOSIO_MCP_API_KEY_ENV]?.trim();
+  const configuredMcpUrl = environment[COMPOSIO_MCP_URL_ENV]?.trim();
+  const configuredUrl = connectApiKey ? COMPOSIO_CONNECT_URL : configuredMcpUrl;
+  const apiKey = connectApiKey || projectApiKey;
+  if (!apiKey || !configuredUrl) return undefined;
+
+  const endpoint = new URL(configuredUrl);
+  if (!endpoint.searchParams.has("user_id")) {
+    endpoint.searchParams.set(
+      "user_id",
+      environment[COMPOSIO_MCP_USER_ID_ENV]?.trim() || "sparky",
+    );
+  }
+
+  const apiKeyHeader =
+    environment[COMPOSIO_MCP_HEADER_ENV]?.trim() ||
+    (endpoint.hostname === "connect.composio.dev" ? "x-consumer-api-key" : "x-api-key");
+
+  return { endpoint: endpoint.toString(), apiKey, apiKeyHeader };
+}
+
+export function composioAuthorizationHeader(config: ComposioMcpConfig): string {
+  return `Bearer ${config.apiKey}`;
+}
+
+export function composioHeaders(config: ComposioMcpConfig): Record<string, string> {
+  return { [config.apiKeyHeader]: config.apiKey };
+}

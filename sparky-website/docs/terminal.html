@@ -16,7 +16,7 @@
   <div class="docs-layout">
     <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items">
@@ -34,13 +34,12 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">TOOLS</div>
         <h1>Terminal Commands</h1>
-        <p>Build, test, install, lint — Sparky runs any command in your project's terminal and shows you the full output.</p>
+        <p>Run project commands with an explicit working directory, captured output, an exit status, and a visible lifecycle in the task timeline.</p>
       </div>
 
       <h2 id="how-it-works">How it works</h2>
-      <p>Sparky can run any shell command in your project's directory. It captures stdout, stderr, and the exit code, then shows you the results. You control the timeout — default is 300 seconds.</p>
+      <p>Sparky can run shell commands in the active project's environment. It captures standard output, standard error, and the exit status, then associates that evidence with the task that requested it. Command availability and shell syntax depend on the operating system and project setup.</p>
 
       <h2 id="running-commands">Running commands</h2>
       <p>Just tell Sparky what to run. It figures out the right command for your project (npm, cargo, python, go, make, etc.).</p>
@@ -52,11 +51,20 @@
       </div></div>
 
       <h2 id="long-commands">Long-running commands</h2>
-      <p>Some commands take a while — large test suites, builds, deployments. Sparky handles these in the background and shows results when they finish. You can press <strong>Ctrl+C</strong> to interrupt.</p>
+      <p>Large test suites and builds can remain active while you inspect the timeline. Use Sparky's <strong>Stop</strong> control to settle the active turn; if a process owns an interactive terminal, stop it through that terminal's normal interrupt control.</p>
       <div class="docs-note"><strong>Tip:</strong> For dev servers or watchers that run indefinitely, start them in a separate terminal. Sparky works best with commands that have a clear end.</div>
 
       <h2 id="timeouts">Timeouts</h2>
-      <p>Commands time out after <strong>300 seconds</strong> by default. If your task needs more time, ask Sparky to increase the timeout or break it into smaller steps.</p>
+      <p>A command can be bounded by the tool or environment that launched it. When it times out, read the output before retrying: the process may have produced useful diagnostics or partial artifacts. Use a focused command, request a suitable finite timeout, or keep an indefinite watcher in a dedicated terminal.</p>
+
+      <h2 id="evidence">Treat output as evidence</h2>
+      <ul>
+        <li>A zero exit status is useful but does not prove the produced artifact is correct.</li>
+        <li>A timeout does not prove that no files changed.</li>
+        <li>For builds, inspect the artifact, version, architecture, or checksum required by the task.</li>
+        <li>For tests, record which suite ran and whether skipped or unrelated failures remain.</li>
+        <li>For destructive or publishing commands, make the exact scope explicit before asking Sparky to run them.</li>
+      </ul>
 
       <div class="docs-next"><h3>Next steps</h3><ul>
         <li><a href="read-edit.html">Read & Edit Files</a> — modify code and config files</li>
@@ -70,7 +78,8 @@
         <li><a href="#how-it-works">How it works</a></li>
         <li><a href="#running-commands">Running commands</a></li>
         <li><a href="#long-commands">Long-running commands</a></li>
-        <li><a href="#timeouts">Timeouts</a></li>
+<li><a href="#timeouts">Timeouts</a></li>
+<li><a href="#evidence">Output as evidence</a></li>
       </ul>
     </aside>
   </div>

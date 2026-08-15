@@ -29,6 +29,14 @@ function json(value, status = 200) {
   return Response.json(value, { status, headers: publicHeaders() });
 }
 
+function releaseIsLaunched(env) {
+  return env.RELEASE_LAUNCHED === "true";
+}
+
+function stagedResponse() {
+  return errorResponse("Downloads are not available.", 404);
+}
+
 function errorResponse(message, status) {
   return json({ error: message }, status);
 }
@@ -63,7 +71,7 @@ function releaseConfig(env) {
     { name: "Sparky-x64.AppImage", platform: "linux-x64", size: Number(env.RELEASE_LINUX_SIZE) || null, contentType: "application/octet-stream", sha256: env.RELEASE_LINUX_SHA256?.trim() || null, url: `${linuxBaseUrl}/Sparky-x64.AppImage` },
     { name: "Sparky-x64.AppImage.asc", platform: "linux-x64", size: Number(env.RELEASE_LINUX_ASC_SIZE) || null, contentType: "application/pgp-signature", sha256: env.RELEASE_LINUX_ASC_SHA256?.trim() || null, url: `${linuxBaseUrl}/Sparky-x64.AppImage.asc` },
   );
-  return { schemaVersion: 0, id: version, version, name: `Sparky ${version}`, channel: "release", changelog: env.RELEASE_CHANGELOG?.trim() || "", publishedAt: env.RELEASE_PUBLISHED_AT?.trim() || null, files };
+  return { schemaVersion: 0, id: version, version, name: `Sparky ${version}`, channel: "release", launchState: releaseIsLaunched(env) ? "launched" : "staged", changelog: env.RELEASE_CHANGELOG?.trim() || "", publishedAt: env.RELEASE_PUBLISHED_AT?.trim() || null, files };
 }
 
 function githubReleaseConfig(env, baseUrl) {
@@ -107,7 +115,7 @@ function githubReleaseConfig(env, baseUrl) {
       file(manifestName, "macos-x64", Number(env.RELEASE_MAC_X64_YML_SIZE), "text/yaml", env.RELEASE_MAC_X64_YML_SHA256),
     );
   }
-  return { schemaVersion: 0, id: version, version, name: `Sparky ${version}`, channel: "release", changelog: env.RELEASE_CHANGELOG?.trim() || "", publishedAt: env.RELEASE_PUBLISHED_AT?.trim() || null, files };
+  return { schemaVersion: 0, id: version, version, name: `Sparky ${version}`, channel: "release", launchState: releaseIsLaunched(env) ? "launched" : "staged", changelog: env.RELEASE_CHANGELOG?.trim() || "", publishedAt: env.RELEASE_PUBLISHED_AT?.trim() || null, files };
 }
 
 function validateManifest(raw) {
@@ -144,11 +152,13 @@ async function loadManifest(env) {
 }
 
 function publicManifest(release) {
+  if (release.launchState === "staged") return { id: "stable", channel: "release", files: [] };
   return {
     id: release.id ?? release.version,
     version: release.version,
     name: release.name ?? `Sparky ${release.version}`,
     channel: release.channel ?? "release",
+    launchState: release.launchState ?? "launched",
     changelog: release.changelog ?? "",
     publishedAt: release.publishedAt ?? null,
     files: release.files.filter((file) => /\.(?:exe|dmg|AppImage|asc)$/iu.test(file.name)).map(({ name, platform, size, contentType, sha256 }) => ({ name, platform, size, contentType, sha256: sha256 ?? null })),
@@ -258,6 +268,7 @@ async function handleRequest(request, env, executionContext) {
   if (path === "/get/manifest") return json(publicManifest(release));
   if (path === "/get/releases") return json([publicManifest(release)]);
   if (path.startsWith("/get/updates/")) {
+    if (!releaseIsLaunched(env)) return stagedResponse();
     const requested = updateRequest(path);
     if (!requested) {
       trackDownloadRequest(env, request, executionContext, release, { platform: "unknown", file: "unknown", outcome: "invalid-update-path", status: 404 });
@@ -272,6 +283,7 @@ async function handleRequest(request, env, executionContext) {
     return redirect(file.url);
   }
   if (path !== "/get" && path !== "/") return errorResponse("Not found.", 404);
+  if (!releaseIsLaunched(env)) return stagedResponse();
   const platform = requestedPlatform(request, url);
   const installer = findInstaller(release, platform);
   if (!installer) {

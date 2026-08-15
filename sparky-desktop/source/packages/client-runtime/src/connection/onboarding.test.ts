@@ -81,18 +81,19 @@ describe("connection onboarding", () => {
       const registration = yield* preparePairingRegistration({
         host: "remote.example.test",
         pairingCode: "pairing-token",
+        label: "Build box",
       }).pipe(Effect.provide(Layer.mergeAll(CLIENT_PRESENTATION_LAYER, pairingHttpLayer(calls))));
 
       expect(registration).toMatchObject({
         _tag: "BearerConnectionRegistration",
         target: {
           environmentId: "environment-paired",
-          label: "Paired environment",
+          label: "Build box",
           connectionId: "bearer:environment-paired",
         },
         profile: {
           environmentId: "environment-paired",
-          label: "Paired environment",
+          label: "Build box",
           connectionId: "bearer:environment-paired",
           httpBaseUrl: "https://remote.example.test/",
           wsBaseUrl: "wss://remote.example.test/",

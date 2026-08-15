@@ -9,7 +9,7 @@ use sparky_config::DEFAULT_CONTEXT_WINDOW_TOKENS;
 use sparky_extensions::{EventBus, JsExtensionRunner, SparkyEvent};
 use sparky_memory::MemoryStore;
 use sparky_session::SessionManager;
-use sparky_tools::{is_hidden_control_tool, register_http_mcp_tools, ToolRegistry};
+use sparky_tools::{is_hidden_control_tool, register_http_mcp_tools_with_header, ToolRegistry};
 use std::env;
 use std::io::{self, Write};
 use std::path::Path;
@@ -102,11 +102,7 @@ struct Cli {
     )]
     append_system_prompt: Option<String>,
 
-    #[arg(
-        long,
-        requires = "mcp_bearer_token_env_var",
-        help = "HTTP MCP endpoint to expose as agent tools"
-    )]
+    #[arg(long, help = "HTTP MCP endpoint to expose as agent tools")]
     mcp_url: Option<String>,
 
     #[arg(
@@ -115,6 +111,24 @@ struct Cli {
         help = "Environment variable containing the bearer token for --mcp-url"
     )]
     mcp_bearer_token_env_var: Option<String>,
+
+    #[arg(
+        long,
+        requires = "mcp_header_env_var",
+        requires = "mcp_url",
+        conflicts_with = "mcp_bearer_token_env_var",
+        help = "Custom HTTP MCP authentication header name"
+    )]
+    mcp_header_name: Option<String>,
+
+    #[arg(
+        long,
+        requires = "mcp_header_name",
+        requires = "mcp_url",
+        conflicts_with = "mcp_bearer_token_env_var",
+        help = "Environment variable containing a custom HTTP MCP header value"
+    )]
+    mcp_header_env_var: Option<String>,
 }
 
 fn write_json_line(value: serde_json::Value) {
@@ -372,14 +386,34 @@ async fn main() -> anyhow::Result<()> {
         memory_store.clone(),
     );
     if let Some(mcp_url) = cli.mcp_url.as_deref() {
-        let token_variable = cli
-            .mcp_bearer_token_env_var
-            .as_deref()
-            .expect("clap validates --mcp-url requirements");
+        let (header_name, token_variable) = if let Some(header_name) =
+            cli.mcp_header_name.as_deref()
+        {
+            let token_variable = cli
+                .mcp_header_env_var
+                .as_deref()
+                .expect("clap validates custom MCP header requirements");
+            (header_name, token_variable)
+        } else {
+            let token_variable = cli
+                .mcp_bearer_token_env_var
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("--mcp-url requires --mcp-bearer-token-env-var or --mcp-header-name with --mcp-header-env-var"))?;
+            ("Authorization", token_variable)
+        };
         let token = required_api_key(token_variable)?;
-        let tool_count =
-            register_http_mcp_tools(&mut tool_registry, mcp_url, &format!("Bearer {}", token))
-                .await?;
+        let header_value = if header_name == "Authorization" {
+            format!("Bearer {}", token)
+        } else {
+            token
+        };
+        let tool_count = register_http_mcp_tools_with_header(
+            &mut tool_registry,
+            mcp_url,
+            header_name,
+            &header_value,
+        )
+        .await?;
         tracing::info!(mcp_url, tool_count, "Loaded HTTP MCP tools");
     }
     let extension_runner = if let Some(extension_path) = cli.extension.as_deref() {

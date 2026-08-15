@@ -46,6 +46,19 @@ describe("ClientSettings streaming text animation", () => {
   });
 });
 
+describe("ClientSettings model selector style", () => {
+  it("defaults legacy settings to the compact menu", () => {
+    expect(decodeClientSettings({}).modelSelectorStyle).toBe("menu");
+  });
+
+  it("accepts both model selector modes", () => {
+    expect(decodeClientSettings({ modelSelectorStyle: "menu" }).modelSelectorStyle).toBe("menu");
+    expect(decodeClientSettings({ modelSelectorStyle: "slider" }).modelSelectorStyle).toBe(
+      "slider",
+    );
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults to an empty record so legacy configs without the key still decode", () => {
     expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});

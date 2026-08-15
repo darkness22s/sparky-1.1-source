@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodePath from "node:path";
 import { describe, it, assert } from "@effect/vitest";
@@ -663,11 +664,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           previousContext,
         );
 
+        const refreshedModel = refreshedProvider.models[0];
+        assert.isDefined(refreshedModel);
         const providerUpdated = {
           ...refreshedProvider,
           models: [
             {
-              ...refreshedProvider.models[0],
+              ...refreshedModel,
               contextWindowSource: "provider" as const,
             },
           ],

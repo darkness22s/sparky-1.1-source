@@ -4,6 +4,7 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ModelSelection,
   ProjectId,
+  PROJECTLESS_PROJECT_ID,
   ProviderInstanceId,
   ThreadId,
 } from "@sparky/contracts";
@@ -176,6 +177,28 @@ export const resolveWelcomeBase = Effect.gen(function* () {
   } as const;
 });
 
+export const ensureProjectlessProject = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const projectionReadModelQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const existingProject =
+    yield* projectionReadModelQuery.getProjectShellById(PROJECTLESS_PROJECT_ID);
+  if (Option.isSome(existingProject)) {
+    return;
+  }
+
+  yield* orchestrationEngine.dispatch({
+    type: "project.create",
+    commandId: CommandId.make(yield* crypto.randomUUIDv4),
+    projectId: PROJECTLESS_PROJECT_ID,
+    title: "Sparky chats",
+    workspaceRoot: serverConfig.baseDir,
+    defaultModelSelection: getAutoBootstrapDefaultModelSelection(),
+    createdAt: DateTime.formatIso(yield* DateTime.now),
+  });
+});
+
 export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const randomUUID = crypto.randomUUIDv4;
@@ -338,6 +361,15 @@ export const make = Effect.gen(function* () {
         yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
         yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
       }),
+    );
+
+    yield* runStartupPhase(
+      "projectless.ensure",
+      ensureProjectlessProject.pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("failed to ensure projectless chat workspace", { cause }),
+        ),
+      ),
     );
 
     const welcomeBase = yield* resolveWelcomeBase;

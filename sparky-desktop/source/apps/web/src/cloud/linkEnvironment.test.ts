@@ -30,6 +30,7 @@ import {
   linkPrimaryEnvironmentToCloud,
   listManagedCloudEnvironments,
   normalizeRelayBaseUrl,
+  provisionPrimaryMachineEndpoint,
   readPrimaryCloudLinkState,
   type CloudLinkTarget,
   unlinkPrimaryEnvironmentFromCloud,
@@ -340,6 +341,63 @@ describe("web cloud link environment client", () => {
           wsBaseUrl: TARGET.wsBaseUrl,
         },
       });
+    }),
+  );
+
+  it.effect("provisions an accountless remote machine endpoint from an environment proof", () =>
+    Effect.gen(function* () {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            challenge: "machine-challenge",
+            expiresAt: "2026-06-06T00:05:00.000Z",
+          }),
+        )
+        .mockResolvedValueOnce(Response.json("machine-signed-proof"))
+        .mockResolvedValueOnce(
+          Response.json({
+            ok: true,
+            cloudUserId: "sparky:machine-pairing",
+            environmentId: TARGET.environmentId,
+            endpoint: {
+              httpBaseUrl: "https://desktop.example.test/",
+              wsBaseUrl: "wss://desktop.example.test/ws",
+              providerKind: "cloudflare_tunnel",
+            },
+            endpointRuntime: {
+              providerKind: "cloudflare_tunnel",
+              connectorToken: "connector-token",
+            },
+            relayIssuer: "https://relay.example.test",
+            environmentCredential: "environment-credential",
+            cloudMintPublicKey: "public-key",
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({ ok: true, endpointRuntimeStatus: { status: "running" } }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const endpoint = yield* withServices(provisionPrimaryMachineEndpoint({ target: TARGET }));
+
+      expect(endpoint).toBe("https://desktop.example.test/");
+      expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+        "https://relay.example.test/v1/machines/pairing-challenges",
+      );
+      expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+        "http://127.0.0.1:3000/api/connect/link-proof",
+      );
+      expect(String(fetchMock.mock.calls[2]?.[0])).toBe(
+        "https://relay.example.test/v1/machines/pairings",
+      );
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      expect(JSON.parse(bodyText(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+        proof: "machine-signed-proof",
+      });
+      expect(String(fetchMock.mock.calls[3]?.[0])).toBe(
+        "http://127.0.0.1:3000/api/connect/relay-config",
+      );
     }),
   );
 

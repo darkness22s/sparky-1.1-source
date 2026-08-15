@@ -41,15 +41,24 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
 import type { ProviderAdapterShape, ProviderThreadSnapshot } from "../Services/ProviderAdapter.ts";
 import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("sparky");
 const T3_MCP_BEARER_TOKEN_ENV_VAR = "T3_MCP_BEARER_TOKEN";
+const T3_MCP_HEADER_VALUE_ENV_VAR = "T3_MCP_HEADER_VALUE";
 const HIDDEN_SPARKY_CONTROL_TOOLS = new Set(["end_task"]);
 const SPARKY_BROWSER_INSTRUCTIONS = `You are running inside Sparky Desktop. The t3-code MCP tools named preview_* control the collaborative browser shared with the user.
 For browser work, first call preview_status. If no automation-capable preview is attached, call preview_open. Then use preview_navigate, preview_snapshot, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 Do not open the user's external browser or start a replacement browser automation stack when the preview_* tools are available.`;
+
+// Stream callbacks are synchronous by contract, so publish their events with
+// a small module-level runner rather than nesting Effect.runSync in the turn
+// effect. This keeps callback ordering while satisfying Effect diagnostics.
+function runEffectSync(effect: Effect.Effect<void>): void {
+  Effect.runSync(effect);
+}
 
 export interface SparkyAdapterOptions {
   readonly instanceId: ProviderInstanceId;
@@ -706,6 +715,8 @@ export function makeSparkyProcessArgs(input: {
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
+  readonly mcpHeaderName?: string | undefined;
+  readonly mcpHeaderEnvVar?: string | undefined;
 }): string[] {
   const selection = parseModelSelection(input.model);
   const args = [
@@ -744,6 +755,14 @@ export function makeSparkyProcessArgs(input: {
   if (input.mcpUrl?.trim() && input.mcpBearerTokenEnvVar?.trim()) {
     args.push("--mcp-url", input.mcpUrl.trim());
     args.push("--mcp-bearer-token-env-var", input.mcpBearerTokenEnvVar.trim());
+  } else if (
+    input.mcpUrl?.trim() &&
+    input.mcpHeaderName?.trim() &&
+    input.mcpHeaderEnvVar?.trim()
+  ) {
+    args.push("--mcp-url", input.mcpUrl.trim());
+    args.push("--mcp-header-name", input.mcpHeaderName.trim());
+    args.push("--mcp-header-env-var", input.mcpHeaderEnvVar.trim());
   }
   return args;
 }
@@ -766,6 +785,8 @@ function runSparky(input: {
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
+  readonly mcpHeaderName?: string | undefined;
+  readonly mcpHeaderEnvVar?: string | undefined;
 }) {
   return Effect.tryPromise({
     try: () =>
@@ -977,9 +998,10 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           ...stamp(threadId, turnId),
           payload: { model },
         });
+        const context = yield* Effect.context();
         const assistantSegments = makeSparkyAssistantSegmenter({
           onStarted: (segmentId) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "item.started",
                 ...stamp(threadId, turnId),
@@ -989,7 +1011,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onDelta: (segmentId, delta) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "content.delta",
                 ...stamp(threadId, turnId),
@@ -999,7 +1021,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             );
           },
           onCompleted: (segmentId, text) => {
-            Effect.runSync(
+            runEffectSync(
               publish({
                 type: "item.completed",
                 ...stamp(threadId, turnId),
@@ -1018,9 +1040,23 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           ? yield* options.getCustomInstructions()
           : "";
         const mcpSession = McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
+        const composioMcp = ComposioMcp.readComposioMcpConfig();
+        const activeMcp: {
+          readonly endpoint: string;
+          readonly authorizationHeader: string;
+          readonly headerName?: string;
+          readonly headerValue?: string;
+        } | undefined = composioMcp
+          ? {
+              endpoint: composioMcp.endpoint,
+              authorizationHeader: ComposioMcp.composioAuthorizationHeader(composioMcp),
+              headerName: composioMcp.apiKeyHeader,
+              headerValue: composioMcp.apiKey,
+            }
+          : mcpSession;
         const effectiveInstructions = [
           customInstructions.trim(),
-          ...(mcpSession ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
+          ...(mcpSession && !composioMcp ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
         ]
           .filter((instructions) => instructions.length > 0)
           .join("\n\n");
@@ -1030,7 +1066,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           try {
             captureSparkySessionIdentity(state, cwd, threadId, nextSessionId);
           } catch (cause) {
-            Effect.runSync(
+            runEffectSync(
               Effect.logWarning("failed to persist early Sparky thread session binding", {
                 threadId,
                 sessionId: nextSessionId,
@@ -1107,7 +1143,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               model,
               cwd,
               hasSession: sessionId !== undefined,
-              hasMcpSession: mcpSession !== undefined,
+              hasMcpSession: activeMcp !== undefined,
             });
             const result = yield* runSparky({
               binaryPath: options.binaryPath,
@@ -1118,13 +1154,17 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               reasoningEffort,
               contextWindow,
               interactionMode,
-              environment: mcpSession
+              environment: activeMcp
                 ? {
                     ...options.environment,
-                    [T3_MCP_BEARER_TOKEN_ENV_VAR]: mcpSession.authorizationHeader.replace(
-                      /^Bearer\s+/u,
-                      "",
-                    ),
+                    ...(activeMcp.headerName && activeMcp.headerValue
+                      ? { [T3_MCP_HEADER_VALUE_ENV_VAR]: activeMcp.headerValue }
+                      : {
+                          [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
+                            /^Bearer\s+/u,
+                            "",
+                          ),
+                        }),
                   }
                 : options.environment,
               activeChildren,
@@ -1132,11 +1172,17 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               sessionId,
               customInstructions: effectiveInstructions,
               isCancelled: isTurnCancelled,
-              ...(mcpSession
-                ? {
-                    mcpUrl: mcpSession.endpoint,
-                    mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
-                  }
+              ...(activeMcp
+                ? activeMcp.headerName && activeMcp.headerValue
+                  ? {
+                      mcpUrl: activeMcp.endpoint,
+                      mcpHeaderName: activeMcp.headerName,
+                      mcpHeaderEnvVar: T3_MCP_HEADER_VALUE_ENV_VAR,
+                    }
+                  : {
+                      mcpUrl: activeMcp.endpoint,
+                      mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
+                    }
                 : {}),
               callbacks: {
                 onDelta: (delta) => {
@@ -1147,7 +1193,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                 onSessionId: captureSessionIdentity,
                 onUsage: (usage) => {
                   if (isTurnCancelled()) return;
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "thread.token-usage.updated",
                       ...stamp(threadId, turnId),
@@ -1181,7 +1227,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   const presentation = sparkyToolPresentation(event.toolName, event.arguments);
                   toolPresentations.set(event.toolCallId, presentation);
                   const data = { ...presentation.data, toolCallId: event.toolCallId };
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "item.started",
                       ...stamp(threadId, turnId),
@@ -1196,14 +1242,13 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   );
                 },
                 onToolCompleted: (event) => {
-                  if (isTurnCancelled()) return;
                   if (isHiddenSparkyControlTool(event.toolName)) return;
                   const toolItemId = RuntimeItemId.make(event.toolCallId);
                   const presentation =
                     toolPresentations.get(event.toolCallId) ??
                     sparkyToolPresentation(event.toolName, {});
                   toolPresentations.delete(event.toolCallId);
-                  Effect.runSync(
+                  runEffectSync(
                     publish({
                       type: "item.completed",
                       ...stamp(threadId, turnId),
