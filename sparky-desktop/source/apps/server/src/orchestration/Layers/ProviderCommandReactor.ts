@@ -9,6 +9,7 @@ import {
   type ProjectId,
   type OrchestrationSession,
   type OrchestrationThread,
+  type ProviderRuntimeEvent,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -35,6 +36,7 @@ import { increment, orchestrationEventsProcessedTotal } from "../../observabilit
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
 import type { ProviderServiceError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
+import { sanitizeThreadTitle } from "../../textGeneration/TextGenerationUtils.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -43,7 +45,6 @@ import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import {
@@ -70,6 +71,15 @@ type ProviderIntentEvent = Extract<
       | "thread.session-stop-requested";
   }
 >;
+
+type ThreadTitleGenerationInput = {
+  readonly threadId: ThreadId;
+  readonly cwd: string;
+  readonly messageText: string;
+  readonly attachments?: ReadonlyArray<ChatAttachment>;
+  readonly titleSeed?: string;
+  readonly modelSelection: ModelSelection;
+};
 
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
@@ -223,7 +233,6 @@ const make = Effect.gen(function* () {
   const gitWorkflow = yield* GitWorkflowService;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
-  const serverSettingsService = yield* ServerSettingsService;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -926,6 +935,7 @@ const make = Effect.gen(function* () {
     readonly worktreePath: string | null;
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
+    readonly modelSelection: ModelSelection;
   }) {
     if (!input.branch || !input.worktreePath) {
       return;
@@ -938,14 +948,11 @@ const make = Effect.gen(function* () {
     const cwd = input.worktreePath;
     const attachments = input.attachments ?? [];
     yield* Effect.gen(function* () {
-      const { textGenerationModelSelection: modelSelection } =
-        yield* serverSettingsService.getSettings;
-
       const generated = yield* textGeneration.generateBranchName({
         cwd,
         message: input.messageText,
         ...(attachments.length > 0 ? { attachments } : {}),
-        modelSelection,
+        modelSelection: input.modelSelection,
       });
       if (!generated) return;
 
@@ -973,30 +980,54 @@ const make = Effect.gen(function* () {
     );
   });
 
-  const maybeGenerateThreadTitleForFirstTurn = Effect.fn("maybeGenerateThreadTitleForFirstTurn")(
-    function* (input: {
-      readonly threadId: ThreadId;
-      readonly cwd: string;
-      readonly messageText: string;
-      readonly attachments?: ReadonlyArray<ChatAttachment>;
-      readonly titleSeed?: string;
-    }) {
-      const attachments = input.attachments ?? [];
-      yield* Effect.gen(function* () {
-        const { textGenerationModelSelection: modelSelection } =
-          yield* serverSettingsService.getSettings;
+  const applyFallbackThreadTitle = Effect.fn("applyFallbackThreadTitle")(function* (
+    input: ThreadTitleGenerationInput,
+  ) {
+    const fallbackTitle = sanitizeThreadTitle(input.messageText);
+    if (fallbackTitle === DEFAULT_THREAD_TITLE) return;
 
-        const generated = yield* textGeneration.generateThreadTitle({
-          cwd: input.cwd,
-          message: input.messageText,
-          ...(attachments.length > 0 ? { attachments } : {}),
-          modelSelection,
-        });
-        if (!generated) return;
+    const thread = yield* resolveThread(input.threadId);
+    if (!thread) return;
+
+    const canReplaceTitle = (currentTitle: string) =>
+      canReplaceThreadTitle(currentTitle, input.titleSeed) || currentTitle.trim() === fallbackTitle;
+    if (!canReplaceTitle(thread.title)) return;
+
+    yield* orchestrationEngine.dispatch({
+      type: "thread.meta.update",
+      commandId: yield* serverCommandId("thread-title-fallback"),
+      threadId: input.threadId,
+      title: fallbackTitle,
+    });
+  });
+
+  const maybeGenerateThreadTitleForFirstTurn = Effect.fn("maybeGenerateThreadTitleForFirstTurn")(
+    function* (input: ThreadTitleGenerationInput) {
+      const attachments = input.attachments ?? [];
+      const fallbackTitle = sanitizeThreadTitle(input.messageText);
+      const canReplaceTitle = (currentTitle: string) =>
+        canReplaceThreadTitle(currentTitle, input.titleSeed) ||
+        (fallbackTitle !== DEFAULT_THREAD_TITLE && currentTitle.trim() === fallbackTitle);
+
+      yield* Effect.gen(function* () {
+        const generated = yield* textGeneration
+          .generateThreadTitle({
+            cwd: input.cwd,
+            message: input.messageText,
+            ...(attachments.length > 0 ? { attachments } : {}),
+            modelSelection: input.modelSelection,
+          })
+          .pipe(Effect.timeout(Duration.seconds(30)));
+
+        const generatedTitle = sanitizeThreadTitle(generated.title);
+        if (generatedTitle === DEFAULT_THREAD_TITLE) {
+          yield* applyFallbackThreadTitle(input);
+          return;
+        }
 
         const thread = yield* resolveThread(input.threadId);
         if (!thread) return;
-        if (!canReplaceThreadTitle(thread.title, input.titleSeed)) {
+        if (!canReplaceTitle(thread.title)) {
           return;
         }
 
@@ -1004,14 +1035,32 @@ const make = Effect.gen(function* () {
           type: "thread.meta.update",
           commandId: yield* serverCommandId("thread-title-rename"),
           threadId: input.threadId,
-          title: generated.title,
+          title: generatedTitle,
         });
       }).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("provider command reactor failed to generate or rename thread title", {
-            threadId: input.threadId,
-            cwd: input.cwd,
-            cause: Cause.pretty(cause),
+          Effect.gen(function* () {
+            yield* Effect.logWarning(
+              "provider command reactor failed to generate or rename thread title",
+              {
+                threadId: input.threadId,
+                cwd: input.cwd,
+                cause: Cause.pretty(cause),
+              },
+            );
+
+            yield* applyFallbackThreadTitle(input).pipe(
+              Effect.catchCause((fallbackCause) =>
+                Effect.logWarning(
+                  "provider command reactor failed to apply fallback thread title",
+                  {
+                    threadId: input.threadId,
+                    cwd: input.cwd,
+                    cause: Cause.pretty(fallbackCause),
+                  },
+                ),
+              ),
+            );
           }),
         ),
       );
@@ -1046,33 +1095,26 @@ const make = Effect.gen(function* () {
 
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
+    let generationInput: ThreadTitleGenerationInput | undefined;
     if (isFirstUserMessageTurn) {
       const project = yield* resolveProject(thread.projectId);
       const generationCwd =
-        resolveThreadWorkspaceCwd({
-          thread,
-          projects: project ? [project] : [],
-        }) ?? process.cwd();
-      const generationInput = {
+        resolveThreadWorkspaceCwd({ thread, projects: project ? [project] : [] }) ?? process.cwd();
+      generationInput = {
+        threadId: event.payload.threadId,
+        cwd: generationCwd,
         messageText: message.text,
         ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
         ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
+        modelSelection: event.payload.modelSelection ?? thread.modelSelection,
       };
+      const firstTurnGenerationInput = generationInput;
 
       yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-        threadId: event.payload.threadId,
         branch: thread.branch,
         worktreePath: thread.worktreePath,
-        ...generationInput,
+        ...firstTurnGenerationInput,
       }).pipe(Effect.forkScoped);
-
-      if (canReplaceThreadTitle(thread.title, event.payload.titleSeed)) {
-        yield* maybeGenerateThreadTitleForFirstTurn({
-          threadId: event.payload.threadId,
-          cwd: generationCwd,
-          ...generationInput,
-        }).pipe(Effect.forkScoped);
-      }
     }
 
     const handleTurnStartFailure = (cause: Cause.Cause<unknown>) => {
@@ -1129,10 +1171,43 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
+    const titleInput =
+      generationInput !== undefined && canReplaceThreadTitle(thread.title, event.payload.titleSeed)
+        ? generationInput
+        : undefined;
+    if (titleInput !== undefined) {
+      // Put a deterministic local title in place immediately, then run title
+      // generation as an independent text-only request using the exact model
+      // selection. It can finish while the real turn is still streaming.
+      yield* applyFallbackThreadTitle(titleInput).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            "provider command reactor failed to apply immediate fallback thread title",
+            {
+              threadId: titleInput.threadId,
+              cause: Cause.pretty(cause),
+            },
+          ),
+        ),
+      );
+      yield* maybeGenerateThreadTitleForFirstTurn(titleInput).pipe(
+        // Metadata generation must never hold the turn-start worker open.
+        Effect.forkScoped,
+        Effect.asVoid,
+      );
+    }
+
+    const providerTurn = providerService
       .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+      .pipe(Effect.catchCause((cause) => recoverTurnStartFailure(cause)));
+
+    yield* providerTurn.pipe(Effect.forkScoped);
   });
+
+  // Keep the provider event subscription alive for adapters that use the
+  // subscription as part of their runtime lifecycle. Title generation no
+  // longer waits on these events, but the stream remains an adapter boundary.
+  const processProviderRuntimeEvent = (_event: ProviderRuntimeEvent) => Effect.void;
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-interrupt-requested" }>,
@@ -1391,6 +1466,10 @@ const make = Effect.gen(function* () {
     yield* Effect.forkScoped(
       Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent),
     );
+    const providerEvents = providerService.subscribeEvents
+      ? Stream.fromSubscription(yield* providerService.subscribeEvents)
+      : providerService.streamEvents;
+    yield* Effect.forkScoped(Stream.runForEach(providerEvents, processProviderRuntimeEvent));
   });
 
   return {

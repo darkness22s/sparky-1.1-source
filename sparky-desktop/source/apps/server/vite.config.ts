@@ -30,7 +30,7 @@ export default mergeConfig(
       },
     },
     pack: {
-      entry: ["src/bin.ts"],
+      entry: ["src/bin.ts", "src/launcher.ts"],
       outDir: "dist",
       sourcemap: true,
       clean: true,

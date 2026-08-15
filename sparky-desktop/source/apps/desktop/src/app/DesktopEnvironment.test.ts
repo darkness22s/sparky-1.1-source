@@ -122,6 +122,31 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
+  it.effect("supports the npm desktop launcher runtime layout", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment(
+        {},
+        {
+          T3CODE_HOME: "C:/Users/alice/.Sparky",
+          T3CODE_DESKTOP_APP_ROOT: "C:/Users/alice/.npm-global/node_modules/t3",
+          T3CODE_DESKTOP_BACKEND_ENTRY:
+            "C:/Users/alice/.npm-global/node_modules/t3/dist/bin.mjs",
+          T3CODE_DESKTOP_BACKEND_CWD: "C:/Users/alice/.npm-global/node_modules/t3/dist",
+        },
+      );
+
+      assert.equal(environment.appRoot, "C:/Users/alice/.npm-global/node_modules/t3");
+      assert.equal(
+        environment.backendEntryPath,
+        "C:/Users/alice/.npm-global/node_modules/t3/dist/bin.mjs",
+      );
+      assert.equal(
+        environment.backendCwd,
+        "C:/Users/alice/.npm-global/node_modules/t3/dist",
+      );
+    }),
+  );
+
   it.effect("ignores a development server URL in packaged builds", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(
