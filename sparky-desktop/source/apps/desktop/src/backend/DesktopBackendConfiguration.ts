@@ -61,7 +61,7 @@ export class DesktopBackendConfiguration extends Context.Service<
     // backend that actually resolved to Windows.
     readonly resolvePrimaryLabel: Effect.Effect<string>;
   }
->()("@t3tools/desktop/backend/DesktopBackendConfiguration") {}
+>()("@sparky/desktop/backend/DesktopBackendConfiguration") {}
 
 interface BackendObservabilitySettings {
   readonly otlpTracesUrl: Option.Option<string>;

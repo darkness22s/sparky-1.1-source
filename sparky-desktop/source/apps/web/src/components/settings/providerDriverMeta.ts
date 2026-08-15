@@ -1,14 +1,8 @@
 import {
-  ClaudeSettings,
-  CodexSettings,
-  CursorSettings,
-  GrokSettings,
-  OpenCodeSettings,
   ProviderDriverKind,
 } from "@sparky/contracts";
-import type * as Schema from "effect/Schema";
-import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
-
+import * as Schema from "effect/Schema";
+import { SparkyIcon, type Icon } from "../Icons";
 type ProviderSettingsSchema = {
   readonly fields: Readonly<Record<string, Schema.Top>>;
 } & Schema.Top;
@@ -36,36 +30,12 @@ export interface ProviderClientDefinition {
 
 export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = [
   {
-    value: ProviderDriverKind.make("codex"),
-    label: "Codex",
-    icon: OpenAI,
-    settingsSchema: CodexSettings,
-  },
-  {
-    value: ProviderDriverKind.make("claudeAgent"),
-    label: "Claude",
-    icon: ClaudeAI,
-    settingsSchema: ClaudeSettings,
-  },
-  {
-    value: ProviderDriverKind.make("cursor"),
-    label: "Cursor",
-    icon: CursorIcon,
-    badgeLabel: "Early Access",
-    settingsSchema: CursorSettings,
-  },
-  {
-    value: ProviderDriverKind.make("grok"),
-    label: "Grok",
-    icon: GrokIcon,
-    badgeLabel: "Early Access",
-    settingsSchema: GrokSettings,
-  },
-  {
-    value: ProviderDriverKind.make("opencode"),
-    label: "OpenCode",
-    icon: OpenCodeIcon,
-    settingsSchema: OpenCodeSettings,
+    value: ProviderDriverKind.make("sparky"),
+    label: "Sparky",
+    icon: SparkyIcon,
+    settingsSchema: Schema.Struct({
+      binaryPath: Schema.String,
+    }),
   },
 ];
 

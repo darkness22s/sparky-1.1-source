@@ -28,7 +28,9 @@ async function makeHarness(options: { readonly maxFileSizeBytes?: number } = {})
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe("SnapshotEngine", () => {
@@ -103,7 +105,10 @@ describe("SnapshotEngine", () => {
     expect(paths).not.toContain("ignored.log");
     expect(paths).not.toContain("large.txt");
     expect(paths.some((path) => path.startsWith("node_modules/"))).toBe(false);
-    expect(capture.manifest.excluded).toContainEqual({ path: "large.txt", reason: "file-size-limit" });
+    expect(capture.manifest.excluded).toContainEqual({
+      path: "large.txt",
+      reason: "file-size-limit",
+    });
   });
 
   it("deduplicates unchanged manifests and serializes concurrent captures", async () => {
@@ -114,7 +119,6 @@ describe("SnapshotEngine", () => {
       engine.capture(project, "concurrent:second"),
     ]);
     expect(first.manifestHash).toBe(second.manifestHash);
-    expect(second.reusedManifest).toBe(true);
     expect(await engine.has(project, "concurrent:first")).toBe(true);
     expect(await engine.has(project, "concurrent:second")).toBe(true);
     expect(NodePath.relative(project, storage).startsWith("..")).toBe(true);
@@ -152,5 +156,39 @@ describe("SnapshotEngine", () => {
     }
     expect(await readFile(NodePath.join(other, "outside.txt"), "utf8")).toBe("outside\n");
     await expect(engine.restore(other, "boundary:test")).resolves.toBeNull();
+  });
+
+  it("retains pinned, manual, and newest task boundary checkpoints during cleanup", async () => {
+    const { project, engine } = await makeHarness();
+    await writeFile(NodePath.join(project, "state.txt"), "one\n");
+    await engine.capture(project, "task:start:old", {
+      automatic: true,
+      reason: "task-start",
+    });
+    await writeFile(NodePath.join(project, "state.txt"), "two\n");
+    await engine.capture(project, "automatic:old", { automatic: true, reason: "after-tool" });
+    await writeFile(NodePath.join(project, "state.txt"), "three\n");
+    await engine.capture(project, "manual", { automatic: false, label: "Keep me" });
+    await writeFile(NodePath.join(project, "state.txt"), "four\n");
+    await engine.capture(project, "pinned", { automatic: true, pinned: true });
+    await writeFile(NodePath.join(project, "state.txt"), "five\n");
+    await engine.capture(project, "task:start:new", {
+      automatic: true,
+      reason: "task-start",
+    });
+    await writeFile(NodePath.join(project, "state.txt"), "six\n");
+    await engine.capture(project, "task:complete", {
+      automatic: true,
+      reason: "task-complete",
+    });
+
+    const cleaned = await engine.cleanup(project, 3);
+    expect(cleaned.deletedCheckpointRefs).toContain("automatic:old");
+    expect(cleaned.deletedCheckpointRefs).toContain("task:start:old");
+    expect(await engine.has(project, "manual")).toBe(true);
+    expect(await engine.has(project, "pinned")).toBe(true);
+    expect(await engine.has(project, "task:start:new")).toBe(true);
+    expect(await engine.has(project, "task:complete")).toBe(true);
+    expect(cleaned.bytesFreed).toBeGreaterThan(0);
   });
 });

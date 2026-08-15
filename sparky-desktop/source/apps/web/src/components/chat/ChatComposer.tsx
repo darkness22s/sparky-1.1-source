@@ -79,6 +79,7 @@ import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
+import { ComposerExtensionReferences } from "./ComposerExtensionReferences";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
@@ -1124,6 +1125,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       scheduleComposerFocus();
     },
     [composerDraftTarget, promptRef, scheduleComposerFocus, setComposerDraftPrompt],
+  );
+
+  const handleExtensionReference = useCallback(
+    (reference: string) => {
+      const currentPrompt = promptRef.current.trimEnd();
+      setPromptFromTraits(`${currentPrompt}${currentPrompt.length > 0 ? " " : ""}${reference}`);
+    },
+    [promptRef, setPromptFromTraits],
   );
 
   const providerTraitsRenderInput = {
@@ -2474,6 +2483,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ))}
                 </div>
               )}
+
+            {!isComposerApprovalState &&
+            !projectSelectionRequired &&
+            pendingUserInputs.length === 0 ? (
+              <ComposerExtensionReferences onReference={handleExtensionReference} />
+            ) : null}
 
             <div className="relative">
               <ComposerPromptEditor

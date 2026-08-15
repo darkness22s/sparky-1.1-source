@@ -60,7 +60,7 @@ export class DesktopClientSettings extends Context.Service<
       settings: ClientSettings,
     ) => Effect.Effect<void, DesktopClientSettingsWriteError>;
   }
->()("@t3tools/desktop/settings/DesktopClientSettings") {}
+>()("@sparky/desktop/settings/DesktopClientSettings") {}
 
 const readClientSettings = (
   fileSystem: FileSystem.FileSystem,

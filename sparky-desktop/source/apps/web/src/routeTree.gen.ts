@@ -1,4 +1,4 @@
-/* eslint-disable */
+﻿/* eslint-disable */
 
 // @ts-nocheck
 
@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PluginsRouteImport } from './routes/plugins'
+import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AutomationsRouteImport } from './routes/automations'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
@@ -28,6 +30,16 @@ import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$e
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PluginsRoute = PluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AutomationsRoute = AutomationsRouteImport.update({
@@ -103,6 +115,8 @@ const ChatEnvironmentIdThreadIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
+  '/activity': typeof ActivityRoute
+  '/plugins': typeof PluginsRoute
   '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
@@ -118,6 +132,8 @@ export interface FileRoutesByFullPath {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
 }
 export interface FileRoutesByTo {
+  '/activity': typeof ActivityRoute
+  '/plugins': typeof PluginsRoute
   '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
@@ -136,6 +152,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_chat': typeof ChatRouteWithChildren
+  '/activity': typeof ActivityRoute
+  '/plugins': typeof PluginsRoute
   '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
@@ -155,6 +173,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity'
+    | '/plugins'
     | '/automations'
     | '/settings'
     | '/settings/archived'
@@ -170,6 +190,8 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/activity'
+    | '/plugins'
     | '/automations'
     | '/settings'
     | '/settings/archived'
@@ -187,6 +209,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_chat'
+    | '/activity'
+    | '/plugins'
     | '/automations'
     | '/settings'
     | '/settings/archived'
@@ -205,6 +229,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
+  ActivityRoute: typeof ActivityRoute
+  PluginsRoute: typeof PluginsRoute
   AutomationsRoute: typeof AutomationsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
 }
@@ -216,6 +242,20 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plugins': {
+      id: '/plugins'
+      path: '/plugins'
+      fullPath: '/plugins'
+      preLoaderRoute: typeof PluginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/automations': {
@@ -363,6 +403,8 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
+  ActivityRoute: ActivityRoute,
+  PluginsRoute: PluginsRoute,
   AutomationsRoute: AutomationsRoute,
   SettingsRoute: SettingsRouteWithChildren,
 }

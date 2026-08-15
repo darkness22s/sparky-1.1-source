@@ -14,6 +14,7 @@ import {
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationProposedPlan,
+  type OrchestrationThreadShell,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
@@ -271,7 +272,7 @@ function buildContextWindowActivityPayload(
 }
 
 function modelSelectionForObservedContextWindow(
-  thread: Pick<OrchestrationThread, "modelSelection">,
+  thread: OrchestrationThreadShell,
   event: ProviderRuntimeEvent,
 ): ModelSelection | undefined {
   if (event.type !== "thread.token-usage.updated") return undefined;

@@ -5864,6 +5864,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           threadId: defaultThreadId,
           status: "ready",
           providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
           runtimeMode: "full-access",
           activeTurnId: null,
           lastError: null,

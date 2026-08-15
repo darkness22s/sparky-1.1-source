@@ -132,6 +132,30 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("keeps Environment as a selectable singleton surface", () => {
+    useRightPanelStore.getState().open(refA, "environment");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
+      "environment",
+    );
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+    ).toEqual([{ id: "environment", kind: "environment" }]);
+
+    useRightPanelStore.getState().toggle(refA, "environment");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({
+      isOpen: false,
+      activeSurfaceId: "environment",
+    });
+
+    useRightPanelStore.getState().toggle(refA, "environment");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
+      "environment",
+    );
+  });
+
   it("keeps files as a singleton surface", () => {
     useRightPanelStore.getState().open(refA, "files");
     useRightPanelStore.getState().open(refA, "files");
