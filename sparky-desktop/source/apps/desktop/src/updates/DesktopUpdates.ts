@@ -160,7 +160,7 @@ export class DesktopUpdates extends Context.Service<
     readonly download: Effect.Effect<DesktopUpdateActionResult>;
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
   }
->()("@t3tools/desktop/updates/DesktopUpdates") {}
+>()("@sparky/desktop/updates/DesktopUpdates") {}
 
 const {
   logInfo: logUpdaterInfo,

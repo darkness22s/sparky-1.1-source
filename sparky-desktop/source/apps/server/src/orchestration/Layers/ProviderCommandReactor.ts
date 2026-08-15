@@ -29,6 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
 
+import { runUltraWorkflow, isUltraModelSelection } from "../UltraWorkflowRuntime.ts";
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
@@ -116,6 +117,18 @@ export function providerErrorLabelFromInstanceHint(input: {
   return providerErrorLabel(
     input.instanceId ?? input.modelSelectionInstanceId ?? input.sessionProvider,
   );
+}
+
+function sanitizeUltraModelSelection(selection: ModelSelection): ModelSelection {
+  const options = selection.options?.filter(
+    (option) =>
+      !((option.id === "effort" || option.id === "reasoningEffort") && option.value === "ultra"),
+  );
+  if (options === undefined || options.length === 0) {
+    const { options: _options, ...withoutOptions } = selection;
+    return withoutOptions;
+  }
+  return { ...selection, options };
 }
 
 function canReplaceThreadTitle(currentTitle: string, titleSeed?: string): boolean {
@@ -269,6 +282,42 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const runUltraForThread = Effect.fn("runUltraForThread")(function* (input: {
+    readonly thread: OrchestrationThread;
+    readonly messageText: string;
+    readonly modelSelection: ModelSelection;
+    readonly createdAt: string;
+  }) {
+    if (!isUltraModelSelection(input.modelSelection.options)) {
+      return input.modelSelection;
+    }
+    const snapshot = yield* Effect.tryPromise(() =>
+      runUltraWorkflow({
+        threadId: String(input.thread.id),
+        prompt: input.messageText,
+      }),
+    );
+    const { commandId, eventId } = yield* Effect.all({
+      commandId: serverCommandId("ultra-workflow-activity"),
+      eventId: serverEventId(),
+    });
+    yield* orchestrationEngine.dispatch({
+      type: "thread.activity.append",
+      commandId,
+      threadId: input.thread.id,
+      activity: {
+        id: eventId,
+        tone: snapshot.status === "Failed" ? "error" : "tool",
+        kind: "ultra.workflow.updated",
+        summary: `Ultra workflow ${snapshot.status.toLowerCase()}`,
+        payload: snapshot,
+        turnId: null,
+        createdAt: input.createdAt,
+      },
+      createdAt: input.createdAt,
+    });
+    return sanitizeUltraModelSelection(input.modelSelection);
+  });
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
     const providerError = isProviderAdapterRequestError(failReason?.error)
@@ -562,7 +611,7 @@ const make = Effect.gen(function* () {
             Effect.map(
               (info) => ({ instanceId: SPARKY_INSTANCE_ID, info, migrated: true }) as const,
             ),
-            Effect.catch(() => Effect.fail(originalError)),
+            Effect.mapError(() => originalError),
           ),
         ),
       );
@@ -805,18 +854,32 @@ const make = Effect.gen(function* () {
             thread,
           })
         : undefined;
+    const normalizedInput = toNonEmptyProviderInput(input.messageText);
+    const normalizedAttachments = input.attachments ?? [];
+    const requestedModelSelection =
+      effectiveInputModelSelection ??
+      threadModelSelections.get(input.threadId) ??
+      thread.modelSelection;
+    const ultraModelSelection = yield* runUltraForThread({
+      thread,
+      messageText: normalizedInput ?? "",
+      modelSelection: requestedModelSelection,
+      createdAt: input.createdAt,
+    });
     yield* ensureSessionForThread(
       input.threadId,
       input.createdAt,
-      effectiveInputModelSelection !== undefined
-        ? { modelSelection: effectiveInputModelSelection }
+      effectiveInputModelSelection !== undefined ||
+        isUltraModelSelection(requestedModelSelection.options)
+        ? { modelSelection: ultraModelSelection }
         : {},
     );
-    if (effectiveInputModelSelection !== undefined) {
-      threadModelSelections.set(input.threadId, effectiveInputModelSelection);
+    if (
+      effectiveInputModelSelection !== undefined ||
+      isUltraModelSelection(requestedModelSelection.options)
+    ) {
+      threadModelSelections.set(input.threadId, ultraModelSelection);
     }
-    const normalizedInput = toNonEmptyProviderInput(input.messageText);
-    const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()
       .pipe(
@@ -833,19 +896,18 @@ const make = Effect.gen(function* () {
             })
           : (yield* providerService.getCapabilities(activeSession.providerInstanceId))
               .sessionModelSwitch;
-    const requestedModelSelection =
-      effectiveInputModelSelection ??
-      threadModelSelections.get(input.threadId) ??
-      thread.modelSelection;
     const modelForTurn =
       sessionModelSwitch === "unsupported" && input.modelSelection === undefined
         ? activeSession?.model !== undefined
           ? {
-              ...requestedModelSelection,
+              ...ultraModelSelection,
               model: activeSession.model,
             }
-          : requestedModelSelection
-        : effectiveInputModelSelection;
+          : ultraModelSelection
+        : effectiveInputModelSelection !== undefined ||
+            isUltraModelSelection(requestedModelSelection.options)
+          ? ultraModelSelection
+          : undefined;
 
     return {
       threadId: input.threadId,

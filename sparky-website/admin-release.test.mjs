@@ -41,6 +41,17 @@ test("failed AWS drafts can be resumed without a misleading publish retry", () =
   assert.doesNotMatch(script, /Retry AWS publish/u);
 });
 
+test("admin Plugins workspace syncs, publishes, and separates Composio toolkits", () => {
+  assert.match(html, /id="plugins-workspace"/u);
+  assert.match(html, /id="sync-plugins"/u);
+  assert.match(html, /id="plugin-available-list"/u);
+  assert.match(html, /id="plugin-enabled-list"/u);
+  assert.match(script, /pluginCatalog:syncComposioToolkits/u);
+  assert.match(script, /pluginCatalog:\$\{action\}/u);
+  assert.match(script, /action !== "add" && action !== "remove"/u);
+  assert.match(html, /Already-added plugins are removed/u);
+});
+
 test("redesigned Docs and Changelog survive a production build", async () => {
   const dist = new URL("./dist/", import.meta.url);
   const styles = await readFile(new URL("styles.css", dist), "utf8");

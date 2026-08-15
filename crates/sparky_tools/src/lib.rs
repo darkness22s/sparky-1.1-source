@@ -18,12 +18,12 @@ pub use edit::EditTool;
 pub use find::FindTool;
 pub use grep::GrepTool;
 pub use ls::LsTool;
-pub use mcp::register_http_mcp_tools;
+pub use mcp::{register_http_mcp_tools, register_http_mcp_tools_with_header};
 pub use memory::{
     MemoryTool, SharedMemoryStore, MEMORY_ADD_TOOL_NAME, MEMORY_DELETE_TOOL_NAME,
     MEMORY_SEARCH_TOOL_NAME, MEMORY_UPDATE_TOOL_NAME,
 };
-pub use plan::{AskUserTool, EndTaskTool, UpdatePlanTool, END_TASK_TOOL_NAME};
+pub use plan::{AskUserTool, EndTaskTool, UpdatePlanTool, ASK_USER_TOOL_NAME, END_TASK_TOOL_NAME};
 pub use read::ReadTool;
 pub use registry::{is_hidden_control_tool, ToolRegistry};
 pub use tool::{Tool, ToolExecutionMode, ToolExecutionResult};

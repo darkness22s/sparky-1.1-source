@@ -54,6 +54,8 @@ function escapeHtml(value) {
 
 let latestData = null;
 let chartMode = "traffic";
+let pluginCatalogData = { syncedAt: null, enabled: [], available: [] };
+let pluginSearchQuery = "";
 
 function platformLabel(platform) {
   return ({
@@ -226,6 +228,75 @@ async function loadDashboard() {
   };
   await refresh();
   setInterval(() => void refresh().catch(() => {}), 15_000);
+}
+
+function pluginRow(plugin, actionLabel, action) {
+  const initials = plugin.name.slice(0, 1).toUpperCase();
+  const auth = plugin.managedAuthSchemes?.length ? "Managed auth" : "Provider credentials";
+  return `<div class="plugin-admin-row"><span class="plugin-admin-icon" aria-hidden="true">${escapeHtml(initials)}</span><div class="plugin-admin-copy"><strong>${escapeHtml(plugin.name)}</strong><span>${escapeHtml(plugin.description)}</span><div class="plugin-admin-meta"><em>${escapeHtml(plugin.category)}</em><em>${escapeHtml(auth)}</em><em>${metricValue(plugin.toolsCount)} tools</em></div></div><button class="text-button" type="button" data-plugin-action="${escapeHtml(action)}" data-plugin-slug="${escapeHtml(plugin.slug)}">${escapeHtml(actionLabel)}</button></div>`;
+}
+
+function renderPluginCatalog() {
+  const availableTarget = document.getElementById("plugin-available-list");
+  const enabledTarget = document.getElementById("plugin-enabled-list");
+  if (!availableTarget || !enabledTarget) return;
+  const query = pluginSearchQuery.trim().toLowerCase();
+  const available = pluginCatalogData.available.filter((plugin) => [plugin.name, plugin.slug, plugin.description, plugin.category, ...(plugin.tags || [])].join(" ").toLowerCase().includes(query));
+  availableTarget.innerHTML = available.length ? available.map((plugin) => pluginRow(plugin, "Add", "add")).join("") : '<div class="empty-activity">No matching toolkits are waiting to be added.</div>';
+  enabledTarget.innerHTML = pluginCatalogData.enabled.length ? pluginCatalogData.enabled.map((plugin) => pluginRow(plugin, "Remove", "remove")).join("") : '<div class="empty-activity">No plugins published yet.</div>';
+  document.querySelectorAll("[data-plugin-action]").forEach((button) => {
+    button.addEventListener("click", () => void updatePlugin(button.dataset.pluginAction, button.dataset.pluginSlug).catch((error) => {
+      const status = document.getElementById("plugin-sync-status");
+      if (status) status.textContent = error instanceof Error ? error.message : "Unable to update plugin.";
+    }));
+  });
+  const status = document.getElementById("plugin-sync-status");
+  if (status) status.textContent = pluginCatalogData.syncedAt ? `Synced ${new Date(pluginCatalogData.syncedAt).toLocaleString()}` : "Catalog has not been synced yet.";
+}
+
+async function loadPluginCatalog() {
+  pluginCatalogData = await convexCall("query", "pluginCatalog:listAdmin");
+  renderPluginCatalog();
+}
+
+async function syncPluginCatalog() {
+  const button = document.getElementById("sync-plugins");
+  if (button) button.disabled = true;
+  try {
+    const result = await convexCall("action", "pluginCatalog:syncComposioToolkits");
+    await loadPluginCatalog();
+    const status = document.getElementById("plugin-sync-status");
+    if (status) status.textContent = `Synced ${compactNumber.format(result.count)} toolkits · ${compactNumber.format(result.enabledCount)} published`;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function updatePlugin(action, slug) {
+  if (!slug || (action !== "add" && action !== "remove")) return;
+  const button = document.querySelector(`[data-plugin-action="${CSS.escape(action)}"][data-plugin-slug="${CSS.escape(slug)}"]`);
+  if (button) button.disabled = true;
+  try {
+    await convexCall("mutation", `pluginCatalog:${action}`, { slug });
+    await loadPluginCatalog();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function setupPluginWorkspace() {
+  document.getElementById("sync-plugins")?.addEventListener("click", () => void syncPluginCatalog().catch((error) => {
+    const status = document.getElementById("plugin-sync-status");
+    if (status) status.textContent = error instanceof Error ? error.message : "Plugin sync failed.";
+  }));
+  document.getElementById("plugin-search")?.addEventListener("input", (event) => {
+    pluginSearchQuery = event.currentTarget.value;
+    renderPluginCatalog();
+  });
+  void loadPluginCatalog().catch((error) => {
+    const status = document.getElementById("plugin-sync-status");
+    if (status) status.textContent = error instanceof Error ? error.message : "Unable to load plugin catalog.";
+  });
 }
 
 function setReleaseError(message = "") {
@@ -496,8 +567,9 @@ function setupReleaseWorkspace() {
     document.querySelectorAll(".workspace-view").forEach((workspace) => {
       workspace.hidden = workspace.id !== workspaceId;
     });
-    document.getElementById("workspace-title").textContent = workspaceId === "releases-workspace" ? "Releases" : "Overview";
+    document.getElementById("workspace-title").textContent = workspaceId === "releases-workspace" ? "Releases" : workspaceId === "plugins-workspace" ? "Plugins" : "Overview";
     if (workspaceId === "releases-workspace") void Promise.all([loadPublishedRelease(), loadReleases()]);
+    if (workspaceId === "plugins-workspace") void loadPluginCatalog();
   };
   document.querySelectorAll("[data-workspace]").forEach((button) => {
     button.addEventListener("click", () => activateWorkspace(button.dataset.workspace));
@@ -562,6 +634,7 @@ async function start() {
   convexToken = await clerk.session.getToken({ template: "convex", skipCache: true });
   if (!convexToken) throw new Error("Clerk did not return the Convex session token.");
   setupReleaseWorkspace();
+  setupPluginWorkspace();
   await Promise.all([loadDashboard(), loadPublishedRelease()]);
 }
 

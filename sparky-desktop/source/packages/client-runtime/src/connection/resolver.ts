@@ -40,7 +40,7 @@ export class ConnectionResolver extends Context.Service<
       entry: ConnectionCatalogEntry,
     ) => Effect.Effect<PreparedConnection, ConnectionAttemptError>;
   }
->()("@t3tools/client-runtime/connection/resolver/ConnectionResolver") {}
+>()("@sparky/client-runtime/connection/resolver/ConnectionResolver") {}
 
 const isBearerProfile = Schema.is(BearerConnectionProfile);
 const isSshProfile = Schema.is(SshConnectionProfile);

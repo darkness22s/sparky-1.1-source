@@ -1,6 +1,15 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@sparky/contracts";
 import { getTerminalLabel } from "@sparky/shared/terminalLabels";
-import { ClipboardList, FileDiff, Files, Globe2, Plus, TerminalSquare, X } from "lucide-react";
+import {
+  ClipboardList,
+  FileDiff,
+  Files,
+  Globe2,
+  Plus,
+  TerminalSquare,
+  Workflow,
+  X,
+} from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -44,9 +53,11 @@ interface RightPanelTabsProps {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
+  onAddEnvironment: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
+  environmentAvailable: boolean;
   children: ReactNode;
 }
 
@@ -91,9 +102,11 @@ function RightPanelEmptyState(props: {
   onAddTerminal: () => void;
   onAddDiff: () => void;
   onAddFiles: () => void;
+  onAddEnvironment: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
+  environmentAvailable: boolean;
 }) {
   const actions = [
     {
@@ -127,6 +140,14 @@ function RightPanelEmptyState(props: {
       available: props.diffAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
+    },
+    {
+      label: "Environment",
+      description: "Monitor the live workspace and Ultra agents.",
+      icon: Workflow,
+      available: props.environmentAvailable,
+      disabledReason: null,
+      onClick: props.onAddEnvironment,
     },
   ] as const;
 
@@ -175,7 +196,7 @@ function RightPanelEmptyState(props: {
             return (
               <DisabledReasonTooltip
                 key={action.label}
-                reason={action.disabledReason}
+                reason={action.disabledReason ?? "Unavailable"}
                 trigger={disabledCard}
               />
             );
@@ -205,6 +226,8 @@ function surfaceTitle(
       );
     case "plan":
       return "Plan";
+    case "environment":
+      return "Environment";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -266,6 +289,8 @@ function SurfaceIcon({
       return <TerminalSquare className="size-3.5 shrink-0" />;
     case "plan":
       return <ClipboardList className="size-3.5 shrink-0" />;
+    case "environment":
+      return <Workflow className="size-3.5 shrink-0" />;
   }
 }
 
@@ -470,6 +495,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <FileDiff />
                     Diff
                   </SurfaceMenuItem>
+                  <SurfaceMenuItem
+                    available={props.environmentAvailable}
+                    onClick={props.onAddEnvironment}
+                  >
+                    <Workflow />
+                    Environment
+                  </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>
             ) : null}
@@ -484,9 +516,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddTerminal={props.onAddTerminal}
             onAddDiff={props.onAddDiff}
             onAddFiles={props.onAddFiles}
+            onAddEnvironment={props.onAddEnvironment}
             browserAvailable={props.browserAvailable}
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}
+            environmentAvailable={props.environmentAvailable}
           />
         ) : (
           props.children
