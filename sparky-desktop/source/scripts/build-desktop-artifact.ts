@@ -576,7 +576,10 @@ interface StagePackageJson {
   };
 }
 
-export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
+// Electron is intentionally a staged devDependency: electron-builder needs the
+// host Electron package to determine the runtime version, while the packaged
+// app's production dependency set remains limited to its runtime libraries.
+export const STAGE_INSTALL_ARGS = ["install"] as const;
 export const DESKTOP_ASAR_UNPACK = ["node_modules/@ff-labs/fff-bin-*/**/*"] as const;
 
 export interface MacPasskeySigningConfiguration {
@@ -1588,7 +1591,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
-  const electronVersion = desktopPackageJson.dependencies.electron;
+  const electronVersion =
+    desktopPackageJson.dependencies.electron ?? desktopPackageJson.devDependencies?.electron;
 
   const serverDependencies = serverPackageJson.dependencies;
   if (!serverDependencies || Object.keys(serverDependencies).length === 0) {
@@ -1827,14 +1831,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     yield* fs.copy(path.join(repoRoot, "patches"), path.join(stageAppDir, "patches"));
   }
 
-  yield* Effect.log("[desktop-artifact] Installing staged production dependencies...");
+  yield* Effect.log("[desktop-artifact] Installing staged dependencies...");
   const installCommand = yield* resolveSpawnCommand("vp", [...STAGE_INSTALL_ARGS]);
   yield* runCommand(
     ChildProcess.make(installCommand.command, installCommand.args, {
       cwd: stageAppDir,
       shell: installCommand.shell,
     }),
-    { label: "vp install --prod", verbose: options.verbose },
+    { label: "vp install", verbose: options.verbose },
   );
   // WSL is Windows-only, so only the Windows artifact carries the Linux backend
   // binary; other platforms ignore the prebuild input.
