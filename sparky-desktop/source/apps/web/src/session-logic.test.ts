@@ -1730,13 +1730,10 @@ describe("isLatestTurnSettled", () => {
 
   it("treats a warm reusable running session with no active turn as settled", () => {
     expect(
-      isLatestTurnSettled(
-        latestTurn,
-        makeSession({
-          status: "running",
-          activeTurnId: null,
-        }),
-      ),
+      isLatestTurnSettled(latestTurn, {
+        status: "running",
+        activeTurnId: null,
+      }),
     ).toBe(true);
   });
 

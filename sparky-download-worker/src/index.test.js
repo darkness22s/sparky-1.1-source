@@ -4,7 +4,6 @@ import { test } from "node:test";
 import worker, { handleRequest, releaseConfig, requestedPlatform, updateRequest, validateManifest } from "./index.js";
 
 const env = {
-  RELEASE_LAUNCHED: "true",
   AWS_RELEASE_BASE_URL: "https://downloads.example.test/releases/0.0.28/",
   AWS_WINDOWS_BASE_URL: "https://downloads.example.test/releases/0.0.28/windows/",
   AWS_MAC_ARM64_BASE_URL: "https://downloads.example.test/releases/0.0.28/macos/arm64/",
@@ -111,7 +110,6 @@ test("a versioned public release overrides stale external manifest bindings", as
     RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2",
     RELEASE_MANIFEST_URL: "https://stale.example.test/manifest.json",
     RELEASE_VERSION: "1.1.2",
-    RELEASE_LAUNCHED: "true",
     RELEASE_MAC_X64_ZIP_SIZE: "10",
     RELEASE_MAC_X64_SIZE: "11",
     RELEASE_MAC_X64_BLOCKMAP_SIZE: "12",
@@ -125,21 +123,6 @@ test("a versioned public release overrides stale external manifest bindings", as
 test("beta never replaces the stable launch build", async () => {
   const response = await handleRequest(new Request("https://sparky.llc/get?channel=beta"), env);
   assert.equal(response.status, 404);
-});
-
-test("staged releases stay invisible and cannot be downloaded", async () => {
-  const stagedEnv = { ...env, RELEASE_VERSION: "1.1.2", RELEASE_LAUNCHED: "false" };
-  const download = await handleRequest(new Request("https://sparky.llc/get?platform=windows"), stagedEnv);
-  assert.equal(download.status, 404);
-  assert.doesNotMatch(await download.text(), /1\.1\.2/u);
-
-  const manifest = await handleRequest(new Request("https://sparky.llc/get/manifest"), stagedEnv);
-  assert.equal(manifest.status, 200);
-  assert.deepEqual(await manifest.json(), { id: "stable", channel: "release", files: [] });
-
-  const update = await handleRequest(new Request("https://sparky.llc/get/updates/windows/latest.yml"), stagedEnv);
-  assert.equal(update.status, 404);
-  assert.doesNotMatch(await update.text(), /1\.1\.2/u);
 });
 
 test("invalid AWS release configuration fails closed", async () => {

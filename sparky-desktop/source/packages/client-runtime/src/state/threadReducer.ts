@@ -407,39 +407,6 @@ export function applyThreadDetailEvent(
 
     // ── Revert ──────────────────────────────────────────────────────
     case "thread.reverted": {
-      if (event.payload.mode === "code") {
-        return {
-          kind: "updated",
-          thread: { ...thread, updatedAt: event.occurredAt },
-        };
-      }
-
-      if (
-        typeof event.payload.conversationState === "object" &&
-        event.payload.conversationState !== null
-      ) {
-        const restored = event.payload.conversationState as Record<string, unknown>;
-        if (
-          Array.isArray(restored.messages) &&
-          Array.isArray(restored.proposedPlans) &&
-          Array.isArray(restored.activities) &&
-          Array.isArray(restored.checkpoints)
-        ) {
-          return {
-            kind: "updated",
-            thread: {
-              ...thread,
-              messages: restored.messages as typeof thread.messages,
-              proposedPlans: restored.proposedPlans as typeof thread.proposedPlans,
-              activities: restored.activities as typeof thread.activities,
-              checkpoints: restored.checkpoints as typeof thread.checkpoints,
-              latestTurn: (restored.latestTurn ?? null) as typeof thread.latestTurn,
-              updatedAt: event.occurredAt,
-            },
-          };
-        }
-      }
-
       const checkpoints = pipe(
         thread.checkpoints,
         Arr.filter(

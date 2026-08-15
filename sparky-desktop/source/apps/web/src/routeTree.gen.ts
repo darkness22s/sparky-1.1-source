@@ -1,4 +1,4 @@
-﻿/* eslint-disable */
+/* eslint-disable */
 
 // @ts-nocheck
 
@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PluginsRouteImport } from './routes/plugins'
 import { Route as ActivityRouteImport } from './routes/activity'
-import { Route as AutomationsRouteImport } from './routes/automations'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
@@ -40,11 +39,6 @@ const PluginsRoute = PluginsRouteImport.update({
 const ActivityRoute = ActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AutomationsRoute = AutomationsRouteImport.update({
-  id: '/automations',
-  path: '/automations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -117,7 +111,6 @@ export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -134,7 +127,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -154,7 +146,6 @@ export interface FileRoutesById {
   '/_chat': typeof ChatRouteWithChildren
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
@@ -175,7 +166,6 @@ export interface FileRouteTypes {
     | '/'
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
@@ -192,7 +182,6 @@ export interface FileRouteTypes {
   to:
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
@@ -211,7 +200,6 @@ export interface FileRouteTypes {
     | '/_chat'
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
@@ -231,7 +219,6 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   ActivityRoute: typeof ActivityRoute
   PluginsRoute: typeof PluginsRoute
-  AutomationsRoute: typeof AutomationsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
 }
 
@@ -256,13 +243,6 @@ declare module '@tanstack/react-router' {
       path: '/activity'
       fullPath: '/activity'
       preLoaderRoute: typeof ActivityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/automations': {
-      id: '/automations'
-      path: '/automations'
-      fullPath: '/automations'
-      preLoaderRoute: typeof AutomationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_chat': {
@@ -405,7 +385,6 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ActivityRoute: ActivityRoute,
   PluginsRoute: PluginsRoute,
-  AutomationsRoute: AutomationsRoute,
   SettingsRoute: SettingsRouteWithChildren,
 }
 export const routeTree = rootRouteImport

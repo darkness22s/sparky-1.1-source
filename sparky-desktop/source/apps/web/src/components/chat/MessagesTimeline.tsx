@@ -42,7 +42,6 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   BrainIcon,
-  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -61,15 +60,12 @@ import {
   ListChecksIcon,
   Maximize2Icon,
   MessageCircleIcon,
-  MinusIcon,
   MousePointerClickIcon,
   PaintbrushIcon,
-  PauseCircleIcon,
-  PlayCircleIcon,
+  MinusIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
-  Trash2Icon,
   Undo2Icon,
   WrenchIcon,
   XIcon,
@@ -1841,14 +1837,10 @@ type WorkEntryIconName =
   | "keyboard"
   | "list-checks"
   | "brain"
-  | "calendar-clock"
   | "message-circle"
   | "mouse-pointer-click"
-  | "pause-circle"
-  | "play-circle"
   | "square-pen"
   | "terminal"
-  | "trash-2"
   | "wrench"
   | "x"
   | "zap";
@@ -1909,22 +1901,14 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <ListChecksIcon className={className} aria-hidden />;
     case "brain":
       return <BrainIcon className={className} aria-hidden />;
-    case "calendar-clock":
-      return <CalendarClockIcon className={className} aria-hidden />;
     case "message-circle":
       return <MessageCircleIcon className={className} aria-hidden />;
     case "mouse-pointer-click":
       return <MousePointerClickIcon className={className} aria-hidden />;
-    case "pause-circle":
-      return <PauseCircleIcon className={className} aria-hidden />;
-    case "play-circle":
-      return <PlayCircleIcon className={className} aria-hidden />;
     case "square-pen":
       return <SquarePenIcon className={className} aria-hidden />;
     case "terminal":
       return <TerminalIcon className={className} aria-hidden />;
-    case "trash-2":
-      return <Trash2Icon className={className} aria-hidden />;
     case "wrench":
       return <WrenchIcon className={className} aria-hidden />;
     case "x":
@@ -2032,16 +2016,6 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
-    case "automation_list":
-      return "calendar-clock";
-    case "automation_create":
-      return "calendar-clock";
-    case "automation_run_now":
-      return "play-circle";
-    case "automation_toggle":
-      return "pause-circle";
-    case "automation_delete":
-      return "trash-2";
     default:
       return undefined;
   }

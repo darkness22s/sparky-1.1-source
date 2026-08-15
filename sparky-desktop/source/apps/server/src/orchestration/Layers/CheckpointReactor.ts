@@ -1,6 +1,6 @@
 import {
   CommandId,
-  CheckpointRef,
+  type CheckpointRef,
   EventId,
   MessageId,
   type ProjectId,
@@ -8,9 +8,7 @@ import {
   TurnId,
   type OrchestrationEvent,
   type ProviderRuntimeEvent,
-  isToolLifecycleItemType,
 } from "@sparky/contracts";
-import * as Clock from "effect/Clock";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -36,21 +34,11 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import { RuntimeReceiptBus } from "../Services/RuntimeReceiptBus.ts";
 import type { CheckpointStoreError } from "../../checkpointing/Errors.ts";
 import type { OrchestrationDispatchError } from "../Errors.ts";
+import { isGitRepository } from "../../git/Utils.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-const DEFAULT_CHECKPOINT_SETTINGS = {
-  enabled: true,
-  maximumCheckpointsPerProject: 200,
-  maximumTotalStorageBytes: 10 * 1024 * 1024 * 1024,
-  maximumFileSizeBytes: 50 * 1024 * 1024,
-  ignoredPaths: [] as ReadonlyArray<string>,
-  beforeTerminalCommands: true,
-  afterTerminalCommands: true,
-  automaticCleanup: true,
-};
 
 type ReactorInput =
   | {
@@ -73,50 +61,6 @@ function sameId(left: string | null | undefined, right: string | null | undefine
   return left === right;
 }
 
-const READ_ONLY_TOOL_NAMES = new Set([
-  "read",
-  "grep",
-  "find",
-  "ls",
-  "web_search",
-  "preview_snapshot",
-  "preview_status",
-  "preview_wait_for",
-]);
-
-function toolNameFromRuntimeEvent(event: ProviderRuntimeEvent): string | undefined {
-  if (event.type !== "item.started" && event.type !== "item.completed") return undefined;
-  const data = event.payload.data;
-  if (typeof data !== "object" || data === null) return undefined;
-  const record = data as Record<string, unknown>;
-  const candidate = record.toolName ?? record.name ?? record.tool;
-  return typeof candidate === "string" ? candidate.toLowerCase() : undefined;
-}
-
-function checkpointMutationKind(
-  event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
-): "readOnly" | "filesystemMutating" | "potentiallyMutating" | "destructive" {
-  if (!isToolLifecycleItemType(event.payload.itemType)) return "readOnly";
-  if (event.payload.itemType === "web_search" || event.payload.itemType === "image_view") {
-    return "readOnly";
-  }
-  if (event.payload.itemType === "file_change") return "filesystemMutating";
-  if (event.payload.itemType === "command_execution") {
-    const detail = `${event.payload.title ?? ""} ${event.payload.detail ?? ""}`.toLowerCase();
-    return /(?:^|\s)(?:rm|del|rmdir|git\s+(?:reset|clean|checkout)|drop|migrate)(?:\s|$)/u.test(
-      detail,
-    )
-      ? "destructive"
-      : "potentiallyMutating";
-  }
-  const toolName = toolNameFromRuntimeEvent(event);
-  return toolName && READ_ONLY_TOOL_NAMES.has(toolName) ? "readOnly" : "potentiallyMutating";
-}
-
-function safeCheckpointToken(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]+/gu, "-").slice(0, 80) || "action";
-}
-
 function checkpointStatusFromRuntime(status: string | undefined): "ready" | "missing" | "error" {
   switch (status) {
     case "failed":
@@ -128,32 +72,6 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
     default:
       return "ready";
   }
-}
-
-const READ_ONLY_TOOL_NAMES = new Set([
-  "read",
-  "grep",
-  "find",
-  "ls",
-  "web_search",
-  "preview_snapshot",
-  "preview_status",
-]);
-
-function potentiallyMutatingToolEvent(
-  event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
-): boolean {
-  if (!isToolLifecycleItemType(event.payload.itemType)) return false;
-  if (event.payload.itemType === "web_search" || event.payload.itemType === "image_view") return false;
-  if (event.payload.itemType === "command_execution" || event.payload.itemType === "file_change") {
-    return true;
-  }
-  const data =
-    event.payload.data && typeof event.payload.data === "object"
-      ? (event.payload.data as Record<string, unknown>)
-      : {};
-  const name = String(data.toolName ?? data.name ?? event.payload.title ?? "").toLowerCase();
-  return !READ_ONLY_TOOL_NAMES.has(name);
 }
 
 const make = Effect.gen(function* () {
@@ -169,8 +87,6 @@ const make = Effect.gen(function* () {
   const receiptBus = yield* RuntimeReceiptBus;
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
-  const serverSettings = yield* Effect.serviceOption(ServerSettingsService);
-  const latestAutomaticRefByThread = new Map<string, CheckpointRef>();
 
   const appendRevertFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -260,9 +176,12 @@ const make = Effect.gen(function* () {
     return project ? [project] : [];
   });
 
+  const isGitWorkspace = (cwd: string) => isGitRepository(cwd);
+
   // Resolves the workspace CWD for checkpoint operations, preferring the
   // active provider session CWD and falling back to the thread/project config.
-  // Snapshot support is independent of Git, so any valid workspace is eligible.
+  // Returns undefined when no CWD can be determined or the workspace is not
+  // a git repository.
   const resolveCheckpointCwd = Effect.fn("resolveCheckpointCwd")(function* (input: {
     readonly threadId: ThreadId;
     readonly thread: { readonly projectId: ProjectId; readonly worktreePath: string | null };
@@ -289,181 +208,13 @@ const make = Effect.gen(function* () {
     if (!cwd) {
       return undefined;
     }
+    if (!isGitWorkspace(cwd)) {
+      return undefined;
+    }
     return cwd;
   });
 
-  const captureAutomaticActionCheckpoint = Effect.fn("captureAutomaticActionCheckpoint")(
-    function* (input: {
-      readonly event: Extract<
-        ProviderRuntimeEvent,
-        {
-          type:
-            | "turn.started"
-            | "turn.completed"
-            | "turn.aborted"
-            | "runtime.error"
-            | "item.started"
-            | "item.completed";
-        }
-      >;
-      readonly reason:
-        | "task-start"
-        | "task-complete"
-        | "before-tool"
-        | "after-tool"
-        | "tool-failure"
-        | "before-retry";
-      readonly label: string;
-      readonly mutationKind?: "filesystemMutating" | "potentiallyMutating" | "destructive";
-    }) {
-      const createDetailedCheckpoint = checkpointStore.createDetailedCheckpoint;
-      if (!createDetailedCheckpoint) return;
-      const settings = Option.isSome(serverSettings)
-        ? yield* serverSettings.value.getSettings.pipe(
-            Effect.map((value) => value.checkpoints),
-            Effect.orElseSucceed(() => DEFAULT_CHECKPOINT_SETTINGS),
-          )
-        : DEFAULT_CHECKPOINT_SETTINGS;
-      if (!settings.enabled) return;
-      if (
-        input.event.type === "item.started" &&
-        input.event.payload.itemType === "command_execution" &&
-        !settings.beforeTerminalCommands
-      ) {
-        return;
-      }
-      if (
-        input.event.type === "item.completed" &&
-        input.event.payload.itemType === "command_execution" &&
-        !settings.afterTerminalCommands
-      ) {
-        return;
-      }
-
-      const thread = yield* resolveThreadDetail(input.event.threadId);
-      if (!thread) return;
-      const projects = yield* resolveThreadProjects(thread.projectId);
-      const cwd = yield* resolveCheckpointCwd({
-        threadId: thread.id,
-        thread,
-        projects,
-        preferSessionRuntime: true,
-      });
-      if (!cwd) return;
-
-      let parentCheckpointRef = latestAutomaticRefByThread.get(thread.id);
-      if (!parentCheckpointRef && checkpointStore.listCheckpointRecords) {
-        const records = yield* checkpointStore.listCheckpointRecords(cwd);
-        const latest = records
-          .filter((record) => record.metadata?.sessionId === thread.id)
-          .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-        parentCheckpointRef = latest ? CheckpointRef.make(latest.checkpointRef) : undefined;
-      }
-      if (parentCheckpointRef) {
-        const parentExists = yield* checkpointStore.hasCheckpointRef({
-          cwd,
-          checkpointRef: parentCheckpointRef,
-        });
-        if (!parentExists) parentCheckpointRef = undefined;
-      }
-
-      const toolCallId =
-        input.event.type === "item.started" || input.event.type === "item.completed"
-          ? input.event.itemId
-          : undefined;
-      const checkpointTimestamp = yield* Clock.currentTimeMillis;
-      const checkpointRef = CheckpointRef.make(
-        `refs/sparky/checkpoints/${safeCheckpointToken(thread.id)}/${checkpointTimestamp}-${safeCheckpointToken(
-          toolCallId ?? input.reason,
-        )}-${yield* randomUUID}`,
-      );
-      const turnCount = thread.checkpoints.reduce(
-        (maximum, checkpoint) => Math.max(maximum, checkpoint.checkpointTurnCount),
-        0,
-      );
-      const conversationState = {
-        messages: thread.messages,
-        proposedPlans: thread.proposedPlans,
-        activities: thread.activities,
-        checkpoints: thread.checkpoints,
-        latestTurn: thread.latestTurn,
-        modelSelection: thread.modelSelection,
-        runtimeMode: thread.runtimeMode,
-        interactionMode: thread.interactionMode,
-      };
-      const result = yield* createDetailedCheckpoint({
-        cwd,
-        checkpointRef,
-        maxFileSizeBytes: settings.maximumFileSizeBytes,
-        ignoredPaths: settings.ignoredPaths,
-        metadata: {
-          sessionId: thread.id,
-          projectId: thread.projectId,
-          ...(toolCallId ? { toolCallId } : {}),
-          label: input.label,
-          reason: input.reason,
-          ...(parentCheckpointRef ? { parentCheckpointRef } : {}),
-          automatic: true,
-          pinned: false,
-          turnCount,
-          conversationState,
-        },
-      });
-      latestAutomaticRefByThread.set(thread.id, checkpointRef);
-
-      const fileStats = result.diff
-        ? parseTurnDiffFilesFromUnifiedDiff(result.diff.unifiedDiff)
-        : [];
-      const files = (result.diff?.files ?? []).map((file) => {
-        const stats = fileStats.find((entry) => entry.path === file.path);
-        return {
-          path: file.path,
-          ...(file.previousPath ? { previousPath: file.previousPath } : {}),
-          kind: file.kind,
-          binary: file.binary,
-          additions: stats?.additions ?? 0,
-          deletions: stats?.deletions ?? 0,
-        };
-      });
-      const createdAt = input.event.createdAt;
-      yield* orchestrationEngine.dispatch({
-        type: "thread.activity.append",
-        commandId: yield* serverCommandId("automatic-checkpoint-captured"),
-        threadId: thread.id,
-        activity: {
-          id: EventId.make(yield* randomUUID),
-          tone: "info",
-          kind: "checkpoint.automatic.captured",
-          summary: input.label,
-          payload: {
-            checkpointRef,
-            parentCheckpointRef: parentCheckpointRef ?? null,
-            reason: input.reason,
-            automatic: true,
-            pinned: false,
-            toolCallId: toolCallId ?? null,
-            mutationKind: input.mutationKind ?? null,
-            files,
-            approximateSize: result.approximateSize,
-            turnCount,
-          },
-          turnId: input.event.turnId ?? null,
-          createdAt,
-        },
-        createdAt,
-      });
-
-      if (settings.automaticCleanup && checkpointStore.cleanup) {
-        yield* checkpointStore.cleanup({
-          cwd,
-          maximumCheckpoints: settings.maximumCheckpointsPerProject,
-          maximumTotalStorageBytes: settings.maximumTotalStorageBytes,
-        });
-      }
-    },
-  );
-
-  // Shared tail for both capture paths: creates the snapshot checkpoint, diffs
+  // Shared tail for both capture paths: creates the git checkpoint ref, diffs
   // it against the previous turn, then dispatches the domain events to update
   // the orchestration read model.
   const captureAndDispatchCheckpoint = Effect.fn("captureAndDispatchCheckpoint")(function* (input: {
@@ -544,42 +295,40 @@ const make = Effect.gen(function* () {
     // reflects files created or deleted during this turn.
     yield* workspaceEntries.refresh(input.cwd);
 
-    const files = fromCheckpointExists
-      ? yield* checkpointStore
-          .diffCheckpoints({
-            cwd: input.cwd,
-            fromCheckpointRef,
-            toCheckpointRef: targetCheckpointRef,
-            fallbackFromToHead: false,
-            ignoreWhitespace: false,
-          })
-          .pipe(
-            Effect.map((diff) =>
-              parseTurnDiffFilesFromUnifiedDiff(diff).map((file) => ({
-                path: file.path,
-                kind: "modified" as const,
-                additions: file.additions,
-                deletions: file.deletions,
-              })),
-            ),
-            Effect.tapError((error) =>
-              appendCaptureFailureActivity({
-                threadId: input.threadId,
-                turnId: input.turnId,
-                detail: `Checkpoint captured, but turn diff summary is unavailable: ${error.message}`,
-                createdAt: input.createdAt,
-              }),
-            ),
-            Effect.catch((error) =>
-              Effect.logWarning("failed to derive checkpoint file summary", {
-                threadId: input.threadId,
-                turnId: input.turnId,
-                turnCount: input.turnCount,
-                detail: error.message,
-              }).pipe(Effect.as([])),
-            ),
-          )
-      : [];
+    const files = yield* checkpointStore
+      .diffCheckpoints({
+        cwd: input.cwd,
+        fromCheckpointRef,
+        toCheckpointRef: targetCheckpointRef,
+        fallbackFromToHead: false,
+        ignoreWhitespace: false,
+      })
+      .pipe(
+        Effect.map((diff) =>
+          parseTurnDiffFilesFromUnifiedDiff(diff).map((file) => ({
+            path: file.path,
+            kind: "modified" as const,
+            additions: file.additions,
+            deletions: file.deletions,
+          })),
+        ),
+        Effect.tapError((error) =>
+          appendCaptureFailureActivity({
+            threadId: input.threadId,
+            turnId: input.turnId,
+            detail: `Checkpoint captured, but turn diff summary is unavailable: ${error.message}`,
+            createdAt: input.createdAt,
+          }),
+        ),
+        Effect.catch((error) =>
+          Effect.logWarning("failed to derive checkpoint file summary", {
+            threadId: input.threadId,
+            turnId: input.turnId,
+            turnCount: input.turnCount,
+            detail: error.message,
+          }).pipe(Effect.as([])),
+        ),
+      );
 
     const assistantMessageId =
       input.assistantMessageId ??
@@ -931,57 +680,6 @@ const make = Effect.gen(function* () {
     });
   });
 
-  const captureToolLifecycleCheckpoint = Effect.fn("captureToolLifecycleCheckpoint")(function* (
-    event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
-  ) {
-    if (!potentiallyMutatingToolEvent(event)) return;
-    const thread = yield* resolveThreadDetail(event.threadId);
-    if (!thread) return;
-    const projects = yield* resolveThreadProjects(thread.projectId);
-    const cwd = yield* resolveCheckpointCwd({
-      threadId: thread.id,
-      thread,
-      projects,
-      preferSessionRuntime: true,
-    });
-    if (!cwd) return;
-    const phase = event.type === "item.started" ? "before" : "after";
-    const checkpointRef = CheckpointRef.make(
-      `refs/sparky/tools/${event.threadId}/${event.eventId}/${phase}`,
-    );
-    yield* checkpointStore.captureCheckpoint({ cwd, checkpointRef });
-    if (phase === "after") {
-      const title = event.payload.title ?? event.payload.itemType.replaceAll("_", " ");
-      yield* Effect.all({
-        commandId: serverCommandId("tool-checkpoint-captured"),
-        activityId: serverEventId,
-      }).pipe(
-        Effect.flatMap(({ commandId, activityId }) =>
-          orchestrationEngine.dispatch({
-            type: "thread.activity.append",
-            commandId,
-            threadId: event.threadId,
-            activity: {
-              id: activityId,
-              tone: "info",
-              kind: "checkpoint.captured",
-              summary: `Checkpoint saved after ${title}`,
-              payload: {
-                checkpointRef,
-                reason: event.payload.status === "failed" ? "tool-failure" : "after-tool",
-                toolCallId: event.itemId ?? event.eventId,
-                automatic: true,
-              },
-              turnId: toTurnId(event.turnId),
-              createdAt: event.createdAt,
-            },
-            createdAt: event.createdAt,
-          }),
-        ),
-      );
-    }
-  });
-
   const handleRevertRequested = Effect.fn("handleRevertRequested")(function* (
     event: Extract<OrchestrationEvent, { type: "thread.checkpoint-revert-requested" }>,
   ) {
@@ -999,25 +697,25 @@ const make = Effect.gen(function* () {
     }
 
     const sessionRuntime = yield* resolveSessionRuntimeForThread(event.payload.threadId);
-    const projects = yield* resolveThreadProjects(thread.projectId);
-    const cwd = Option.isSome(sessionRuntime)
-      ? sessionRuntime.value.cwd
-      : yield* resolveCheckpointCwd({
-          threadId: thread.id,
-          thread,
-          projects,
-          preferSessionRuntime: false,
-        });
-    if (!cwd) {
+    if (Option.isNone(sessionRuntime)) {
       yield* appendRevertFailureActivity({
         threadId: event.payload.threadId,
         turnCount: event.payload.turnCount,
-        detail: "No workspace is available for this checkpoint.",
+        detail: "No active provider session with workspace cwd is bound to this thread.",
         createdAt: now,
       }).pipe(Effect.catch(() => Effect.void));
       return;
     }
-    const restoreMode = event.payload.mode ?? "both";
+    if (!isGitWorkspace(sessionRuntime.value.cwd)) {
+      yield* appendRevertFailureActivity({
+        threadId: event.payload.threadId,
+        turnCount: event.payload.turnCount,
+        detail: "Checkpoints are unavailable because this project is not a git repository.",
+        createdAt: now,
+      }).pipe(Effect.catch(() => Effect.void));
+      return;
+    }
+
     const currentTurnCount = thread.checkpoints.reduce(
       (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
       0,
@@ -1034,12 +732,11 @@ const make = Effect.gen(function* () {
     }
 
     const targetCheckpointRef =
-      event.payload.checkpointRef ??
-      (event.payload.turnCount === 0
+      event.payload.turnCount === 0
         ? checkpointRefForThreadTurn(event.payload.threadId, 0)
         : thread.checkpoints.find(
             (checkpoint) => checkpoint.checkpointTurnCount === event.payload.turnCount,
-          )?.checkpointRef);
+          )?.checkpointRef;
 
     if (!targetCheckpointRef) {
       yield* appendRevertFailureActivity({
@@ -1051,105 +748,53 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const targetRecord = checkpointStore.getCheckpointRecord
-      ? yield* checkpointStore.getCheckpointRecord({ cwd, checkpointRef: targetCheckpointRef })
-      : null;
-    const currentConversationState = {
-      messages: thread.messages,
-      proposedPlans: thread.proposedPlans,
-      activities: thread.activities,
-      checkpoints: thread.checkpoints,
-      latestTurn: thread.latestTurn,
-      modelSelection: thread.modelSelection,
-      runtimeMode: thread.runtimeMode,
-      interactionMode: thread.interactionMode,
-    };
-    let safetyCheckpointRef: CheckpointRef | undefined;
-
-    if (restoreMode !== "conversation") {
-      if (checkpointStore.createDetailedCheckpoint) {
-        const checkpointSettings = Option.isSome(serverSettings)
-          ? yield* serverSettings.value.getSettings.pipe(
-              Effect.map((value) => value.checkpoints),
-              Effect.orElseSucceed(() => DEFAULT_CHECKPOINT_SETTINGS),
-            )
-          : DEFAULT_CHECKPOINT_SETTINGS;
-        const safetyTimestamp = yield* Clock.currentTimeMillis;
-        safetyCheckpointRef = CheckpointRef.make(
-          `refs/sparky/checkpoints/${safeCheckpointToken(thread.id)}/${safetyTimestamp}-restore-safety-${yield* randomUUID}`,
-        );
-        const safetyParentCheckpointRef = latestAutomaticRefByThread.get(thread.id);
-        yield* checkpointStore.createDetailedCheckpoint({
-          cwd,
-          checkpointRef: safetyCheckpointRef,
-          maxFileSizeBytes: checkpointSettings.maximumFileSizeBytes,
-          ignoredPaths: checkpointSettings.ignoredPaths,
-          metadata: {
-            sessionId: thread.id,
-            projectId: thread.projectId,
-            label: "Before restore",
-            reason: "restore-safety",
-            ...(safetyParentCheckpointRef
-              ? { parentCheckpointRef: safetyParentCheckpointRef }
-              : {}),
-            automatic: false,
-            pinned: true,
-            turnCount: currentTurnCount,
-            conversationState: currentConversationState,
-          },
-        });
-        latestAutomaticRefByThread.set(thread.id, safetyCheckpointRef);
-      }
-
-      const detailedRestore = checkpointStore.restoreCheckpointDetailed;
-      const restored = detailedRestore
-        ? (yield* detailedRestore({
-            cwd,
-            checkpointRef: targetCheckpointRef,
-            fallbackToHead: event.payload.turnCount === 0,
-          })) !== null
-        : yield* checkpointStore.restoreCheckpoint({
-            cwd,
-            checkpointRef: targetCheckpointRef,
-            fallbackToHead: event.payload.turnCount === 0,
-          });
-      if (!restored) {
-        yield* appendRevertFailureActivity({
-          threadId: event.payload.threadId,
-          turnCount: event.payload.turnCount,
-          detail: `Filesystem checkpoint is unavailable for turn ${event.payload.turnCount}.`,
-          createdAt: now,
-        }).pipe(Effect.catch(() => Effect.void));
-        return;
-      }
-
-      // Refresh the workspace entry index so the @-mention file picker
-      // reflects the restored filesystem state.
-      yield* workspaceEntries.refresh(cwd);
+    const restored = yield* checkpointStore.restoreCheckpoint({
+      cwd: sessionRuntime.value.cwd,
+      checkpointRef: targetCheckpointRef,
+      fallbackToHead: event.payload.turnCount === 0,
+    });
+    if (!restored) {
+      yield* appendRevertFailureActivity({
+        threadId: event.payload.threadId,
+        turnCount: event.payload.turnCount,
+        detail: `Filesystem checkpoint is unavailable for turn ${event.payload.turnCount}.`,
+        createdAt: now,
+      }).pipe(Effect.catch(() => Effect.void));
+      return;
     }
 
+    // Refresh the workspace entry index so the @-mention file picker
+    // reflects the reverted filesystem state.
+    yield* workspaceEntries.refresh(sessionRuntime.value.cwd);
+
     const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
-    if (restoreMode !== "code" && rolledBackTurns > 0 && Option.isSome(sessionRuntime)) {
+    if (rolledBackTurns > 0) {
       yield* providerService.rollbackConversation({
         threadId: sessionRuntime.value.threadId,
         numTurns: rolledBackTurns,
       });
     }
 
-    // Future checkpoint refs are intentionally retained. Their conversation
-    // snapshots form abandoned branches that can be selected again later.
+    const staleCheckpointRefs: Array<CheckpointRef> = [];
+    for (const checkpoint of thread.checkpoints) {
+      if (checkpoint.checkpointTurnCount > event.payload.turnCount) {
+        staleCheckpointRefs.push(checkpoint.checkpointRef);
+      }
+    }
+
+    if (staleCheckpointRefs.length > 0) {
+      yield* checkpointStore.deleteCheckpointRefs({
+        cwd: sessionRuntime.value.cwd,
+        checkpointRefs: staleCheckpointRefs,
+      });
+    }
+
     yield* orchestrationEngine
       .dispatch({
         type: "thread.revert.complete",
         commandId: yield* serverCommandId("checkpoint-revert-complete"),
         threadId: event.payload.threadId,
         turnCount: event.payload.turnCount,
-        checkpointRef: targetCheckpointRef,
-        mode: restoreMode,
-        ...(restoreMode !== "code" && targetRecord?.metadata?.conversationState !== undefined
-          ? { conversationState: targetRecord.metadata.conversationState }
-          : {}),
-        ...(safetyCheckpointRef ? { safetyCheckpointRef } : {}),
         createdAt: now,
       })
       .pipe(
@@ -1210,42 +855,7 @@ const make = Effect.gen(function* () {
   const processRuntimeEvent = Effect.fn("processRuntimeEvent")(function* (
     event: ProviderRuntimeEvent,
   ) {
-    if (event.type === "item.started" || event.type === "item.completed") {
-      const mutationKind = checkpointMutationKind(event);
-      if (mutationKind === "readOnly") return;
-      const toolName = toolNameFromRuntimeEvent(event);
-      const title = event.payload.title ?? toolName ?? event.payload.itemType.replaceAll("_", " ");
-      const failed = event.type === "item.completed" && event.payload.status === "failed";
-      yield* captureAutomaticActionCheckpoint({
-        event,
-        reason:
-          event.type === "item.started" ? "before-tool" : failed ? "tool-failure" : "after-tool",
-        label:
-          event.type === "item.started"
-            ? `Before ${title}`
-            : failed
-              ? `After failed ${title}`
-              : `After ${title}`,
-        mutationKind,
-      });
-      return;
-    }
-
-    if (event.type === "turn.aborted" || event.type === "runtime.error") {
-      yield* captureAutomaticActionCheckpoint({
-        event,
-        reason: "before-retry",
-        label: event.type === "turn.aborted" ? "Task interrupted" : "Before retry after error",
-      });
-      return;
-    }
-
     if (event.type === "turn.started") {
-      yield* captureAutomaticActionCheckpoint({
-        event,
-        reason: "task-start",
-        label: "Task started",
-      });
       yield* ensurePreTurnBaselineFromTurnStart(event);
       return;
     }
@@ -1265,11 +875,6 @@ const make = Effect.gen(function* () {
           ),
         ),
       );
-      yield* captureAutomaticActionCheckpoint({
-        event,
-        reason: "task-complete",
-        label: "Task completed",
-      });
       return;
     }
   });
@@ -1319,14 +924,7 @@ const make = Effect.gen(function* () {
       : providerService.streamEvents;
     yield* Effect.forkScoped(
       Stream.runForEach(providerEvents, (event) => {
-        if (
-          event.type !== "turn.started" &&
-          event.type !== "turn.completed" &&
-          event.type !== "turn.aborted" &&
-          event.type !== "runtime.error" &&
-          event.type !== "item.started" &&
-          event.type !== "item.completed"
-        ) {
+        if (event.type !== "turn.started" && event.type !== "turn.completed") {
           return Effect.void;
         }
         return worker.enqueue({ source: "runtime", event });

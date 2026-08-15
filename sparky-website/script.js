@@ -32,14 +32,12 @@
   menuButton?.addEventListener("click", () => {
     const open = document.body.classList.toggle("menu-open");
     menuButton.setAttribute("aria-expanded", String(open));
-    menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
     const icon = $(".material-symbols-rounded", menuButton);
     if (icon) icon.textContent = open ? "close" : "menu";
   });
   $$(".primary-nav a").forEach((link) => link.addEventListener("click", () => {
     document.body.classList.remove("menu-open");
     menuButton?.setAttribute("aria-expanded", "false");
-    menuButton?.setAttribute("aria-label", "Open menu");
     const icon = menuButton && $(".material-symbols-rounded", menuButton);
     if (icon) icon.textContent = "menu";
   }));

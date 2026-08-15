@@ -998,7 +998,6 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           ...stamp(threadId, turnId),
           payload: { model },
         });
-        const context = yield* Effect.context();
         const assistantSegments = makeSparkyAssistantSegmenter({
           onStarted: (segmentId) => {
             runEffectSync(

@@ -81,18 +81,13 @@ import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerExtensionReferences } from "./ComposerExtensionReferences";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
-import { ComposerQueuedMessages } from "./ComposerQueuedMessages";
-import { type QueuedComposerMessage, type QueuedMessageSendRequest } from "./steeringQueue";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
-  getProviderFastModeState,
-  getProviderTraitsPrimaryLabel,
-  renderProviderFastModeControl,
   renderProviderTraitsMenuContent,
-  renderProviderTraitsSliderContent,
+  renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -442,8 +437,6 @@ export interface ChatComposerHandle {
     selectedProvider: ProviderDriverKind;
     selectedModel: string;
     selectedProviderModels: ReadonlyArray<ServerProvider["models"][number]>;
-    runtimeMode: RuntimeMode;
-    interactionMode: ProviderInteractionMode;
   };
 }
 
@@ -529,17 +522,8 @@ export interface ChatComposerProps {
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
 
-  // Steering queue
-  queuedMessages: ReadonlyArray<QueuedComposerMessage>;
-  queuedMessageSteerDisabled: boolean;
-
   // Callbacks
-  onSend: (
-    e?: { preventDefault: () => void },
-    request?: QueuedMessageSendRequest,
-  ) => Promise<boolean>;
-  onSteerQueuedMessage: (messageId: string) => void;
-  onDeleteQueuedMessage: (messageId: string) => void;
+  onSend: (e?: { preventDefault: () => void }) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
@@ -625,11 +609,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     composerImagesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
-    queuedMessages,
-    queuedMessageSteerDisabled,
     onSend,
-    onSteerQueuedMessage,
-    onDeleteQueuedMessage,
     onInterrupt,
     onImplementPlanInNewThread,
     onRespondToApproval,
@@ -1152,7 +1132,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [promptRef, setPromptFromTraits],
   );
 
-  const providerTraitsRenderInput = {
+  const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
     instanceId: selectedInstanceId,
     ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
@@ -1162,22 +1142,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     modelOptions: composerModelOptions?.[selectedInstanceId],
     prompt,
     onPromptChange: setPromptFromTraits,
-  };
-  const nestedProviderTraitsMenuContent = renderProviderTraitsMenuContent({
-    ...providerTraitsRenderInput,
-    nested: true,
   });
-  const providerTraitsSliderContent = renderProviderTraitsSliderContent(providerTraitsRenderInput);
-  const providerTraitsPrimaryLabel = getProviderTraitsPrimaryLabel(providerTraitsRenderInput);
-  const providerFastModeState = getProviderFastModeState(providerTraitsRenderInput);
-  const providerFastModeTriggerControl = renderProviderFastModeControl(
-    providerTraitsRenderInput,
-    "trigger",
-  );
-  const providerFastModePopupControl = renderProviderFastModeControl(
-    providerTraitsRenderInput,
-    "popup",
-  );
+  const providerTraitsPicker = renderProviderTraitsPicker({
+    provider: selectedProvider,
+    instanceId: selectedInstanceId,
+    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
+    ...(routeKind === "draft" && draftId ? { draftId } : {}),
+    model: selectedModel,
+    models: selectedProviderModels,
+    modelOptions: composerModelOptions?.[selectedInstanceId],
+    prompt,
+    onPromptChange: setPromptFromTraits,
+  });
   const pendingPrimaryAction = useMemo(
     () =>
       activePendingProgress
@@ -2123,8 +2099,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         selectedProvider,
         selectedModel,
         selectedProviderModels,
-        runtimeMode,
-        interactionMode,
       }),
     }),
     [
@@ -2152,8 +2126,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedPromptEffort,
       selectedProvider,
       selectedProviderModels,
-      runtimeMode,
-      interactionMode,
     ],
   );
 
@@ -2208,13 +2180,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             scheduleComposerCollapseCheck();
           }}
         >
-          <ComposerQueuedMessages
-            messages={queuedMessages}
-            onSteer={onSteerQueuedMessage}
-            onDelete={onDeleteQueuedMessage}
-            steerDisabled={queuedMessageSteerDisabled}
-          />
-
           {!isComposerCollapsedMobile &&
             (activePendingApproval ? (
               <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
@@ -2617,14 +2582,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   instanceEntries={providerInstanceEntries}
                   keybindings={keybindings}
                   modelOptionsByInstance={modelOptionsByInstance}
-                  selectorStyle={settings.modelSelectorStyle}
-                  traitsMenuContent={nestedProviderTraitsMenuContent}
-                  traitsSliderContent={providerTraitsSliderContent}
-                  sliderValueLabel={providerTraitsPrimaryLabel}
-                  fastModeSupported={providerFastModeState.supported}
-                  fastModeEnabled={providerFastModeState.enabled}
-                  fastModeTriggerControl={providerFastModeTriggerControl}
-                  fastModePopupControl={providerFastModePopupControl}
                   terminalOpen={terminalOpen}
                   open={isComposerModelPickerOpen}
                   {...(composerProviderState.modelPickerIconClassName
@@ -2647,22 +2604,31 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     planSidebarOpen={planSidebarOpen}
                     runtimeMode={runtimeMode}
                     showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                    traitsMenuContent={providerTraitsMenuContent}
                     onToggleInteractionMode={toggleInteractionMode}
                     onTogglePlanSidebar={togglePlanSidebar}
                     onRuntimeModeChange={handleRuntimeModeChange}
                   />
                 ) : (
-                  <ComposerFooterModeControls
-                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                    interactionMode={interactionMode}
-                    runtimeMode={runtimeMode}
-                    showPlanToggle={showPlanSidebarToggle}
-                    planSidebarLabel={planSidebarLabel}
-                    planSidebarOpen={planSidebarOpen}
-                    onToggleInteractionMode={toggleInteractionMode}
-                    onRuntimeModeChange={handleRuntimeModeChange}
-                    onTogglePlanSidebar={togglePlanSidebar}
-                  />
+                  <>
+                    {providerTraitsPicker ? (
+                      <>
+                        <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                        {providerTraitsPicker}
+                      </>
+                    ) : null}
+                    <ComposerFooterModeControls
+                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                      interactionMode={interactionMode}
+                      runtimeMode={runtimeMode}
+                      showPlanToggle={showPlanSidebarToggle}
+                      planSidebarLabel={planSidebarLabel}
+                      planSidebarOpen={planSidebarOpen}
+                      onToggleInteractionMode={toggleInteractionMode}
+                      onRuntimeModeChange={handleRuntimeModeChange}
+                      onTogglePlanSidebar={togglePlanSidebar}
+                    />
+                  </>
                 )}
               </div>
 

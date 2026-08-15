@@ -61,7 +61,7 @@ const thread = (
   session: {
     threadId: id,
     status: "ready",
-    providerName: "codex",
+    providerName: "Sparky",
     providerInstanceId: demoProviderInstanceId,
     runtimeMode: "full-access",
     activeTurnId: null,
@@ -184,49 +184,7 @@ const serverConfig: ServerConfig = {
           shortName: "5.6 Sol",
           isCustom: false,
           isDefault: true,
-          capabilities: {
-            optionDescriptors: [
-              {
-                id: "reasoning_effort",
-                label: "Effort",
-                type: "select",
-                currentValue: "high",
-                options: [
-                  { id: "low", label: "Low" },
-                  { id: "medium", label: "Medium" },
-                  { id: "high", label: "High", isDefault: true },
-                ],
-              },
-              {
-                id: "fastMode",
-                label: "Fast priority",
-                type: "boolean",
-                currentValue: false,
-              },
-            ],
-          },
-        },
-        {
-          slug: "gpt-5.6-standard",
-          name: "GPT-5.6 Standard",
-          shortName: "5.6 Standard",
-          isCustom: false,
-          isDefault: false,
-          capabilities: {
-            optionDescriptors: [
-              {
-                id: "reasoning_effort",
-                label: "Effort",
-                type: "select",
-                currentValue: "medium",
-                options: [
-                  { id: "low", label: "Low" },
-                  { id: "medium", label: "Medium", isDefault: true },
-                  { id: "high", label: "High" },
-                ],
-              },
-            ],
-          },
+          capabilities: null,
         },
       ],
       slashCommands: [],

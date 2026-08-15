@@ -4,13 +4,12 @@ import {
   scopeThreadRef,
 } from "@sparky/client-runtime/environment";
 import {
-  DEFAULT_SERVER_SETTINGS,
   DEFAULT_RUNTIME_MODE,
-  PROJECTLESS_PROJECT_ID,
+  DEFAULT_SERVER_SETTINGS,
   type ScopedProjectRef,
 } from "@sparky/contracts";
 import { useParams, useRouter } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   markPromotedDraftThreadByRef,
   type DraftThreadEnvMode,
@@ -18,15 +17,17 @@ import {
   useComposerDraftStore,
 } from "../composerDraftStore";
 import { newDraftId, newThreadId } from "../lib/utils";
+import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
+  getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { readThreadShell, useProjects, useServerConfigs, useThread } from "../state/entities";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import { resolveThreadRouteTarget } from "../threadRoutes";
+import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
-import { usePrimaryEnvironmentId } from "../state/environments";
 
 export function useNewThreadHandler() {
   const projects = useProjects();
@@ -46,9 +47,9 @@ export function useNewThreadHandler() {
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
         startFromOrigin?: boolean;
-        initialPrompt?: string;
         replace?: boolean;
         forceNew?: boolean;
+        initialPrompt?: string;
       },
     ): Promise<void> => {
       const {
@@ -115,9 +116,6 @@ export function useNewThreadHandler() {
               threadId: reusableStoredDraftThread.threadId,
             },
           );
-          if (options?.initialPrompt !== undefined) {
-            setPrompt(reusableStoredDraftThread.draftId, options.initialPrompt);
-          }
           if (
             currentRouteTarget?.kind === "draft" &&
             currentRouteTarget.draftId === reusableStoredDraftThread.draftId
@@ -162,9 +160,6 @@ export function useNewThreadHandler() {
           ...(hasEnvModeOption ? { envMode: options?.envMode } : {}),
           ...(hasStartFromOriginOption ? { startFromOrigin: options?.startFromOrigin } : {}),
         });
-        if (options?.initialPrompt !== undefined) {
-          setPrompt(currentRouteTarget.draftId, options.initialPrompt);
-        }
         return Promise.resolve();
       }
 
@@ -204,6 +199,7 @@ export function useNewThreadHandler() {
 }
 
 export function useHandleNewThread() {
+  const projectOrder = useUiStateStore((store) => store.projectOrder);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -218,14 +214,25 @@ export function useHandleNewThread() {
         : useComposerDraftStore.getState().getDraftSession(routeTarget.draftId)
       : null,
   );
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const projects = useProjects();
+  const orderedProjects = useMemo(() => {
+    return orderItemsByPreferredIds({
+      items: projects,
+      preferredIds: projectOrder,
+      getId: getProjectOrderKey,
+      getPreferenceIds: (project) => [
+        getProjectOrderKey(project),
+        legacyProjectCwdPreferenceKey(project.workspaceRoot),
+      ],
+    });
+  }, [projectOrder, projects]);
   const handleNewThread = useNewThreadHandler();
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: primaryEnvironmentId
-      ? scopeProjectRef(primaryEnvironmentId, PROJECTLESS_PROJECT_ID)
+    defaultProjectRef: orderedProjects[0]
+      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
       : null,
     handleNewThread,
     routeThreadRef,

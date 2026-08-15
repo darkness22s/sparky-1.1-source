@@ -8,12 +8,8 @@ import {
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
-  getProviderFastModeState,
-  getProviderTraitsPrimaryLabel,
-  renderProviderFastModeControl,
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
-  renderProviderTraitsSliderContent,
 } from "./composerProviderState";
 
 // Everything in composerProviderState is now data-driven by the model's
@@ -248,49 +244,5 @@ describe("provider traits render guards", () => {
 
     expect(renderProviderTraitsPicker(args)).toBeNull();
     expect(renderProviderTraitsMenuContent(args)).toBeNull();
-    expect(renderProviderTraitsSliderContent(args)).toBeNull();
-    expect(renderProviderFastModeControl(args, "trigger")).toBeNull();
-  });
-
-  it("derives the slider label from the active primary trait", () => {
-    const args = {
-      provider: PROVIDER,
-      model: MODEL,
-      models: modelWith([
-        selectDescriptor("effort", [
-          { id: "low", label: "Low" },
-          { id: "high", label: "High", isDefault: true },
-        ]),
-      ]),
-      modelOptions: selections(["effort", "low"]),
-      prompt: "",
-      onPromptChange: () => {},
-    };
-
-    expect(getProviderTraitsPrimaryLabel(args)).toBe("Low");
-  });
-
-  it("reports fast priority support and its active state from the boolean descriptor", () => {
-    const baseArgs = {
-      provider: PROVIDER,
-      model: MODEL,
-      models: modelWith([booleanDescriptor("fastMode")]),
-      prompt: "",
-      onPromptChange: () => {},
-    };
-
-    expect(
-      getProviderFastModeState({
-        ...baseArgs,
-        modelOptions: selections(["fastMode", true]),
-      }),
-    ).toEqual({ supported: true, enabled: true });
-    expect(
-      getProviderFastModeState({
-        ...baseArgs,
-        models: modelWith([]),
-        modelOptions: undefined,
-      }),
-    ).toEqual({ supported: false, enabled: false });
   });
 });

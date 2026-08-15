@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,50 +33,34 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
+        <div class="docs-page-tag">GETTING STARTED</div>
         <h1>Quickstart</h1>
-        <p>Install Sparky 1.1.2, connect an AI provider, open a project, and complete your first reviewed task.</p>
+        <p>Get Sparky running in five minutes. All you need is the app and an AI account.</p>
       </div>
 
 <h2 id="step-1">Step 1: Download Sparky</h2>
 <p>Grab the latest build from the <a href="../download.html">download page</a>.</p>
-<table class="docs-table"><tr><th>System</th><th>Choose</th><th>First-launch note</th></tr>
-<tr><td>Windows x64</td><td>EXE installer</td><td>The current build is unsigned. In SmartScreen, choose <strong>More info</strong>, verify the app name, then choose <strong>Run anyway</strong> only if you trust the source.</td></tr>
-<tr><td>macOS Apple Silicon</td><td>Apple Silicon DMG or ZIP</td><td>If macOS cannot verify the app, use the Finder or Privacy &amp; Security confirmation for the downloaded Sparky app.</td></tr>
-<tr><td>macOS Intel</td><td>Intel DMG or ZIP</td><td>Use the Intel package and the same macOS confirmation flow when required.</td></tr>
-<tr><td>Linux x64</td><td>AppImage</td><td>Use the Linux package shown by the current published release. Availability is determined by that release bundle.</td></tr></table>
-<p>Read <a href="release-1.1.2.html">What's new in Sparky 1.1.2</a> for the complete cross-platform feature guide.</p>
 
 <h2 id="step-2">Step 2: Add your API key</h2>
-<p>Open Sparky, go to <strong>Settings, Models</strong>, choose your provider, and add the required API key or supported account connection. Credentials remain specific to that provider.</p>
+<p>Open Sparky, go to Settings, and paste your API key:</p>
 <div id="vid-wrap" style="width:100%;max-width:700px;border-radius:8px;margin-bottom:1.5rem;cursor:default;" oncontextmenu="return false;"></div>
 <script>
 (function(){var w=document.getElementById('vid-wrap');if(!w)return;var v=document.createElement('video');v.src='api-key-ad-v2.mp4';v.autoplay=true;v.loop=true;v.muted=true;v.playsinline=true;v.preload='auto';v.style.cssText='width:100%;height:auto;display:block;pointer-events:none;user-select:none;-webkit-user-select:none;';v.setAttribute('disablePictureInPicture','');v.setAttribute('controlslist','nodownload nofullscreen noremoteplayback');w.appendChild(v);(function p(){v.play()['catch'](function(){setTimeout(p,200)});})();})();
 </script>
 
 <h2 id="step-3">Step 3: Pick an AI model</h2>
-<p>Sparky discovers models and supported controls from provider metadata. The model picker shows the reasoning levels and context information the provider reports; exact entries can change without a Sparky update.</p>
+<p>Sparky works with whatever AI you already have. The app discovers available models automatically from your API key. Click a provider below to get started:</p>
 <table class="docs-table"><tr><th>Provider</th><th>Get your API key</th></tr>
 <tr><td>Anthropic (Claude)</td><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></td></tr>
 <tr><td>OpenAI (GPT)</td><td><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a></td></tr>
 <tr><td>Google (Gemini)</td><td><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a></td></tr>
 <tr><td>OpenCode Zen</td><td><a href="https://opencode.ai/" target="_blank" rel="noopener">opencode.ai</a></td></tr></table>
 
-<h2 id="step-4">Step 4: Open a project</h2>
-<p>Choose the project folder Sparky should work in. Files, Terminal, Diff, browser preview, local search, project memories, and tool context all follow the active workspace.</p>
-
-<h2 id="step-5">Step 5: Choose Plan or Build</h2>
-<p>Use <strong>Plan</strong> when you want Sparky to inspect the project, ask necessary questions, and produce a read-only implementation plan. Use <strong>Build</strong> when you want it to edit files, run commands, and carry the task through verification.</p>
-
-<h2 id="step-6">Step 6: Give a bounded first task</h2>
-<p>State the outcome, constraints, and verification. For example: <strong>“Update the empty state in src/pages/Search.tsx, preserve the existing colors, run the focused component test, and show me the diff.”</strong></p>
-<p>Watch the tool timeline, then review the changed files, terminal output, and final summary. Follow up in the same session so the provider conversation and transcript continue instead of restarting.</p>
-
-<h2 id="step-7">Step 7: Save durable context</h2>
-<p>Open <strong>Settings, Memory</strong> to save preferences or project rules you want Sparky to reuse later. Keep temporary task details in the session; use Memory for facts that should remain useful in future conversations.</p>
+<h2 id="step-4">Step 4: Start coding</h2>
+<p>Open Sparky, point it at your project folder, and tell it what you need in plain English. It reads your project, figures out the structure, and starts working.</p>
 
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="overview.html">Overview</a> — how Sparky works</li>
-<li><a href="memory.html">Memory</a> — save reusable context</li>
 <li><a href="read-edit.html">Read & Edit Files</a> — learn the tools</li>
 <li><a href="prompts.html">Writing Prompts</a> — write effective prompts</li>
 </ul></div>
@@ -86,10 +70,7 @@
       <ul class="docs-toc-list"><li><a href="#step-1">Download</a></li>
 <li><a href="#step-2">Add API key</a></li>
 <li><a href="#step-3">Pick a model</a></li>
-<li><a href="#step-4">Open a project</a></li>
-<li><a href="#step-5">Choose a mode</a></li>
-<li><a href="#step-6">Start a task</a></li>
-<li><a href="#step-7">Save context</a></li>
+<li><a href="#step-4">Start coding</a></li>
 </ul>
     </aside>
   </div>

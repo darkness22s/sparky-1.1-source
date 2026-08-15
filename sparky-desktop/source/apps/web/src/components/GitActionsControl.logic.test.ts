@@ -1055,25 +1055,15 @@ describe("resolveThreadBranchUpdate", () => {
 });
 
 describe("resolveLiveThreadBranchUpdate", () => {
-  it("initializes an unassigned thread from the current git ref", () => {
+  it("returns a branch update when live git status differs from stored thread metadata", () => {
     const update = resolveLiveThreadBranchUpdate({
-      threadBranch: null,
+      threadBranch: "feature/old-ref",
       gitStatus: status({ refName: "effect-atom" }),
     });
 
     assert.deepEqual(update, {
       branch: "effect-atom",
     });
-  });
-
-  it("does not overwrite an assigned thread when the shared checkout differs", () => {
-    const update = resolveLiveThreadBranchUpdate({
-      threadBranch: "feature/old-ref",
-      gitStatus: status({ refName: "effect-atom" }),
-      isSharedCheckout: true,
-    });
-
-    assert.equal(update, null);
   });
 
   it("returns null when live git status is unavailable", () => {

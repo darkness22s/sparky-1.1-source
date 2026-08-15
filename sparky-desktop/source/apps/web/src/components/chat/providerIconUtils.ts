@@ -1,5 +1,5 @@
 import { ProviderDriverKind } from "@sparky/contracts";
-import { ClaudeAI, Gemini, Icon, OpenAI, OpenCodeIcon, SparkyIcon } from "../Icons";
+import { Icon, SparkyIcon } from "../Icons";
 import { PROVIDER_OPTIONS } from "../../session-logic";
 
 export const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
@@ -23,48 +23,6 @@ export type ModelEsque = {
   shortName?: string | undefined;
   subProvider?: string | undefined;
 };
-
-export type ModelProviderPresentation = {
-  label: string;
-  Icon: Icon;
-};
-
-const MODEL_PROVIDER_PRESENTATION_BY_LABEL: Readonly<Record<string, ModelProviderPresentation>> = {
-  Claude: { label: "Claude", Icon: ClaudeAI },
-  Google: { label: "Google", Icon: Gemini },
-  OpenAI: { label: "OpenAI", Icon: OpenAI },
-  "OpenAI Codex": { label: "OpenAI Codex", Icon: OpenAI },
-  "OpenCode Zen": { label: "OpenCode Zen", Icon: OpenCodeIcon },
-};
-
-/** Resolve the actual model vendor, rather than the Sparky runtime serving it. */
-export function getModelProviderPresentation(
-  model: Pick<ModelEsque, "slug" | "subProvider">,
-): ModelProviderPresentation | null {
-  const subProvider = model.subProvider?.trim();
-  if (subProvider) {
-    const exact = MODEL_PROVIDER_PRESENTATION_BY_LABEL[subProvider];
-    if (exact) return exact;
-  }
-
-  const slug = model.slug.toLowerCase();
-  if (slug.startsWith("anthropic/") || slug.startsWith("claude")) {
-    return MODEL_PROVIDER_PRESENTATION_BY_LABEL.Claude ?? null;
-  }
-  if (slug.startsWith("google/") || slug.startsWith("gemini")) {
-    return MODEL_PROVIDER_PRESENTATION_BY_LABEL.Google ?? null;
-  }
-  if (slug.startsWith("opencode/")) {
-    return MODEL_PROVIDER_PRESENTATION_BY_LABEL["OpenCode Zen"] ?? null;
-  }
-  if (slug.startsWith("openai-codex/")) {
-    return MODEL_PROVIDER_PRESENTATION_BY_LABEL["OpenAI Codex"] ?? null;
-  }
-  if (slug.startsWith("openai/") || slug.startsWith("gpt-")) {
-    return MODEL_PROVIDER_PRESENTATION_BY_LABEL.OpenAI ?? null;
-  }
-  return null;
-}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

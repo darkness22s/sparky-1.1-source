@@ -101,10 +101,11 @@ export function resolveBranchToolbarValue(input: {
   activeThreadBranch: string | null;
   currentGitBranch: string | null;
 }): string | null {
-  // A local checkout is shared by threads, so its live ref must not replace a
-  // branch explicitly assigned to the thread currently being viewed.
-  const { activeThreadBranch, currentGitBranch } = input;
-  return activeThreadBranch ?? currentGitBranch;
+  const { envMode, activeWorktreePath, activeThreadBranch, currentGitBranch } = input;
+  if (envMode === "worktree" && !activeWorktreePath) {
+    return activeThreadBranch ?? currentGitBranch;
+  }
+  return currentGitBranch ?? activeThreadBranch;
 }
 
 export function resolveBranchSelectionTarget(input: {

@@ -15,16 +15,7 @@ import type { ReactNode } from "react";
 
 import type { DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
-import {
-  getFastModeState,
-  getPrimaryTraitLabel,
-  type FastModeState,
-  shouldRenderTraitsControls,
-  TraitsFastModeControl,
-  TraitsMenuContent,
-  TraitsPicker,
-  TraitsSliderContent,
-} from "./TraitsPicker";
+import { shouldRenderTraitsControls, TraitsMenuContent, TraitsPicker } from "./TraitsPicker";
 
 export type ComposerProviderStateInput = {
   provider: ProviderDriverKind;
@@ -55,7 +46,6 @@ type TraitsRenderInput = {
   modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
   prompt: string;
   onPromptChange: (prompt: string) => void;
-  nested?: boolean;
 };
 
 export function getComposerPromptInjectionState(prompt: string): ComposerPromptInjectionState {
@@ -91,7 +81,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
 }
 
 function renderTraitsControl(
-  Component: typeof TraitsMenuContent | typeof TraitsPicker | typeof TraitsSliderContent,
+  Component: typeof TraitsMenuContent | typeof TraitsPicker,
   input: TraitsRenderInput,
 ): ReactNode {
   const {
@@ -104,7 +94,6 @@ function renderTraitsControl(
     modelOptions,
     prompt,
     onPromptChange,
-    nested,
   } = input;
   const hasTarget = threadRef !== undefined || draftId !== undefined;
   if (
@@ -124,59 +113,12 @@ function renderTraitsControl(
       modelOptions={modelOptions}
       prompt={prompt}
       onPromptChange={onPromptChange}
-      {...(nested !== undefined ? { nested } : {})}
     />
   );
 }
 
 export function renderProviderTraitsMenuContent(input: TraitsRenderInput): ReactNode {
   return renderTraitsControl(TraitsMenuContent, input);
-}
-
-export function renderProviderTraitsSliderContent(input: TraitsRenderInput): ReactNode {
-  return renderTraitsControl(TraitsSliderContent, input);
-}
-
-export function renderProviderFastModeControl(
-  input: TraitsRenderInput,
-  placement: "trigger" | "popup",
-): ReactNode {
-  const hasTarget = input.threadRef !== undefined || input.draftId !== undefined;
-  if (!hasTarget) return null;
-  return (
-    <TraitsFastModeControl
-      provider={input.provider}
-      {...(input.instanceId ? { instanceId: input.instanceId } : {})}
-      models={input.models}
-      {...(input.threadRef ? { threadRef: input.threadRef } : {})}
-      {...(input.draftId ? { draftId: input.draftId } : {})}
-      model={input.model}
-      modelOptions={input.modelOptions}
-      prompt={input.prompt}
-      onPromptChange={input.onPromptChange}
-      placement={placement}
-    />
-  );
-}
-
-export function getProviderFastModeState(input: TraitsRenderInput): FastModeState {
-  return getFastModeState({
-    provider: input.provider,
-    models: input.models,
-    model: input.model,
-    prompt: input.prompt,
-    modelOptions: input.modelOptions,
-  });
-}
-
-export function getProviderTraitsPrimaryLabel(input: TraitsRenderInput): string | null {
-  return getPrimaryTraitLabel({
-    provider: input.provider,
-    models: input.models,
-    model: input.model,
-    prompt: input.prompt,
-    modelOptions: input.modelOptions,
-  });
 }
 
 export function renderProviderTraitsPicker(input: TraitsRenderInput): ReactNode {

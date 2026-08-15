@@ -24,7 +24,6 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ClaudeAI, Gemini, OpenAI, OpenCodeIcon } from "../Icons";
 import { Button } from "../ui/button";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 
 type Logo = ComponentType<SVGProps<SVGSVGElement>>;
@@ -122,7 +121,6 @@ export function ModelsSettingsPanel() {
     reportFailure: false,
   });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [selectedApiId, setSelectedApiId] = useState(MODEL_APIS[0]?.id ?? "openai");
   const [codexAuth, setCodexAuth] = useState<CodexAuthStatus | null>(null);
   const [codexAuthBusy, setCodexAuthBusy] = useState(false);
   const [codexAuthError, setCodexAuthError] = useState<string | null>(null);
@@ -207,151 +205,111 @@ export function ModelsSettingsPanel() {
     setDrafts((current) => ({ ...current, [envName]: "" }));
   };
 
-  const selectedApi = MODEL_APIS.find((api) => api.id === selectedApiId) ?? MODEL_APIS[0];
-  const SelectedApiLogo = selectedApi?.Logo;
-
   return (
     <SettingsPageContainer>
       <SettingsSection title="Models" icon={<KeyRoundIcon className="size-3.5" />}>
         <div className="border-b border-border/60 px-5 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <h3 className="text-[13px] font-semibold text-foreground">Sparky model APIs</h3>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground/80">
-                Choose a provider to configure. Its models appear in the composer as soon as the
-                provider is connected. Keys are encrypted locally and never returned to this page.
-              </p>
-            </div>
-            <label className="flex w-full shrink-0 flex-col gap-1.5 sm:w-56">
-              <span className="text-[11px] font-medium text-muted-foreground">Provider</span>
-              <Select
-                value={selectedApiId}
-                onValueChange={(value) => {
-                  if (value) setSelectedApiId(value);
-                }}
-              >
-                <SelectTrigger className="w-full" aria-label="Model provider">
-                  <SelectValue>
-                    <span className="flex min-w-0 items-center gap-2">
-                      {SelectedApiLogo ? (
-                        <SelectedApiLogo className="size-4 shrink-0" aria-hidden />
-                      ) : null}
-                      <span className="truncate">{selectedApi?.name ?? "Choose a provider"}</span>
-                    </span>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false} className="min-w-56">
-                  {MODEL_APIS.map(({ id, name, Logo }) => (
-                    <SelectItem key={id} value={id}>
-                      <span className="flex items-center gap-2">
-                        <Logo className="size-4 shrink-0" aria-hidden />
-                        <span>{name}</span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </label>
-          </div>
+          <h3 className="text-[13px] font-semibold text-foreground">Sparky model APIs</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground/80">
+            Sparky is the only coding runtime. Add provider-specific API keys here to make those
+            models available in the existing model picker. A ChatGPT subscription is separate from
+            the OpenAI API and does not authenticate Claude, Gemini, or OpenCode. Keys are encrypted
+            by the local desktop backend and never returned to this page.
+          </p>
         </div>
 
-        {MODEL_APIS.filter(({ id }) => id === selectedApiId).map(
-          ({ id, name, envName, placeholder, description, Logo }) => {
-            const stored = variables.get(envName);
-            const configured = stored?.valueRedacted === true || Boolean(stored?.value);
-            const draft = drafts[envName] ?? "";
-            return (
-              <div
-                key={id}
-                className="border-t border-border/60 px-4 py-4 first:border-t-0 sm:px-5"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/70">
-                    <Logo className="size-5" aria-hidden />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[13px] font-semibold text-foreground">{name}</h3>
-                      {configured ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2Icon className="size-3" /> Configured
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground/80">{description}</p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <input
-                        type="password"
-                        value={draft}
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder={configured ? "Enter a replacement key" : placeholder}
-                        aria-label={`${name} API key`}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [envName]: event.target.value,
-                          }))
-                        }
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-ring focus:ring-2 focus:ring-ring/20"
-                      />
+        {MODEL_APIS.map(({ id, name, envName, placeholder, description, Logo }) => {
+          const stored = variables.get(envName);
+          const configured = stored?.valueRedacted === true || Boolean(stored?.value);
+          const draft = drafts[envName] ?? "";
+          return (
+            <div key={id} className="border-t border-border/60 px-4 py-4 first:border-t-0 sm:px-5">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/70">
+                  <Logo className="size-5" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[13px] font-semibold text-foreground">{name}</h3>
+                    {configured ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2Icon className="size-3" /> Configured
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground/80">{description}</p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="password"
+                      value={draft}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder={configured ? "Enter a replacement key" : placeholder}
+                      aria-label={`${name} API key`}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [envName]: event.target.value,
+                        }))
+                      }
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 gap-1.5"
+                      disabled={draft.trim().length === 0}
+                      onClick={() => commitKey(envName, draft.trim())}
+                    >
+                      <SaveIcon className="size-3.5" /> Save key
+                    </Button>
+                    {configured ? (
                       <Button
                         type="button"
                         size="sm"
-                        className="h-9 gap-1.5"
-                        disabled={draft.trim().length === 0}
-                        onClick={() => commitKey(envName, draft.trim())}
+                        variant="outline"
+                        className="h-9 gap-1.5 text-destructive hover:text-destructive"
+                        onClick={() => commitKey(envName, "")}
                       >
-                        <SaveIcon className="size-3.5" /> Save key
+                        <Trash2Icon className="size-3.5" /> Remove
                       </Button>
-                      {configured ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-9 gap-1.5 text-destructive hover:text-destructive"
-                          onClick={() => commitKey(envName, "")}
-                        >
-                          <Trash2Icon className="size-3.5" /> Remove
-                        </Button>
-                      ) : null}
-                    </div>
-                    {id === "openai" ? (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground disabled:opacity-50"
-                          disabled={codexAuthBusy}
-                          onClick={() =>
-                            void updateCodexAuthentication(
-                              codexAuth?.authenticated ? "logout" : "login",
-                            )
-                          }
-                        >
-                          {codexAuthBusy ? (
-                            <LoaderCircleIcon className="size-3 animate-spin" />
-                          ) : codexAuth?.authenticated ? (
-                            <CheckCircle2Icon className="size-3 text-emerald-500" />
-                          ) : null}
-                          {codexAuth?.authenticated
-                            ? "Signed in with ChatGPT subscription"
-                            : codexAuthBusy
-                              ? "Signing in to ChatGPT…"
-                              : "Already have a subscription? Sign in with ChatGPT"}
-                        </button>
-                        {codexAuthError ? (
-                          <p role="alert" className="mt-1 text-xs text-destructive">
-                            {codexAuthError}
-                          </p>
-                        ) : null}
-                      </div>
                     ) : null}
                   </div>
+                  {id === "openai" ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground disabled:opacity-50"
+                        disabled={codexAuthBusy}
+                        onClick={() =>
+                          void updateCodexAuthentication(
+                            codexAuth?.authenticated ? "logout" : "login",
+                          )
+                        }
+                      >
+                        {codexAuthBusy ? (
+                          <LoaderCircleIcon className="size-3 animate-spin" />
+                        ) : codexAuth?.authenticated ? (
+                          <CheckCircle2Icon className="size-3 text-emerald-500" />
+                        ) : null}
+                        {codexAuth?.authenticated
+                          ? "Signed in with ChatGPT subscription"
+                          : codexAuthBusy
+                            ? "Signing in to ChatGPT…"
+                            : "Already have a subscription? Sign in with ChatGPT"}
+                      </button>
+                      {codexAuthError ? (
+                        <p role="alert" className="mt-1 text-xs text-destructive">
+                          {codexAuthError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            );
-          },
-        )}
+            </div>
+          );
+        })}
       </SettingsSection>
     </SettingsPageContainer>
   );

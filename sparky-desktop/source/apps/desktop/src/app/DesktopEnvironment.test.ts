@@ -147,8 +147,14 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
-      assert.equal(development.stateDir, development.path.normalize("/Users/alice/.sparky/dev"));
-      assert.equal(production.stateDir, production.path.normalize("/Users/alice/.sparky/userdata"));
+      assert.equal(
+        development.stateDir,
+        development.path.normalize("/Users/alice/.sparky-desktop/dev"),
+      );
+      assert.equal(
+        production.stateDir,
+        production.path.normalize("/Users/alice/.sparky-desktop/userdata"),
+      );
     }),
   );
 

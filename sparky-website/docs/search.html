@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,12 +33,13 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
+        <div class="docs-page-tag">TOOLS</div>
         <h1>Search</h1>
-        <p>Locate files and symbols inside the active project without confusing local code search with internet research.</p>
+        <p>Find functions, variables, or any text pattern across your entire codebase.</p>
       </div>
 
 <h2 id="how-it-works">How it works</h2>
-<p>Sparky uses content search to find text inside files and file search to locate paths by name or pattern. The exact command can vary by operating system and available tooling; describe the information you need instead of requiring a particular utility.</p>
+<p>Sparky has two search modes: <strong>content search</strong> (grep) finds text inside files, and <strong>file search</strong> (find) locates files by name.</p>
 
 <h2 id="content-search">Content search (grep)</h2>
 <p>Search for any text pattern inside your files. Uses regex for powerful matching.</p>
@@ -54,14 +55,10 @@
 
 <h2 id="tips">Tips</h2>
 <ul>
-<li>Name the language, directory, or file type when the project is large.</li>
-<li>Use a literal phrase when possible; use regex when the pattern genuinely varies.</li>
-<li>Ask Sparky to exclude dependency stores, generated bundles, build output, and release artifacts when they are not source.</li>
-<li>Combine search with reading: “Find the auth middleware, open the relevant implementation, and explain its callers.”</li>
+<li>Prefix with language name for better results</li>
+<li>Use regex for complex searches</li>
+<li>Combine with read: "Find the auth middleware and show me"</li>
 </ul>
-
-<h2 id="search-vs-web">Project search or web search?</h2>
-<p>Use project search for facts that should be established from the active checkout: definitions, references, configuration, tests, or file paths. Use <a href="web-search.html">Web Search</a> for current external documentation, release information, or provider behavior. A good task can use both, but the evidence should remain distinguishable.</p>
 
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="read-edit.html">Read & Edit Files</a> — modify found files</li>
@@ -75,7 +72,6 @@
 <li><a href="#content-search">Content search</a></li>
 <li><a href="#file-search">File search</a></li>
 <li><a href="#tips">Tips</a></li>
-<li><a href="#search-vs-web">Project vs. web search</a></li>
 </ul>
     </aside>
   </div>
