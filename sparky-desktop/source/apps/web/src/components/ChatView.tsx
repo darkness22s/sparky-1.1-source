@@ -4053,9 +4053,9 @@ function ChatViewContent(props: ChatViewProps) {
       }
       const confirmed = await localApi.dialogs.confirm(
         [
-          `Revert this thread to checkpoint ${turnCount}?`,
-          "This will discard newer messages and turn diffs in this thread.",
-          "This action cannot be undone.",
+          `Restore code and conversation to checkpoint ${turnCount}?`,
+          "A pinned safety checkpoint will be created first, so this restore can be undone.",
+          "Newer checkpoints remain available as an alternate timeline.",
         ].join("\n"),
       );
       if (!confirmed) {
@@ -4069,6 +4069,7 @@ function ChatViewContent(props: ChatViewProps) {
         input: {
           threadId: activeThread.id,
           turnCount,
+          mode: "both",
         },
       });
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
