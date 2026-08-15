@@ -393,6 +393,27 @@ export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 export const SparkyPersonality = Schema.Literals(["coding", "everyday"]);
 export type SparkyPersonality = typeof SparkyPersonality.Type;
 
+const PositiveCheckpointInteger = Schema.Int.check(Schema.isGreaterThan(0));
+export const CheckpointSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  maximumCheckpointsPerProject: PositiveCheckpointInteger.pipe(
+    Schema.withDecodingDefault(Effect.succeed(200)),
+  ),
+  maximumTotalStorageBytes: PositiveCheckpointInteger.pipe(
+    Schema.withDecodingDefault(Effect.succeed(10 * 1024 * 1024 * 1024)),
+  ),
+  maximumFileSizeBytes: PositiveCheckpointInteger.pipe(
+    Schema.withDecodingDefault(Effect.succeed(50 * 1024 * 1024)),
+  ),
+  ignoredPaths: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  beforeTerminalCommands: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  afterTerminalCommands: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  automaticCleanup: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+});
+export type CheckpointSettings = typeof CheckpointSettings.Type;
+
 export const ServerSettings = Schema.Struct({
   customInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   sparkyPersonality: SparkyPersonality.pipe(
@@ -402,6 +423,7 @@ export const ServerSettings = Schema.Struct({
   // Buffered delivery makes the final segment appear to be missing until the
   // user interrupts or the provider emits turn.completed.
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  checkpoints: CheckpointSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -542,11 +564,23 @@ const OpenCodeSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const CheckpointSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  maximumCheckpointsPerProject: Schema.optionalKey(PositiveCheckpointInteger),
+  maximumTotalStorageBytes: Schema.optionalKey(PositiveCheckpointInteger),
+  maximumFileSizeBytes: Schema.optionalKey(PositiveCheckpointInteger),
+  ignoredPaths: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
+  beforeTerminalCommands: Schema.optionalKey(Schema.Boolean),
+  afterTerminalCommands: Schema.optionalKey(Schema.Boolean),
+  automaticCleanup: Schema.optionalKey(Schema.Boolean),
+});
+
 export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   customInstructions: Schema.optionalKey(TrimmedString),
   sparkyPersonality: Schema.optionalKey(SparkyPersonality),
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
+  checkpoints: Schema.optionalKey(CheckpointSettingsPatch),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),

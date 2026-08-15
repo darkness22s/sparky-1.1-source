@@ -4,13 +4,19 @@ use crate::types::{AssistantMessageEvent, ContentPart, Message, Role, ToolCall, 
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::{json, Value};
+use std::future::Future;
+use std::time::Duration;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
+#[derive(Clone)]
 pub struct CodexProvider {
     client: reqwest::Client,
 }
 
 const MAX_CODEX_ATTEMPTS: u32 = 2;
+const MAX_CODEX_STREAM_RETRIES: u32 = 5;
+const INITIAL_CODEX_STREAM_RETRY_DELAY: Duration = Duration::from_millis(200);
+const MAX_CODEX_STREAM_RETRY_DELAY: Duration = Duration::from_secs(2);
 
 impl CodexProvider {
     pub fn new() -> Self {
@@ -214,6 +220,243 @@ fn stream_error_detail(event: &Value) -> String {
         .unwrap_or_else(|| event.to_string().chars().take(2_000).collect())
 }
 
+fn codex_stream_retry_delay(retry_index: u32) -> Duration {
+    INITIAL_CODEX_STREAM_RETRY_DELAY
+        .checked_mul(2_u32.saturating_pow(retry_index))
+        .unwrap_or(MAX_CODEX_STREAM_RETRY_DELAY)
+        .min(MAX_CODEX_STREAM_RETRY_DELAY)
+}
+
+fn can_retry_codex_stream(retry_count: u32, saw_output: bool) -> bool {
+    !saw_output && retry_count < MAX_CODEX_STREAM_RETRIES
+}
+
+async fn wait_for_codex_stream_retry(
+    retry_count: &mut u32,
+    saw_output: bool,
+    detail: &str,
+) -> bool {
+    if !can_retry_codex_stream(*retry_count, saw_output) {
+        return false;
+    }
+
+    let delay = codex_stream_retry_delay(*retry_count);
+    *retry_count += 1;
+    tracing::warn!(
+        retry_attempt = *retry_count,
+        max_retries = MAX_CODEX_STREAM_RETRIES,
+        delay_ms = delay.as_millis() as u64,
+        error = detail,
+        "Retrying ChatGPT response after a pre-output stream disconnect"
+    );
+    tokio::time::sleep(delay).await;
+    true
+}
+
+#[derive(Debug, PartialEq)]
+enum CodexStreamOutcome {
+    Completed,
+    RetryableDisconnect(String),
+    Failed(String),
+}
+
+fn codex_response_chunks(
+    response: reqwest::Response,
+) -> futures::stream::BoxStream<'static, Result<Vec<u8>, String>> {
+    response
+        .bytes_stream()
+        .map(|chunk| {
+            chunk
+                .map(|bytes| bytes.to_vec())
+                .map_err(|error| error.to_string())
+        })
+        .boxed()
+}
+
+async fn forward_codex_stream<S>(
+    mut chunks: S,
+    tx: &tokio::sync::mpsc::UnboundedSender<AssistantMessageEvent>,
+) -> CodexStreamOutcome
+where
+    S: futures::Stream<Item = Result<Vec<u8>, String>> + Unpin,
+{
+    let mut buffer = String::new();
+    let mut saw_output = false;
+    let mut calls: std::collections::HashMap<u64, (String, String)> =
+        std::collections::HashMap::new();
+
+    while let Some(chunk) = chunks.next().await {
+        let chunk = match chunk {
+            Ok(chunk) => chunk,
+            Err(error) => {
+                let detail =
+                    format!("ChatGPT response stream disconnected before completion: {error}");
+                return if saw_output {
+                    CodexStreamOutcome::Failed(detail)
+                } else {
+                    CodexStreamOutcome::RetryableDisconnect(detail)
+                };
+            }
+        };
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(end) = buffer.find('\n') {
+            let line = buffer[..end].trim().to_string();
+            buffer.drain(..=end);
+            let Some(data) = line.strip_prefix("data: ") else {
+                continue;
+            };
+            if data == "[DONE]" {
+                let detail = if saw_output {
+                    "ChatGPT ended the response stream without a completion event. Your work was saved; retry the message to continue."
+                } else {
+                    "ChatGPT ended the response stream before sending any output."
+                };
+                return if saw_output {
+                    CodexStreamOutcome::Failed(detail.into())
+                } else {
+                    CodexStreamOutcome::RetryableDisconnect(detail.into())
+                };
+            }
+            let Ok(event) = serde_json::from_str::<Value>(data) else {
+                continue;
+            };
+            match event["type"].as_str().unwrap_or_default() {
+                "response.output_text.delta" => {
+                    if let Some(delta) = event["delta"].as_str() {
+                        saw_output = true;
+                        let _ = tx.send(AssistantMessageEvent::TextDelta(delta.into()));
+                    }
+                }
+                "response.reasoning_summary_text.delta" => {
+                    if let Some(delta) = event["delta"].as_str() {
+                        saw_output = true;
+                        let _ = tx.send(AssistantMessageEvent::ThinkingDelta(delta.into()));
+                    }
+                }
+                "response.output_item.done" if event["item"]["type"] == "reasoning" => {
+                    if let Some(encrypted_content) = event["item"]["encrypted_content"].as_str() {
+                        saw_output = true;
+                        let reasoning_item = json!({
+                            "type": "reasoning",
+                            "id": event["item"]["id"],
+                            "encrypted_content": encrypted_content,
+                            "summary": event["item"]["summary"]
+                                .as_array()
+                                .cloned()
+                                .unwrap_or_default(),
+                        });
+                        let _ = tx.send(AssistantMessageEvent::ProviderState(
+                            ContentPart::ProviderState {
+                                provider: "openai-codex".into(),
+                                data: reasoning_item,
+                            },
+                        ));
+                    }
+                }
+                "response.output_item.added" if event["item"]["type"] == "function_call" => {
+                    let index = event["output_index"].as_u64().unwrap_or(0);
+                    let id = event["item"]["call_id"]
+                        .as_str()
+                        .or_else(|| event["item"]["id"].as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let name = event["item"]["name"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string();
+                    calls.insert(index, (id.clone(), name.clone()));
+                    saw_output = true;
+                    let _ = tx.send(AssistantMessageEvent::ToolCallDelta {
+                        id,
+                        name,
+                        arguments_delta: String::new(),
+                    });
+                }
+                "response.function_call_arguments.delta" => {
+                    let index = event["output_index"].as_u64().unwrap_or(0);
+                    if let Some((id, name)) = calls.get(&index) {
+                        saw_output = true;
+                        let _ = tx.send(AssistantMessageEvent::ToolCallDelta {
+                            id: id.clone(),
+                            name: name.clone(),
+                            arguments_delta: event["delta"].as_str().unwrap_or_default().into(),
+                        });
+                    }
+                }
+                "response.completed" => {
+                    let usage = &event["response"]["usage"];
+                    let input = usage["input_tokens"].as_u64().unwrap_or(0) as u32;
+                    let output = usage["output_tokens"].as_u64().unwrap_or(0) as u32;
+                    let _ = tx.send(AssistantMessageEvent::Done {
+                        usage: Some(UsageStats {
+                            prompt_tokens: input,
+                            completion_tokens: output,
+                            total_tokens: input.saturating_add(output),
+                        }),
+                    });
+                    return CodexStreamOutcome::Completed;
+                }
+                "error" | "response.failed" => {
+                    return CodexStreamOutcome::Failed(stream_error_detail(&event));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let detail = if saw_output {
+        "ChatGPT closed the response stream before completion. Your session was saved; retry the message to continue."
+    } else {
+        "ChatGPT closed the response stream before sending any output."
+    };
+    if saw_output {
+        CodexStreamOutcome::Failed(detail.into())
+    } else {
+        CodexStreamOutcome::RetryableDisconnect(detail.into())
+    }
+}
+
+async fn drive_codex_streams<S, Reconnect, ReconnectFuture>(
+    tx: tokio::sync::mpsc::UnboundedSender<AssistantMessageEvent>,
+    mut chunks: S,
+    mut reconnect: Reconnect,
+) where
+    S: futures::Stream<Item = Result<Vec<u8>, String>> + Send + Unpin,
+    Reconnect: FnMut() -> ReconnectFuture,
+    ReconnectFuture: Future<Output = Result<S, String>>,
+{
+    let mut retry_count = 0;
+    loop {
+        match forward_codex_stream(&mut chunks, &tx).await {
+            CodexStreamOutcome::Completed => return,
+            CodexStreamOutcome::Failed(detail) => {
+                let _ = tx.send(AssistantMessageEvent::Error(detail));
+                return;
+            }
+            CodexStreamOutcome::RetryableDisconnect(detail) => {
+                if tx.is_closed()
+                    || !wait_for_codex_stream_retry(&mut retry_count, false, &detail).await
+                    || tx.is_closed()
+                {
+                    if !tx.is_closed() {
+                        let _ = tx.send(AssistantMessageEvent::Error(detail));
+                    }
+                    return;
+                }
+                match reconnect().await {
+                    Ok(next_chunks) => chunks = next_chunks,
+                    Err(error) => {
+                        let _ = tx.send(AssistantMessageEvent::Error(format!(
+                            "Unable to reconnect the ChatGPT response stream: {error}"
+                        )));
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[async_trait]
 impl LlmProvider for CodexProvider {
     fn provider_name(&self) -> &str {
@@ -274,132 +517,25 @@ impl LlmProvider for CodexProvider {
         options: &CompletionOptions,
     ) -> anyhow::Result<EventStream> {
         let response = self.send(messages, options).await?;
-        let mut bytes = response.bytes_stream();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let provider = self.clone();
+        let messages = messages.to_vec();
+        let options = options.clone();
         tokio::spawn(async move {
-            let mut buffer = String::new();
-            let mut saw_event = false;
-            let mut calls: std::collections::HashMap<u64, (String, String)> =
-                std::collections::HashMap::new();
-            while let Some(chunk) = bytes.next().await {
-                let chunk = match chunk {
-                    Ok(chunk) => chunk,
-                    Err(error) => {
-                        let _ = tx.send(AssistantMessageEvent::Error(format!(
-                            "ChatGPT response stream disconnected before completion: {error}"
-                        )));
-                        return;
-                    }
-                };
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
-                while let Some(end) = buffer.find('\n') {
-                    let line = buffer[..end].trim().to_string();
-                    buffer.drain(..=end);
-                    let Some(data) = line.strip_prefix("data: ") else {
-                        continue;
-                    };
-                    if data == "[DONE]" {
-                        let _ = tx.send(AssistantMessageEvent::Error(
-                            "ChatGPT ended the response stream without a completion event. Your work was saved; retry the message to continue.".into(),
-                        ));
-                        return;
-                    }
-                    let Ok(event) = serde_json::from_str::<Value>(data) else {
-                        continue;
-                    };
-                    saw_event = true;
-                    match event["type"].as_str().unwrap_or_default() {
-                        "response.output_text.delta" => {
-                            if let Some(delta) = event["delta"].as_str() {
-                                let _ = tx.send(AssistantMessageEvent::TextDelta(delta.into()));
-                            }
-                        }
-                        "response.reasoning_summary_text.delta" => {
-                            if let Some(delta) = event["delta"].as_str() {
-                                let _ = tx.send(AssistantMessageEvent::ThinkingDelta(delta.into()));
-                            }
-                        }
-                        "response.output_item.done" if event["item"]["type"] == "reasoning" => {
-                            if let Some(encrypted_content) =
-                                event["item"]["encrypted_content"].as_str()
-                            {
-                                let reasoning_item = json!({
-                                    "type": "reasoning",
-                                    "id": event["item"]["id"],
-                                    "encrypted_content": encrypted_content,
-                                    "summary": event["item"]["summary"]
-                                        .as_array()
-                                        .cloned()
-                                        .unwrap_or_default(),
-                                });
-                                let _ = tx.send(AssistantMessageEvent::ProviderState(
-                                    ContentPart::ProviderState {
-                                        provider: "openai-codex".into(),
-                                        data: reasoning_item,
-                                    },
-                                ));
-                            }
-                        }
-                        "response.output_item.added"
-                            if event["item"]["type"] == "function_call" =>
-                        {
-                            let index = event["output_index"].as_u64().unwrap_or(0);
-                            let id = event["item"]["call_id"]
-                                .as_str()
-                                .or_else(|| event["item"]["id"].as_str())
-                                .unwrap_or_default()
-                                .to_string();
-                            let name = event["item"]["name"]
-                                .as_str()
-                                .unwrap_or_default()
-                                .to_string();
-                            calls.insert(index, (id.clone(), name.clone()));
-                            let _ = tx.send(AssistantMessageEvent::ToolCallDelta {
-                                id,
-                                name,
-                                arguments_delta: String::new(),
-                            });
-                        }
-                        "response.function_call_arguments.delta" => {
-                            let index = event["output_index"].as_u64().unwrap_or(0);
-                            if let Some((id, name)) = calls.get(&index) {
-                                let _ = tx.send(AssistantMessageEvent::ToolCallDelta {
-                                    id: id.clone(),
-                                    name: name.clone(),
-                                    arguments_delta: event["delta"]
-                                        .as_str()
-                                        .unwrap_or_default()
-                                        .into(),
-                                });
-                            }
-                        }
-                        "response.completed" => {
-                            let usage = &event["response"]["usage"];
-                            let input = usage["input_tokens"].as_u64().unwrap_or(0) as u32;
-                            let output = usage["output_tokens"].as_u64().unwrap_or(0) as u32;
-                            let _ = tx.send(AssistantMessageEvent::Done {
-                                usage: Some(UsageStats {
-                                    prompt_tokens: input,
-                                    completion_tokens: output,
-                                    total_tokens: input.saturating_add(output),
-                                }),
-                            });
-                            return;
-                        }
-                        "error" | "response.failed" => {
-                            let _ =
-                                tx.send(AssistantMessageEvent::Error(stream_error_detail(&event)));
-                            return;
-                        }
-                        _ => {}
-                    }
+            let chunks = codex_response_chunks(response);
+            drive_codex_streams(tx, chunks, move || {
+                let provider = provider.clone();
+                let messages = messages.clone();
+                let options = options.clone();
+                async move {
+                    provider
+                        .send(&messages, &options)
+                        .await
+                        .map(codex_response_chunks)
+                        .map_err(|error| error.to_string())
                 }
-            }
-            let _ = tx.send(AssistantMessageEvent::Error(if saw_event {
-                "ChatGPT closed the response stream before completion. Your session was saved; retry the message to continue.".into()
-            } else {
-                "ChatGPT closed the response stream before sending any events. Check your connection and retry.".into()
-            }));
+            })
+            .await;
         });
         Ok(Box::pin(UnboundedReceiverStream::new(rx)))
     }
@@ -506,5 +642,75 @@ mod tests {
             "data:image/png;base64,aGVsbG8="
         );
         assert_eq!(body["stream"], true);
+    }
+
+    #[tokio::test]
+    async fn retries_a_disconnect_before_output_and_completes_the_stream() {
+        use futures::stream;
+
+        let initial = stream::iter(vec![Err("error decoding response body".to_string())]).boxed();
+        let completed = format!(
+            "data: {}\n",
+            json!({
+                "type": "response.completed",
+                "response": {
+                    "usage": { "input_tokens": 12, "output_tokens": 3 }
+                }
+            })
+        );
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut reconnects = 0;
+
+        drive_codex_streams(tx, initial, || {
+            reconnects += 1;
+            std::future::ready(Ok(
+                stream::iter(vec![Ok(completed.clone().into_bytes())]).boxed()
+            ))
+        })
+        .await;
+
+        assert_eq!(reconnects, 1);
+        assert!(matches!(
+            rx.recv().await,
+            Some(AssistantMessageEvent::Done {
+                usage: Some(UsageStats {
+                    prompt_tokens: 12,
+                    completion_tokens: 3,
+                    total_tokens: 15,
+                }),
+            })
+        ));
+        assert!(rx.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_after_model_output_has_started() {
+        use futures::stream;
+
+        let initial = stream::iter(vec![
+            Ok(b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n".to_vec()),
+            Err("error decoding response body".to_string()),
+        ])
+        .boxed();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut reconnects = 0;
+
+        drive_codex_streams(tx, initial, || {
+            reconnects += 1;
+            std::future::ready(Ok(stream::empty().boxed()))
+        })
+        .await;
+
+        assert_eq!(reconnects, 0);
+        assert!(matches!(
+            rx.recv().await,
+            Some(AssistantMessageEvent::TextDelta(text)) if text == "partial"
+        ));
+        assert!(matches!(
+            rx.recv().await,
+            Some(AssistantMessageEvent::Error(message))
+                if message.contains("error decoding response body")
+        ));
+        assert!(rx.recv().await.is_none());
     }
 }

@@ -7,6 +7,7 @@ import {
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
 import {
   buildProviderOptionSelectionsFromDescriptors,
+  createModelSelection,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
 } from "@sparky/shared/model";
@@ -43,7 +44,10 @@ import {
   deriveProviderInstanceEntries,
   sortProviderInstanceEntries,
 } from "../providerInstances";
-import { getAppModelOptionsForInstance } from "../modelSelection";
+import {
+  defaultAutomationModel,
+  deriveAutomationProviderOptions,
+} from "../automationProviderOptions";
 import { getProviderModelCapabilities } from "../providerModels";
 import { primaryServerProvidersAtom } from "../state/server";
 import { Button } from "./ui/button";
@@ -193,6 +197,10 @@ export function AutomationsPage() {
       ),
     [providers, settings],
   );
+  const providerOptions = useMemo(
+    () => deriveAutomationProviderOptions(providerEntries, settings),
+    [providerEntries, settings],
+  );
 
   useEffect(() => {
     if (!selectedThreadId && threads[0]) setSelectedThreadId(threads[0].id);
@@ -261,20 +269,49 @@ export function AutomationsPage() {
     if (selectedThread) setSelectedModelSelection(selectedThread.modelSelection);
   }, [selectedThread]);
 
+  useEffect(() => {
+    const current = selectedModelSelection ?? selectedThread?.modelSelection;
+    const matchingOption = current
+      ? (providerOptions.find(
+          (option) =>
+            option.instanceId === current.instanceId && option.modelSlugs.has(current.model),
+        ) ?? providerOptions.find((option) => option.modelSlugs.has(current.model)))
+      : undefined;
+    const option = matchingOption ?? providerOptions[0];
+    const model =
+      matchingOption && current && matchingOption.modelSlugs.has(current.model)
+        ? matchingOption.modelOptions.find((candidate) => candidate.slug === current.model)
+        : option
+          ? defaultAutomationModel(option)
+          : undefined;
+    if (!option || !model) return;
+
+    const nextSelection = current
+      ? { ...current, instanceId: option.instanceId, model: model.slug }
+      : createModelSelection(option.instanceId, model.slug);
+    if (current?.instanceId === nextSelection.instanceId && current.model === nextSelection.model) {
+      return;
+    }
+    setSelectedModelSelection(nextSelection);
+  }, [providerOptions, selectedModelSelection, selectedThread]);
+
   const selectedModel = selectedModelSelection?.model ?? selectedThread?.modelSelection.model ?? "";
+  const selectedProviderOption =
+    providerOptions.find(
+      (option) =>
+        option.instanceId === selectedModelSelection?.instanceId &&
+        option.modelSlugs.has(selectedModel),
+    ) ??
+    providerOptions.find((option) => option.instanceId === selectedModelSelection?.instanceId) ??
+    providerOptions[0];
   const selectedProviderInstanceId =
-    selectedModelSelection?.instanceId ?? selectedThread?.modelSelection.instanceId ?? "";
-  const selectedProviderEntry = providerEntries.find(
-    (entry) => entry.instanceId === selectedProviderInstanceId,
-  );
-  const selectedModelOptions = selectedProviderEntry
-    ? getAppModelOptionsForInstance(settings, selectedProviderEntry)
-    : [];
-  const selectedModelCapabilities = selectedProviderEntry
+    selectedProviderOption?.instanceId ?? selectedModelSelection?.instanceId ?? "";
+  const selectedModelOptions = selectedProviderOption?.modelOptions ?? [];
+  const selectedModelCapabilities = selectedProviderOption
     ? getProviderModelCapabilities(
-        selectedProviderEntry.models,
+        selectedProviderOption.entry.models,
         selectedModel,
-        selectedProviderEntry.driverKind,
+        selectedProviderOption.entry.driverKind,
       )
     : null;
   const reasoningDescriptors = selectedModelCapabilities
@@ -289,7 +326,12 @@ export function AutomationsPage() {
     ) ?? reasoningDescriptors.find((descriptor) => descriptor.type === "select");
   const updateSelectedModel = (instanceId: string, model: string) => {
     const current = selectedModelSelection ?? selectedThread?.modelSelection;
-    if (!current) return;
+    if (!current) {
+      setSelectedModelSelection(
+        createModelSelection(instanceId as ModelSelection["instanceId"], model),
+      );
+      return;
+    }
     setSelectedModelSelection({
       ...current,
       instanceId: instanceId as ModelSelection["instanceId"],
@@ -784,15 +826,13 @@ export function AutomationsPage() {
                       <label className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                         <span>Provider</span>
                         <Select
-                          value={selectedProviderInstanceId}
+                          value={selectedProviderOption?.key ?? ""}
                           onValueChange={(value) => {
-                            const entry = providerEntries.find(
-                              (candidate) => candidate.instanceId === value,
+                            const option = providerOptions.find(
+                              (candidate) => candidate.key === value,
                             );
-                            const model = entry
-                              ? getAppModelOptionsForInstance(settings, entry)[0]?.slug
-                              : undefined;
-                            if (value && model) updateSelectedModel(value, model);
+                            const model = option ? defaultAutomationModel(option) : undefined;
+                            if (option && model) updateSelectedModel(option.instanceId, model.slug);
                           }}
                         >
                           <SelectTrigger
@@ -801,7 +841,7 @@ export function AutomationsPage() {
                             aria-label="Automation provider"
                           >
                             <SelectValue>
-                              {selectedProviderEntry?.displayName ?? "Choose provider"}
+                              {selectedProviderOption?.displayName ?? "Choose provider"}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectPopup
@@ -809,13 +849,11 @@ export function AutomationsPage() {
                             alignItemWithTrigger={false}
                             popupClassName="min-w-48"
                           >
-                            {providerEntries
-                              .filter((entry) => entry.enabled)
-                              .map((entry) => (
-                                <SelectItem key={entry.instanceId} value={entry.instanceId}>
-                                  {entry.displayName}
-                                </SelectItem>
-                              ))}
+                            {providerOptions.map((option) => (
+                              <SelectItem key={option.key} value={option.key}>
+                                {option.displayName}
+                              </SelectItem>
+                            ))}
                           </SelectPopup>
                         </Select>
                       </label>

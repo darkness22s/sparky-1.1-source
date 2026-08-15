@@ -1,25 +1,29 @@
 /**
  * CheckpointStore - Repository interface for filesystem-backed workspace checkpoints.
  *
- * Owns hidden Git-ref checkpoint capture/restore and diff computation for a
- * workspace thread timeline. It does not store user-facing checkpoint metadata
- * and does not coordinate provider conversation rollback.
- *
- * The live adapter resolves the active VCS driver once per checkpoint operation
- * and delegates to the driver's optional checkpoint capability.
+ * Owns content-addressed workspace checkpoint capture, restore, and diff
+ * computation. Snapshot objects and metadata live in Sparky application data,
+ * never in the workspace or the user's Git repository.
  *
  * Uses Effect `Context.Service` for dependency injection and exposes typed
  * domain errors for checkpoint storage operations.
  *
  * @module CheckpointStore
  */
-import { VcsRepositoryDetectionError, type CheckpointRef } from "@sparky/contracts";
+import { type CheckpointRef } from "@sparky/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
-import type { CheckpointStoreError } from "./Errors.ts";
-import { SnapshotEngine } from "./SnapshotEngine.ts";
+import { CheckpointStoreOperationError, type CheckpointStoreError } from "./Errors.ts";
+import {
+  SnapshotEngine,
+  type CheckpointMetadata,
+  type SnapshotCleanupResult,
+  type SnapshotDiff,
+  type SnapshotRefRecord,
+  type SnapshotRestoreResult,
+} from "./SnapshotEngine.ts";
 import * as ServerConfig from "../config.ts";
 import { isGitRepository as detectGitRepository } from "../git/Utils.ts";
 
@@ -40,19 +44,18 @@ function omitWhitespaceOnlyDiffLines(diff: string): string {
   for (const [key, count] of removed) {
     matched.set(key, Math.min(count, added.get(key) ?? 0));
   }
-  const removedMatches = new Map<string, number>();
-  const addedMatches = new Map<string, number>();
+  const seenRemoved = new Map<string, number>();
+  const seenAdded = new Map<string, number>();
   return lines
     .filter((line) => {
       const isRemoved = line.startsWith("-") && !line.startsWith("---");
       const isAdded = line.startsWith("+") && !line.startsWith("+++");
       if (!isRemoved && !isAdded) return true;
       const key = line.slice(1).trim();
-      const limit = matched.get(key) ?? 0;
-      const seen = isRemoved ? removedMatches : addedMatches;
+      const seen = isRemoved ? seenRemoved : seenAdded;
       const next = (seen.get(key) ?? 0) + 1;
       seen.set(key, next);
-      return next > limit;
+      return next > (matched.get(key) ?? 0);
     })
     .join("\n");
 }
@@ -81,17 +84,29 @@ export interface DeleteCheckpointRefsInput {
   readonly checkpointRefs: ReadonlyArray<CheckpointRef>;
 }
 
+export interface CreateDetailedCheckpointInput extends CaptureCheckpointInput {
+  readonly metadata: CheckpointMetadata;
+  readonly maxFileSizeBytes?: number;
+  readonly ignoredPaths?: ReadonlyArray<string>;
+}
+
+export interface DetailedCheckpointResult {
+  readonly record: SnapshotRefRecord;
+  readonly approximateSize: number;
+  readonly diff: SnapshotDiff | null;
+}
+
 /** Service tag for checkpoint persistence and restore operations. */
 export class CheckpointStore extends Context.Service<
   CheckpointStore,
   {
-    /** Check whether cwd is inside a Git worktree. */
+    /** Check whether cwd is inside a repository; retained for status compatibility. */
     readonly isGitRepository: (cwd: string) => Effect.Effect<boolean, CheckpointStoreError>;
 
     /**
-     * Capture a checkpoint commit and store it at the provided checkpoint ref.
+     * Capture a checkpoint and store it at the provided ref.
      *
-     * Uses an isolated temporary Git index and writes a hidden ref.
+     * Uses the application-data snapshot store and never touches repository metadata.
      */
     readonly captureCheckpoint: (
       input: CaptureCheckpointInput,
@@ -103,9 +118,9 @@ export class CheckpointStore extends Context.Service<
     ) => Effect.Effect<boolean, CheckpointStoreError>;
 
     /**
-     * Restore workspace and staging state to a checkpoint.
+     * Restore workspace files to a checkpoint.
      *
-     * Optionally falls back to current `HEAD` when the checkpoint ref is missing.
+     * Missing refs return `false` when fallback is disabled.
      */
     readonly restoreCheckpoint: (
       input: RestoreCheckpointInput,
@@ -114,7 +129,7 @@ export class CheckpointStore extends Context.Service<
     /**
      * Compute a patch diff between two checkpoint refs.
      *
-     * Can optionally treat a missing "from" ref as `HEAD`.
+     * Missing baseline refs are handled by the caller when necessary.
      */
     readonly diffCheckpoints: (
       input: DiffCheckpointsInput,
@@ -128,27 +143,48 @@ export class CheckpointStore extends Context.Service<
     readonly deleteCheckpointRefs: (
       input: DeleteCheckpointRefsInput,
     ) => Effect.Effect<void, CheckpointStoreError>;
+
+    /** Extended local snapshot APIs used by automatic action checkpoints. */
+    readonly createDetailedCheckpoint?: (
+      input: CreateDetailedCheckpointInput,
+    ) => Effect.Effect<DetailedCheckpointResult, CheckpointStoreError>;
+    readonly getCheckpointRecord?: (
+      input: Omit<RestoreCheckpointInput, "fallbackToHead">,
+    ) => Effect.Effect<SnapshotRefRecord | null, CheckpointStoreError>;
+    readonly listCheckpointRecords?: (
+      cwd: string,
+    ) => Effect.Effect<ReadonlyArray<SnapshotRefRecord>, CheckpointStoreError>;
+    readonly restoreCheckpointDetailed?: (
+      input: RestoreCheckpointInput,
+    ) => Effect.Effect<SnapshotRestoreResult | null, CheckpointStoreError>;
+    readonly pinCheckpoint?: (
+      input: Omit<RestoreCheckpointInput, "fallbackToHead"> & { readonly pinned?: boolean },
+    ) => Effect.Effect<boolean, CheckpointStoreError>;
+    readonly cleanup?: (input: {
+      readonly cwd: string;
+      readonly maximumCheckpoints: number;
+      readonly maximumTotalStorageBytes?: number;
+    }) => Effect.Effect<SnapshotCleanupResult, CheckpointStoreError>;
   }
 >()("t3/checkpointing/CheckpointStore") {}
 
 export const make = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
-  const engine = new SnapshotEngine({
-    storageRoot: config.checkpointsDir,
-  });
+  const engine = new SnapshotEngine({ storageRoot: config.checkpointsDir });
 
   const run = <T>(operation: string, cwd: string, promise: () => Promise<T>) =>
     Effect.tryPromise({
       try: promise,
       catch: (cause) =>
-        new VcsRepositoryDetectionError({
+        new CheckpointStoreOperationError({
           operation,
           cwd,
           detail: cause instanceof Error ? cause.message : String(cause),
-          cause,
         }),
     });
 
+  // Retained for compatibility with callers that display repository status;
+  // snapshot support itself does not require Git.
   const isGitRepository: CheckpointStore["Service"]["isGitRepository"] = (cwd) =>
     Effect.sync(() => detectGitRepository(cwd));
 
@@ -180,11 +216,7 @@ export const make = Effect.gen(function* () {
     "diffCheckpoints",
   )((input) =>
     run("CheckpointStore.diffCheckpoints", input.cwd, async () => {
-      const result = await engine.diff(
-        input.cwd,
-        input.fromCheckpointRef,
-        input.toCheckpointRef,
-      );
+      const result = await engine.diff(input.cwd, input.fromCheckpointRef, input.toCheckpointRef);
       return input.ignoreWhitespace
         ? omitWhitespaceOnlyDiffLines(result.unifiedDiff)
         : result.unifiedDiff;
@@ -199,6 +231,71 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const createDetailedCheckpoint = Effect.fn("createDetailedCheckpoint")(function* (
+    input: CreateDetailedCheckpointInput,
+  ) {
+    return yield* run("CheckpointStore.createDetailedCheckpoint", input.cwd, async () => {
+      engine.configure({
+        ...(input.maxFileSizeBytes !== undefined
+          ? { maxFileSizeBytes: input.maxFileSizeBytes }
+          : {}),
+        ...(input.ignoredPaths !== undefined ? { ignoredPaths: input.ignoredPaths } : {}),
+      });
+      const captured = await engine.capture(input.cwd, input.checkpointRef, input.metadata);
+      const parent = input.metadata.parentCheckpointRef;
+      const parentExists = parent ? await engine.has(input.cwd, parent) : false;
+      const diff =
+        parent && parentExists ? await engine.diff(input.cwd, parent, input.checkpointRef) : null;
+      const changedFiles = diff?.files.map(({ path, previousPath, kind, binary }) => ({
+        path,
+        ...(previousPath ? { previousPath } : {}),
+        kind,
+        binary,
+      }));
+      const metadata = { ...input.metadata, ...(changedFiles ? { changedFiles } : {}) };
+      if (changedFiles) {
+        await engine.updateMetadata(input.cwd, input.checkpointRef, metadata);
+      }
+      return {
+        record: { ...captured.record, metadata },
+        approximateSize: captured.manifest.approximateSize,
+        diff,
+      } satisfies DetailedCheckpointResult;
+    });
+  });
+
+  const getCheckpointRecord = Effect.fn("getCheckpointRecord")(
+    (input: Omit<RestoreCheckpointInput, "fallbackToHead">) =>
+      run("CheckpointStore.getCheckpointRecord", input.cwd, () =>
+        engine.getRecord(input.cwd, input.checkpointRef),
+      ),
+  );
+  const listCheckpointRecords = Effect.fn("listCheckpointRecords")((cwd: string) =>
+    run("CheckpointStore.listCheckpointRecords", cwd, () => engine.listRecords(cwd)),
+  );
+  const restoreCheckpointDetailed = Effect.fn("restoreCheckpointDetailed")(
+    (input: RestoreCheckpointInput) =>
+      run("CheckpointStore.restoreCheckpointDetailed", input.cwd, () =>
+        engine.restore(input.cwd, input.checkpointRef),
+      ),
+  );
+  const pinCheckpoint = Effect.fn("pinCheckpoint")(
+    (input: Omit<RestoreCheckpointInput, "fallbackToHead"> & { readonly pinned?: boolean }) =>
+      run("CheckpointStore.pinCheckpoint", input.cwd, () =>
+        engine.pin(input.cwd, input.checkpointRef, input.pinned ?? true),
+      ),
+  );
+  const cleanup = Effect.fn("cleanup")(
+    (input: {
+      readonly cwd: string;
+      readonly maximumCheckpoints: number;
+      readonly maximumTotalStorageBytes?: number;
+    }) =>
+      run("CheckpointStore.cleanup", input.cwd, () =>
+        engine.cleanup(input.cwd, input.maximumCheckpoints, input.maximumTotalStorageBytes),
+      ),
+  );
+
   return CheckpointStore.of({
     isGitRepository,
     captureCheckpoint,
@@ -206,6 +303,12 @@ export const make = Effect.gen(function* () {
     restoreCheckpoint,
     diffCheckpoints,
     deleteCheckpointRefs,
+    createDetailedCheckpoint,
+    getCheckpointRecord,
+    listCheckpointRecords,
+    restoreCheckpointDetailed,
+    pinCheckpoint,
+    cleanup,
   });
 });
 

@@ -8,7 +8,9 @@ use sparky_config::{max_output_tokens_for_model, DEFAULT_CONTEXT_WINDOW_TOKENS};
 use sparky_extensions::{EventBus, SparkyEvent};
 use sparky_prompt::PromptBuilder;
 use sparky_session::SessionManager;
-use sparky_tools::{ToolExecutionMode, ToolExecutionResult, ToolRegistry, END_TASK_TOOL_NAME};
+use sparky_tools::{
+    ToolExecutionMode, ToolExecutionResult, ToolRegistry, ASK_USER_TOOL_NAME, END_TASK_TOOL_NAME,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -42,6 +44,10 @@ mod tests {
     struct StreamingProvider;
 
     struct EndTaskProvider {
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    struct AskUserProvider {
         calls: std::sync::atomic::AtomicUsize,
     }
 
@@ -194,6 +200,53 @@ mod tests {
                     arguments_delta: r#"{"summary":"Implemented and verified the requested fix."}"#
                         .to_string(),
                 },
+                AssistantMessageEvent::Done { usage: None },
+            ])))
+        }
+    }
+
+    #[async_trait]
+    impl LlmProvider for AskUserProvider {
+        fn provider_name(&self) -> &str {
+            "test"
+        }
+
+        async fn complete(
+            &self,
+            _messages: &[Message],
+            _options: &CompletionOptions,
+        ) -> anyhow::Result<Message> {
+            anyhow::bail!("the streaming agent loop must not call complete")
+        }
+
+        async fn stream(
+            &self,
+            messages: &[Message],
+            options: &CompletionOptions,
+        ) -> anyhow::Result<EventStream> {
+            let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert!(options
+                .tools
+                .iter()
+                .any(|tool| tool.name == ASK_USER_TOOL_NAME));
+            if call == 0 {
+                return Ok(Box::pin(stream::iter(vec![
+                    AssistantMessageEvent::TextDelta("I need one decision.".to_string()),
+                    AssistantMessageEvent::ToolCallDelta {
+                        id: "ask-user-call".to_string(),
+                        name: ASK_USER_TOOL_NAME.to_string(),
+                        arguments_delta: r#"{"question":"Which database should we use?","options":["Postgres","SQLite"]}"#
+                            .to_string(),
+                    },
+                    AssistantMessageEvent::Done { usage: None },
+                ])));
+            }
+
+            assert!(messages
+                .iter()
+                .any(|message| message.text().contains("Postgres")));
+            Ok(Box::pin(stream::iter(vec![
+                AssistantMessageEvent::TextDelta("Thanks, continuing with Postgres.".to_string()),
                 AssistantMessageEvent::Done { usage: None },
             ])))
         }
@@ -731,6 +784,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ask_user_pauses_the_turn_and_next_message_resumes_same_session() {
+        let workspace = temporary_workspace();
+        tokio::fs::create_dir_all(&workspace).await.unwrap();
+        let cwd = workspace.to_string_lossy().to_string();
+        let mut session = SessionManager::create_new(&cwd, None).await.unwrap();
+        let provider = Arc::new(AskUserProvider {
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let agent = AgentLoop::new(
+            provider.clone(),
+            ToolRegistry::new(),
+            EventBus::new(),
+            AgentLoopOptions {
+                cwd: cwd.clone(),
+                ..AgentLoopOptions::default()
+            },
+        );
+
+        let question = agent
+            .run_turn("Choose a database", &mut session)
+            .await
+            .unwrap();
+        assert!(question.contains("Which database should we use?"));
+        assert!(question.contains("paused after this question"));
+        assert_eq!(provider.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(session.build_context_messages().iter().any(|message| {
+            message
+                .tool_result
+                .as_ref()
+                .is_some_and(|result| result.tool_call_id == "ask-user-call")
+        }));
+
+        let response = agent.run_turn("Postgres", &mut session).await.unwrap();
+        assert_eq!(response, "Thanks, continuing with Postgres.");
+        assert_eq!(provider.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+        drop(agent);
+        drop(provider);
+        drop(session);
+        remove_temporary_workspace(workspace).await;
+    }
+
+    #[tokio::test]
     async fn returns_malformed_tool_arguments_to_the_model_as_an_error_result() {
         let workspace = temporary_workspace();
         tokio::fs::create_dir_all(&workspace).await.unwrap();
@@ -830,6 +926,15 @@ pub struct AgentLoop {
 
 fn is_end_task_tool(tool_call: &ToolCall) -> bool {
     tool_call.name == END_TASK_TOOL_NAME
+}
+
+fn is_valid_ask_user_tool(tool_call: &ToolCall) -> bool {
+    tool_call.name == ASK_USER_TOOL_NAME
+        && tool_call
+            .arguments
+            .get("question")
+            .and_then(|value| value.as_str())
+            .is_some_and(|question| !question.trim().is_empty())
 }
 
 fn is_context_window_error(message: &str) -> bool {
@@ -1220,6 +1325,56 @@ impl AgentLoop {
                     let suffix = format!("\n\n{summary}");
                     final_response.push_str(&suffix);
                     on_event(&AssistantMessageEvent::TextDelta(suffix));
+                }
+                self.event_bus.emit(&SparkyEvent::TurnEnd {
+                    turn_index: turn_count,
+                });
+                break;
+            }
+
+            // `ask_user` is a turn boundary rather than a normal tool. Its
+            // question is returned to the user, who can answer in the next
+            // message while continuing the same persisted session.
+            let ask_user_call_index = tool_calls.iter().position(|call| {
+                is_valid_ask_user_tool(call) && !malformed_arguments.contains_key(&call.id)
+            });
+            if let Some(ask_user_call_index) = ask_user_call_index {
+                let mut ask_user_result = None;
+                for (index, tool_call) in tool_calls.iter().enumerate() {
+                    if index > ask_user_call_index {
+                        self.append_tool_result(
+                            tool_call,
+                            ToolExecutionResult::error("The turn paused for a user response before this tool was executed."),
+                            session,
+                        )
+                        .await?;
+                        continue;
+                    }
+
+                    if let Some(error) = malformed_arguments.remove(&tool_call.id) {
+                        self.record_tool_call_error(tool_call, error, session)
+                            .await?;
+                        continue;
+                    }
+
+                    let result = self.execute_tool_call_result(tool_call).await;
+                    if index == ask_user_call_index {
+                        ask_user_result = Some(result.clone());
+                    }
+                    self.append_tool_result(tool_call, result, session).await?;
+                }
+
+                if let Some(result) = ask_user_result {
+                    if !result.is_error {
+                        let separator = if final_response.trim().is_empty() {
+                            ""
+                        } else {
+                            "\n\n"
+                        };
+                        let question = format!("{separator}{}", result.output);
+                        final_response.push_str(&question);
+                        on_event(&AssistantMessageEvent::TextDelta(question));
+                    }
                 }
                 self.event_bus.emit(&SparkyEvent::TurnEnd {
                     turn_index: turn_count,

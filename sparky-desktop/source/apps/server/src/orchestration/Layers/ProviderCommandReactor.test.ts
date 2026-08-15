@@ -743,6 +743,54 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("runs and records an Ultra workflow before forwarding a sanitized provider turn", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-ultra"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-ultra"),
+          role: "user",
+          text: "Coordinate a focused implementation and verification pass.",
+          attachments: [],
+        },
+        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5-codex", [
+          { id: "effort", value: "ultra" },
+        ]),
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5-codex",
+      },
+    });
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    const activities =
+      thread?.activities.filter((activity) => activity.kind === "ultra.workflow.updated") ?? [];
+    expect(activities).toHaveLength(1);
+    expect(activities[0]?.payload).toMatchObject({
+      threadId: "thread-1",
+      status: "Completed",
+      agents: expect.arrayContaining([
+        expect.objectContaining({ name: "Analyst", status: "completed" }),
+        expect.objectContaining({ name: "Implementer", status: "completed" }),
+        expect.objectContaining({ name: "Verifier", status: "completed" }),
+      ]),
+    });
+  });
   it("forwards claude effort options through session start and turn send", async () => {
     const harness = await createHarness({
       threadModelSelection: {
@@ -1813,7 +1861,7 @@ describe("ProviderCommandReactor", () => {
         Effect.fail(
           new ProviderAdapterRequestError({
             provider: "codex",
-            method: "thread/interrupt",
+            method: "thread.turn.interrupt",
             detail: "interrupt unavailable",
           }),
         ) as never,
@@ -2327,7 +2375,7 @@ describe("ProviderCommandReactor", () => {
         Effect.fail(
           new ProviderAdapterRequestError({
             provider: "codex",
-            method: "thread/stop",
+            method: "thread.session.stop",
             detail: "stop unavailable",
           }),
         ) as never,
