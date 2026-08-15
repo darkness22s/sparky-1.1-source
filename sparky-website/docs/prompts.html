@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,13 +33,17 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">REFERENCE</div>
         <h1>Writing Prompts</h1>
-        <p>How to talk to Sparky for the best results. Be specific, give context.</p>
+        <p>Give Sparky a clear outcome, the boundaries that matter, and the evidence you expect before the task is complete.</p>
       </div>
 
 <h2 id="overview">How to think about prompts</h2>
-<p>Talk to Sparky like a developer sitting next to you. The more specific, the better.</p>
+<p>Talk to Sparky like a developer joining the task with access to the active project. Name the result you want, point to known context, state what must not change, and describe how to verify the work.</p>
+<div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Reusable task shape</span></div><div class="docs-code-body"><span class="cmd">“In [scope], produce [outcome]. Preserve [constraints]. Verify it with [tests or inspection], then summarize [evidence].”</span></div></div>
+
+<h2 id="modes">Choose Plan or Build</h2>
+<p><strong>Plan mode</strong> uses Sparky's Rust-native read-only planning flow. Use it to inspect unfamiliar code, compare approaches, ask decision questions, and produce a structured plan without editing files. <strong>Build mode</strong> restores implementation tools for edits, commands, searches, previews, and verification.</p>
+<p>State the same task in either mode. The mode changes the allowed actions, not the meaning of your request.</p>
 
 <h2 id="good-prompts">Good prompts</h2>
 <ul>
@@ -57,12 +61,19 @@
 </ul>
 
 <h2 id="follow-up">Follow-up prompts</h2>
-<p>Sparky remembers the full conversation. Follow up naturally:</p>
+<p>Continue in the same session when the next message depends on earlier work. Sparky reloads the visible transcript and the provider continuation state required for a true follow-up:</p>
 <ul>
 <li>"That is close, but move the validation earlier"</li>
 <li>"Also update the error message"</li>
 <li>"Now do the same for other endpoints"</li>
 </ul>
+
+<h2 id="images">Use images as task context</h2>
+<p>Attach a screenshot, mockup, diagram, or other supported image when visual evidence matters. Sparky validates the attachment and forwards it as a multimodal request part to a provider that supports images. An image-only message receives an effective prompt, but a short instruction such as <strong>“Match this empty-state spacing in the current component”</strong> produces a clearer task.</p>
+<div class="docs-note"><strong>Provider capability matters:</strong> An attachment can travel through Sparky correctly while the selected model still lacks image support. If the provider rejects it, switch to a multimodal model or describe the relevant detail in text.</div>
+
+<h2 id="memory">Use Memory for durable context</h2>
+<p>Do not repeat stable preferences and project conventions in every prompt. Save them as a global or project memory, then keep the prompt focused on the current outcome. Temporary errors, one-off file positions, and guesses should remain in the session instead of becoming persistent memories.</p>
 
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="overview.html">Overview</a> — understand tools</li>
@@ -73,9 +84,12 @@
     <aside class="docs-toc">
       <div class="docs-toc-title">On this page</div>
       <ul class="docs-toc-list"><li><a href="#overview">Overview</a></li>
+<li><a href="#modes">Plan or Build</a></li>
 <li><a href="#good-prompts">Good prompts</a></li>
 <li><a href="#bad-prompts">Bad prompts</a></li>
 <li><a href="#follow-up">Follow-up prompts</a></li>
+<li><a href="#images">Image prompts</a></li>
+<li><a href="#memory">Memory</a></li>
 </ul>
     </aside>
   </div>

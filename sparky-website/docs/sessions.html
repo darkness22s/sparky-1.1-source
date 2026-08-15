@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,19 +33,40 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">REFERENCE</div>
         <h1>Sessions</h1>
-        <p>Every conversation is saved automatically. Pick up where you left off.</p>
+        <p>Continue a real provider conversation after a follow-up, reload, restart, or supported context compaction.</p>
       </div>
 
 <h2 id="overview">How sessions work</h2>
-<p>Every conversation with Sparky is saved automatically. Full history is always there.</p>
+<p>A session connects the visible transcript, active project, and provider-specific continuation state. Sparky saves the records required to reopen that conversation rather than treating every message as an unrelated request.</p>
 
 <h2 id="resuming">Resuming a session</h2>
-<p>Sessions are in the sidebar of the desktop app. Click any one to continue where you left off.</p>
+<p>Sessions are in the sidebar of the desktop app. Click any one to reload its transcript and continue from the same saved provider conversation.</p>
 
-<h2 id="limits">Turn limits</h2>
-<p>Each prompt gets up to <strong>40 rounds</strong> of tool calls. When reached, Sparky summarizes and you can continue with another prompt.</p>
+<h2 id="continuity">What is preserved</h2>
+<ul>
+<li>The visible user and assistant transcript.</li>
+<li>The provider session binding required for a true follow-up turn.</li>
+<li>Opaque continuation state used by providers such as GPT-5.6.</li>
+<li>Project and session records stored under Sparky's session directories.</li>
+</ul>
+
+<h2 id="memory-difference">Sessions are not Memory</h2>
+<p>A session preserves one line of work. Memory stores selected durable information that should be reusable in another session. Keep temporary tool output, errors, and implementation details in the conversation. Save stable preferences or project conventions in <a href="memory.html">Memory</a>.</p>
+
+<h2 id="compaction">Long conversations and compaction</h2>
+<p>Sparky 1.1.2 no longer applies the old fixed 40-round cutoff to longer coding tasks. Codex OAuth conversations can use <code>/compact</code>, and a context-overflow recovery compacts the same provider thread before retrying once.</p>
+<p>If required resume state is missing, Sparky reports that problem instead of quietly substituting a fresh hidden conversation. Read the <a href="release-1.1.2.html#sessions">complete 1.1.2 continuity reference</a> for the full behavior.</p>
+
+<h2 id="completion">When a turn is complete</h2>
+<p>An incomplete provider stream is not treated as a successful turn. Sparky waits for a valid user-facing summary, records the terminal state, and rejects late completion events after a turn has been stopped.</p>
+
+<h2 id="stopping">Stop and resume safely</h2>
+<p>Stop settles the active UI state immediately while provider cancellation continues in parallel. Late response text and late completion events are rejected after interruption. A warm provider session with no active turn remains ready, so stopping one operation does not mean the entire session was discarded.</p>
+<p>Before continuing, read the terminal state in the timeline. A stopped turn, provider failure, environment error, and completed turn mean different things and can require different recovery.</p>
+
+<h2 id="notifications">Desktop notifications</h2>
+<p>Sparky can issue one native notification when an agent turn settles on Windows, macOS, or Linux. The notification contains the first seven response lines so you can recognize the result while working elsewhere. Return to the session for the complete summary, tool evidence, and diff.</p>
 
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="prompts.html">Writing Prompts</a> — better prompts</li>
@@ -57,7 +78,12 @@
       <div class="docs-toc-title">On this page</div>
       <ul class="docs-toc-list"><li><a href="#overview">Overview</a></li>
 <li><a href="#resuming">Resuming a session</a></li>
-<li><a href="#limits">Turn limits</a></li>
+<li><a href="#continuity">What is preserved</a></li>
+<li><a href="#memory-difference">Sessions vs. Memory</a></li>
+<li><a href="#compaction">Long conversations</a></li>
+<li><a href="#completion">Turn completion</a></li>
+<li><a href="#stopping">Stop and resume</a></li>
+<li><a href="#notifications">Notifications</a></li>
 </ul>
     </aside>
   </div>

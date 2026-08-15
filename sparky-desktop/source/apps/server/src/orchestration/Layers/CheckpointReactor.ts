@@ -130,6 +130,32 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
   }
 }
 
+const READ_ONLY_TOOL_NAMES = new Set([
+  "read",
+  "grep",
+  "find",
+  "ls",
+  "web_search",
+  "preview_snapshot",
+  "preview_status",
+]);
+
+function potentiallyMutatingToolEvent(
+  event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
+): boolean {
+  if (!isToolLifecycleItemType(event.payload.itemType)) return false;
+  if (event.payload.itemType === "web_search" || event.payload.itemType === "image_view") return false;
+  if (event.payload.itemType === "command_execution" || event.payload.itemType === "file_change") {
+    return true;
+  }
+  const data =
+    event.payload.data && typeof event.payload.data === "object"
+      ? (event.payload.data as Record<string, unknown>)
+      : {};
+  const name = String(data.toolName ?? data.name ?? event.payload.title ?? "").toLowerCase();
+  return !READ_ONLY_TOOL_NAMES.has(name);
+}
+
 const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const randomUUID = crypto.randomUUIDv4;
@@ -903,6 +929,57 @@ const make = Effect.gen(function* () {
       checkpointRef: baselineCheckpointRef,
       createdAt: event.occurredAt,
     });
+  });
+
+  const captureToolLifecycleCheckpoint = Effect.fn("captureToolLifecycleCheckpoint")(function* (
+    event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
+  ) {
+    if (!potentiallyMutatingToolEvent(event)) return;
+    const thread = yield* resolveThreadDetail(event.threadId);
+    if (!thread) return;
+    const projects = yield* resolveThreadProjects(thread.projectId);
+    const cwd = yield* resolveCheckpointCwd({
+      threadId: thread.id,
+      thread,
+      projects,
+      preferSessionRuntime: true,
+    });
+    if (!cwd) return;
+    const phase = event.type === "item.started" ? "before" : "after";
+    const checkpointRef = CheckpointRef.make(
+      `refs/sparky/tools/${event.threadId}/${event.eventId}/${phase}`,
+    );
+    yield* checkpointStore.captureCheckpoint({ cwd, checkpointRef });
+    if (phase === "after") {
+      const title = event.payload.title ?? event.payload.itemType.replaceAll("_", " ");
+      yield* Effect.all({
+        commandId: serverCommandId("tool-checkpoint-captured"),
+        activityId: serverEventId,
+      }).pipe(
+        Effect.flatMap(({ commandId, activityId }) =>
+          orchestrationEngine.dispatch({
+            type: "thread.activity.append",
+            commandId,
+            threadId: event.threadId,
+            activity: {
+              id: activityId,
+              tone: "info",
+              kind: "checkpoint.captured",
+              summary: `Checkpoint saved after ${title}`,
+              payload: {
+                checkpointRef,
+                reason: event.payload.status === "failed" ? "tool-failure" : "after-tool",
+                toolCallId: event.itemId ?? event.eventId,
+                automatic: true,
+              },
+              turnId: toTurnId(event.turnId),
+              createdAt: event.createdAt,
+            },
+            createdAt: event.createdAt,
+          }),
+        ),
+      );
+    }
   });
 
   const handleRevertRequested = Effect.fn("handleRevertRequested")(function* (

@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
       </div>
 
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
@@ -34,29 +34,36 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
-        <div class="docs-page-tag">GETTING STARTED</div>
-        <h1>Overview</h1>
-        <p>Sparky is a desktop AI coding assistant that reads your code, makes changes, runs commands, and searches your project — using the AI model you already have.</p>
+        <h1>Sparky documentation</h1>
+        <p>Learn the complete Sparky 1.1.2 workspace: connect your provider, open a real project, plan or build, review every tool result, and preserve useful context with Memory.</p>
       </div>
 
 <section class="docs-start-grid" aria-label="Choose a documentation path">
-  <a href="getting-started.html"><span>01</span><strong>Install and connect</strong><small>Download Sparky, add a provider, and open your first project.</small></a>
-  <a href="prompts.html"><span>02</span><strong>Give a useful task</strong><small>Write prompts that include intent, constraints, and a clear verification step.</small></a>
-  <a href="troubleshooting.html"><span>03</span><strong>Fix a blocker</strong><small>Resolve provider, terminal, project, and permission problems quickly.</small></a>
+  <a href="getting-started.html"><strong>Install and connect</strong><small>Choose the Windows, macOS, or Linux package, connect a provider, and open a project.</small></a>
+  <a href="prompts.html"><strong>Plan or build</strong><small>Use read-only Plan mode to investigate first or Build mode to implement and verify.</small></a>
+  <a href="memory.html"><strong>Set up Memory</strong><small>Save reusable preferences and project conventions without depending on one chat transcript.</small></a>
 </section>
 
+<div class="docs-note"><strong>Current release:</strong> <a href="release-1.1.2.html">What's new in Sparky 1.1.2</a> documents the entire desktop app across Windows, macOS, and Linux, including Memory, continuous sessions, provider-aware models, images, Plan mode, notifications, web search, and browser preview.</div>
+
 <h2 id="what-is-sparky">What is Sparky?</h2>
-<p>Sparky is a desktop application that acts as an AI pair programmer. It reads your codebase, understands the structure, and can make changes, run commands, search code — all through natural language.</p>
-<p>Unlike cloud-based tools, Sparky runs on your machine. Your code is only sent to the AI provider you choose.</p>
+<p>Sparky is a desktop AI coding workspace. It combines a project-aware conversation, file and diff views, a terminal, web search, browser preview, model controls, and persistent Memory in one application.</p>
+<p>The workspace and its coordination server run locally. Provider requests are sent to the provider you configure, while project tools operate against the folder you opened. Review the provider's own data policy before sending sensitive code or attachments.</p>
 
 <h2 id="how-it-works">How it works</h2>
 <ol>
-<li><strong>Point Sparky at a project</strong> — it reads the structure</li>
-<li><strong>Tell it what you need</strong> — in plain English</li>
-<li><strong>Review the result</strong> — keep or revert</li>
+<li><strong>Open a project.</strong> Sparky inventories relevant workspace context and keeps tools scoped to that project.</li>
+<li><strong>Choose Plan or Build.</strong> Plan investigates without editing; Build can change files and run tools.</li>
+<li><strong>Describe the outcome.</strong> Include constraints, relevant files, and the evidence that should prove the work.</li>
+<li><strong>Follow the timeline.</strong> Tool states show what is running, completed, failed, stopped, or declined.</li>
+<li><strong>Review the result.</strong> Inspect changed files, diffs, terminal output, and the final summary.</li>
 </ol>
 
-<h2 id="sidebar-surfaces">The Sidebar Panel</h2>
+<h2 id="modes-memory">Plan, Build, sessions, and Memory</h2>
+<p><strong>Plan mode</strong> investigates with a read-only tool policy. <strong>Build mode</strong> enables normal implementation tools. A <strong>session</strong> preserves the current conversation and provider continuation state. <strong>Memory</strong> stores selected reusable facts beyond one session.</p>
+<p>These systems complement one another: plan the approach, build the change, continue the same provider conversation when you follow up, and save only durable preferences or project rules to Memory.</p>
+
+<h2 id="sidebar-surfaces">Workspace surfaces</h2>
 <p>Open supporting tools beside the active thread. Each surface keeps the current project and task in view:</p>
 <div class="docs-surface-list">
   <div><strong>Browser</strong><span>Open a local app or URL and inspect the result.</span></div>
@@ -64,6 +71,7 @@
   <div><strong>Files</strong><span>Browse the project tree and read the exact files involved.</span></div>
   <div><strong>Diff</strong><span>Review working-tree or thread changes before you commit.</span></div>
 </div>
+<p>The conversation timeline stays connected to these surfaces, so a command, file change, web search, or browser action can be reviewed in the context of the task that requested it.</p>
 
 <h2 id="providers">Supported AI providers</h2>
 <table class="docs-table"><tr><th>Provider</th><th>Models</th><th>Get your API key</th></tr>
@@ -82,7 +90,8 @@
       <div class="docs-toc-title">On this page</div>
       <ul class="docs-toc-list"><li><a href="#what-is-sparky">What is Sparky?</a></li>
 <li><a href="#how-it-works">How it works</a></li>
-<li><a href="#sidebar-surfaces">Sidebar Panel</a></li>
+<li><a href="#modes-memory">Modes and Memory</a></li>
+<li><a href="#sidebar-surfaces">Workspace surfaces</a></li>
 <li><a href="#providers">Supported AI providers</a></li>
 </ul>
     </aside>
