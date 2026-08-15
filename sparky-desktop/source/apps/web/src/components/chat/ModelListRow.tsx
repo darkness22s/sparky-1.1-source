@@ -3,6 +3,7 @@ import { memo } from "react";
 import { CheckIcon, StarIcon } from "lucide-react";
 import {
   getDisplayModelName,
+  getModelProviderPresentation,
   getTriggerDisplayModelLabel,
   type ModelEsque,
   PROVIDER_ICON_BY_PROVIDER,
@@ -37,10 +38,9 @@ export const ModelListRow = memo(function ModelListRow(props: {
   disabledReason?: string | null;
   onToggleFavorite: () => void;
 }) {
-  const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
-  const providerLabel = props.model.subProvider
-    ? `${props.providerDisplayName} · ${props.model.subProvider}`
-    : props.providerDisplayName;
+  const modelProvider = getModelProviderPresentation(props.model);
+  const ProviderIcon = modelProvider?.Icon ?? PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
+  const providerLabel = modelProvider?.label ?? props.providerDisplayName;
 
   const row = (
     <ComboboxItem
@@ -58,6 +58,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
     >
       <div className="min-w-0 flex-1 text-left">
         <div className="flex min-w-0 items-center gap-2">
+          {ProviderIcon ? <ProviderIcon className="size-4 shrink-0" aria-hidden /> : null}
           <div className="min-w-0 truncate text-xs font-medium leading-snug">
             {props.useTriggerLabel
               ? getTriggerDisplayModelLabel(props.model)
@@ -77,8 +78,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
           ) : null}
         </div>
         {props.showProvider && (
-          <div className="mt-1 flex items-center gap-1.5">
-            {ProviderIcon ? <ProviderIcon className="size-3 shrink-0" /> : null}
+          <div className="mt-1 flex items-center gap-1.5 pl-6">
             <span className="truncate text-xs font-normal leading-snug text-muted-foreground/70">
               {providerLabel}
             </span>

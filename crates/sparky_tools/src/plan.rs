@@ -2,6 +2,7 @@ use crate::tool::{Tool, ToolExecutionResult};
 use async_trait::async_trait;
 use serde_json::json;
 
+pub const ASK_USER_TOOL_NAME: &str = "ask_user";
 pub const END_TASK_TOOL_NAME: &str = "end_task";
 
 /// Control-only tool used to close a completed agent turn. The agent must
@@ -63,7 +64,7 @@ pub struct AskUserTool;
 #[async_trait]
 impl Tool for AskUserTool {
     fn name(&self) -> &str {
-        "ask_user"
+        ASK_USER_TOOL_NAME
     }
 
     fn label(&self) -> &str {
@@ -125,7 +126,7 @@ impl Tool for AskUserTool {
             }
         }
         output.push_str(
-            "\nNo file or external state was changed. Continue with the safest explicit assumption unless the user supplies an answer.",
+            "\nNo file or external state was changed. The current turn is paused after this question. Ask the user to answer in their next message; do not continue with an assumption.",
         );
         Ok(ToolExecutionResult::success(output))
     }
@@ -234,6 +235,7 @@ mod tests {
             .unwrap();
         assert!(!result.is_error);
         assert!(result.output.contains("Which database?"));
+        assert!(result.output.contains("paused after this question"));
         assert!(result
             .output
             .contains("No file or external state was changed"));

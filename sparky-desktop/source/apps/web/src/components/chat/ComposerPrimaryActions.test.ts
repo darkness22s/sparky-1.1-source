@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatPendingPrimaryActionLabel } from "./ComposerPrimaryActions";
+import {
+  formatPendingPrimaryActionLabel,
+  shouldShowQueuePrimaryAction,
+} from "./ComposerPrimaryActions";
 
 describe("formatPendingPrimaryActionLabel", () => {
   it("returns 'Submitting...' while responding", () => {
@@ -89,5 +92,20 @@ describe("formatPendingPrimaryActionLabel", () => {
         questionIndex: 5,
       }),
     ).toBe("Submit answers");
+  });
+});
+
+describe("shouldShowQueuePrimaryAction", () => {
+  it("shows a queue action for sendable content during a running turn", () => {
+    expect(shouldShowQueuePrimaryAction({ isRunning: true, hasSendableContent: true })).toBe(true);
+  });
+
+  it("hides the queue action when the turn is idle or the composer is empty", () => {
+    expect(shouldShowQueuePrimaryAction({ isRunning: false, hasSendableContent: true })).toBe(
+      false,
+    );
+    expect(shouldShowQueuePrimaryAction({ isRunning: true, hasSendableContent: false })).toBe(
+      false,
+    );
   });
 });
