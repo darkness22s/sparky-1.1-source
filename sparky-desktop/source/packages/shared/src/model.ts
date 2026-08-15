@@ -11,6 +11,11 @@ import {
 } from "@sparky/contracts";
 
 const DEFAULT_PROVIDER_DRIVER_KIND = ProviderDriverKind.make("codex");
+const ULTRA_REASONING_OPTION = {
+  id: "ultra",
+  label: "Ultra",
+  description: "Delegate this task through a generated multi-agent workflow.",
+} as const;
 
 export interface SelectableModelOption {
   slug: string;
@@ -149,8 +154,27 @@ export function getProviderOptionDescriptors(input: {
 }): ReadonlyArray<ProviderOptionDescriptor> {
   const { caps, selections } = input;
   const baseDescriptors = (caps.optionDescriptors ?? []).map(cloneDescriptor);
+  const descriptorsWithUltra = baseDescriptors.map((descriptor, index) =>
+    index === 0 && descriptor.type === "select"
+      ? {
+          ...descriptor,
+          options: descriptor.options.some((option) => option.id === ULTRA_REASONING_OPTION.id)
+            ? descriptor.options
+            : [
+                ...descriptor.options,
+                {
+                  id: ULTRA_REASONING_OPTION.id,
+                  label: ULTRA_REASONING_OPTION.label,
+                  description: ULTRA_REASONING_OPTION.description,
+                },
+              ],
+        }
+      : descriptor,
+  );
 
-  return baseDescriptors.map((descriptor) =>
+  const optionsWithUltra = descriptorsWithUltra;
+
+  return optionsWithUltra.map((descriptor) =>
     withDescriptorCurrentValue(
       descriptor,
       getRawSelectionValueById(selections, descriptor.id) ?? descriptor.currentValue,

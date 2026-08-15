@@ -116,7 +116,7 @@ const STREAMING_TEXT_ANIMATION_OPTIONS = [
   { value: "words", label: "Word dissolve" },
 ] as const;
 
-const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("sparky");
 
 function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
@@ -407,6 +407,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
+      ...(!Equal.equals(settings.checkpoints, DEFAULT_UNIFIED_SETTINGS.checkpoints)
+        ? ["Automatic checkpoints"]
+        : []),
       ...(settings.streamingTextAnimation !== DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation
         ? ["Streaming text animation"]
         : []),
@@ -429,6 +432,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.checkpoints,
       settings.modelSelectorStyle,
       settings.streamingTextAnimation,
       settings.sidebarThreadPreviewCount,
@@ -455,6 +459,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+      checkpoints: DEFAULT_UNIFIED_SETTINGS.checkpoints,
       streamingTextAnimation: DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation,
       modelSelectorStyle: DEFAULT_UNIFIED_SETTINGS.modelSelectorStyle,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
@@ -663,6 +668,97 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          title="Automatic checkpoints"
+          description="Capture local code and conversation state before and after tasks and mutating tools. Snapshots are stored outside your project and Git repository."
+          resetAction={
+            !Equal.equals(settings.checkpoints, DEFAULT_UNIFIED_SETTINGS.checkpoints) ? (
+              <SettingResetButton
+                label="automatic checkpoints"
+                onClick={() =>
+                  updateSettings({ checkpoints: DEFAULT_UNIFIED_SETTINGS.checkpoints })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.checkpoints.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  checkpoints: { ...settings.checkpoints, enabled: Boolean(checked) },
+                })
+              }
+              aria-label="Enable automatic checkpoints"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Checkpoint retention"
+          description="Maximum automatic checkpoints retained per project. Pinned, manual, task-start, and task-complete checkpoints are protected."
+          control={
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              defaultValue={settings.checkpoints.maximumCheckpointsPerProject}
+              onBlur={(event) => {
+                const value = Number.parseInt(event.currentTarget.value, 10);
+                if (Number.isInteger(value) && value > 0) {
+                  updateSettings({
+                    checkpoints: {
+                      ...settings.checkpoints,
+                      maximumCheckpointsPerProject: value,
+                    },
+                  });
+                }
+              }}
+              className="h-8 w-24 rounded-md border border-border bg-background px-2 text-sm"
+              aria-label="Maximum checkpoints per project"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Terminal command checkpoints"
+          description="Capture immediately before and after shell commands, including failed commands."
+          control={
+            <Switch
+              checked={
+                settings.checkpoints.beforeTerminalCommands &&
+                settings.checkpoints.afterTerminalCommands
+              }
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  checkpoints: {
+                    ...settings.checkpoints,
+                    beforeTerminalCommands: Boolean(checked),
+                    afterTerminalCommands: Boolean(checked),
+                  },
+                })
+              }
+              aria-label="Checkpoint terminal commands"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Checkpoint cleanup"
+          description="Remove old unprotected checkpoint references automatically after capture."
+          control={
+            <Switch
+              checked={settings.checkpoints.automaticCleanup}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  checkpoints: { ...settings.checkpoints, automaticCleanup: Boolean(checked) },
+                })
+              }
+              aria-label="Automatically clean up checkpoints"
+            />
+          }
+        />
+
+        <SettingsRow
           title="Streaming text animation"
           description="Choose how newly streamed words appear while existing text stays stable."
           resetAction={
@@ -838,6 +934,185 @@ export function GeneralSettingsPanel() {
                 }}
               />
             </div>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Automatic checkpoints">
+        <SettingsRow
+          title="Enable automatic checkpoints"
+          description="Capture local, Git-independent snapshots before and after actions that may change your project."
+          control={
+            <Switch
+              checked={settings.checkpoints.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  checkpoints: { ...settings.checkpoints, enabled: Boolean(checked) },
+                })
+              }
+              aria-label="Enable automatic checkpoints"
+            />
+          }
+        />
+        <SettingsRow
+          title="Checkpoints per project"
+          description="Older automatic checkpoints are removed first; pinned and manual checkpoints are retained."
+          control={
+            <input
+              type="number"
+              min={1}
+              max={5000}
+              value={settings.checkpoints.maximumCheckpointsPerProject}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value);
+                if (Number.isInteger(value) && value > 0) {
+                  updateSettings({
+                    checkpoints: {
+                      ...settings.checkpoints,
+                      maximumCheckpointsPerProject: value,
+                    },
+                  });
+                }
+              }}
+              className="border-input bg-background h-8 w-24 rounded-md border px-2 text-sm"
+              aria-label="Maximum checkpoints per project"
+            />
+          }
+        />
+        <SettingsRow
+          title="Storage limit"
+          description="Maximum checkpoint storage across projects. Protected restore points are never removed automatically."
+          control={
+            <Select
+              value={String(settings.checkpoints.maximumTotalStorageBytes)}
+              onValueChange={(value) =>
+                updateSettings({
+                  checkpoints: {
+                    ...settings.checkpoints,
+                    maximumTotalStorageBytes: Number(value),
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-full sm:w-32" aria-label="Checkpoint storage limit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup align="end">
+                {[2, 5, 10, 25, 50].map((gigabytes) => (
+                  <SelectItem key={gigabytes} value={String(gigabytes * 1024 * 1024 * 1024)}>
+                    {gigabytes} GB
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          title="Maximum file size"
+          description="Files larger than this are skipped when a checkpoint is captured."
+          control={
+            <Select
+              value={String(settings.checkpoints.maximumFileSizeBytes)}
+              onValueChange={(value) =>
+                updateSettings({
+                  checkpoints: {
+                    ...settings.checkpoints,
+                    maximumFileSizeBytes: Number(value),
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-full sm:w-32" aria-label="Maximum checkpoint file size">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup align="end">
+                {[10, 25, 50, 100, 250, 500].map((megabytes) => (
+                  <SelectItem key={megabytes} value={String(megabytes * 1024 * 1024)}>
+                    {megabytes} MB
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          title="Additional ignored paths"
+          description="One project-relative glob per line. These are added to Sparky's built-in exclusions."
+          control={
+            <textarea
+              value={settings.checkpoints.ignoredPaths.join("\n")}
+              onChange={(event) =>
+                updateSettings({
+                  checkpoints: {
+                    ...settings.checkpoints,
+                    ignoredPaths: event.currentTarget.value
+                      .split("\n")
+                      .map((path) => path.trim())
+                      .filter(Boolean),
+                  },
+                })
+              }
+              rows={3}
+              className="border-input bg-background min-h-20 w-full rounded-md border px-2 py-1.5 font-mono text-xs sm:w-72"
+              aria-label="Additional checkpoint ignored paths"
+              placeholder="coverage/**"
+            />
+          }
+        />
+        <SettingsRow
+          title="Terminal command checkpoints"
+          description="Treat terminal commands as potentially mutating unless Sparky can prove they are read-only."
+          control={
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <label className="flex items-center gap-1.5">
+                <Switch
+                  checked={settings.checkpoints.beforeTerminalCommands}
+                  onCheckedChange={(checked) =>
+                    updateSettings({
+                      checkpoints: {
+                        ...settings.checkpoints,
+                        beforeTerminalCommands: Boolean(checked),
+                      },
+                    })
+                  }
+                  aria-label="Checkpoint before terminal commands"
+                />
+                Before
+              </label>
+              <label className="flex items-center gap-1.5">
+                <Switch
+                  checked={settings.checkpoints.afterTerminalCommands}
+                  onCheckedChange={(checked) =>
+                    updateSettings({
+                      checkpoints: {
+                        ...settings.checkpoints,
+                        afterTerminalCommands: Boolean(checked),
+                      },
+                    })
+                  }
+                  aria-label="Checkpoint after terminal commands"
+                />
+                After
+              </label>
+            </div>
+          }
+        />
+        <SettingsRow
+          title="Automatic cleanup"
+          description="Apply retention after captures without blocking the chat interface."
+          control={
+            <Switch
+              checked={settings.checkpoints.automaticCleanup}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  checkpoints: {
+                    ...settings.checkpoints,
+                    automaticCleanup: Boolean(checked),
+                  },
+                })
+              }
+              aria-label="Automatically clean up old checkpoints"
+            />
           }
         />
       </SettingsSection>
@@ -1025,17 +1300,24 @@ export function ProviderSettingsPanel() {
     const driver = providerSettings.provider;
     const defaultInstanceId = defaultInstanceIdForDriver(driver);
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
-    const legacyConfig = legacyProviders[providerSettings.provider]!;
-    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider]!;
+    const legacyConfig = legacyProviders[providerSettings.provider];
+    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider];
     const effectiveInstance: ProviderInstanceConfig =
       explicitInstance ??
       ({
         driver,
-        enabled: legacyConfig.enabled,
-        config: legacyConfig,
+        enabled:
+          typeof legacyConfig === "object" &&
+          legacyConfig !== null &&
+          "enabled" in legacyConfig &&
+          typeof legacyConfig.enabled === "boolean"
+            ? legacyConfig.enabled
+            : true,
+        config: legacyConfig ?? {},
       } satisfies ProviderInstanceConfig);
     const isDirty =
-      explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
+      explicitInstance !== undefined ||
+      (legacyConfig !== undefined && !Equal.equals(legacyConfig, defaultLegacyConfig));
     rows.push({
       instanceId: defaultInstanceId,
       instance: effectiveInstance,

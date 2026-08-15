@@ -10,45 +10,37 @@ import {
 } from "./ProviderSettingsForm";
 
 describe("ProviderSettingsForm helpers", () => {
-  it("derives visible provider config fields from the client definition schema", () => {
-    const codex = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("codex")];
+  it("exposes only the supported user-facing provider drivers", () => {
+    expect(DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("cursor")]).toBeUndefined();
+    expect(DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("grok")]).toBeUndefined();
+    expect(Object.values(DRIVER_OPTION_BY_VALUE).map((option) => option?.label)).toEqual(["Sparky"]);
+  });
 
-    expect(codex).toBeDefined();
-    expect(deriveProviderSettingsFields(codex!).map((field) => field.key)).toEqual([
-      "binaryPath",
-      "homePath",
-      "shadowHomePath",
-      "launchArgs",
-    ]);
+  it("derives visible provider config fields from the client definition schema", () => {
+    const sparky = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("sparky")];
+
+    expect(sparky).toBeDefined();
+    expect(deriveProviderSettingsFields(sparky!).map((field) => field.key)).toEqual(["binaryPath"]);
   });
 
   it("sources labels and descriptions from schema annotations", () => {
-    const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
-    expect(opencode).toBeDefined();
-
-    const serverPassword = deriveProviderSettingsFields(opencode!).find(
-      (field) => field.key === "serverPassword",
-    );
-
-    expect(serverPassword).toMatchObject({
-      label: "Server password",
-      description: "Stored in plain text on disk.",
-      control: "password",
-    });
+    const sparky = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("sparky")];
+    expect(sparky).toBeDefined();
+    expect(deriveProviderSettingsFields(sparky!).map((field) => field.label)).toEqual(["Binary Path"]);
   });
 
   it("preserves unknown config keys while omitting empty configurable fields", () => {
-    const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
-    expect(opencode).toBeDefined();
+    const sparky = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("sparky")];
+    expect(sparky).toBeDefined();
 
-    const serverUrl = deriveProviderSettingsFields(opencode!).find(
-      (field) => field.key === "serverUrl",
+    const binaryPath = deriveProviderSettingsFields(sparky!).find(
+      (field) => field.key === "binaryPath",
     );
-    expect(serverUrl).toBeDefined();
+    expect(binaryPath).toBeDefined();
 
     const next = nextProviderConfigWithFieldValue(
-      { forkOwned: 1, serverUrl: "http://127.0.0.1:4096" },
-      serverUrl!,
+      { forkOwned: 1, binaryPath: "sparky" },
+      binaryPath!,
       "",
     );
 

@@ -3,6 +3,12 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  type ProviderSession,
+} from "@sparky/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -12,6 +18,7 @@ import {
   normalizeSparkyContextWindow,
   parseSparkyContextWindowTokens,
   resolveSparkyRuntimeContextWindow,
+  captureSparkySessionIdentity,
   isRetryableSparkyProcessError,
   readSparkySessionBinding,
   resolveSparkySessionId,
@@ -379,6 +386,22 @@ describe("Sparky session continuity", () => {
     expect(args.join(" ")).not.toContain("Bearer ");
   });
 
+  it("passes Composio Connect's custom consumer header without exposing its key", () => {
+    const args = makeSparkyProcessArgs({
+      cwd: "C:\\workspace",
+      prompt: "Use Gmail",
+      model: "openai/gpt-4o",
+      mcpUrl: "https://connect.composio.dev/mcp?user_id=sparky",
+      mcpHeaderName: "x-consumer-api-key",
+      mcpHeaderEnvVar: "T3_MCP_HEADER_VALUE",
+    });
+
+    expect(args).toContain("--mcp-header-name");
+    expect(args.at(args.indexOf("--mcp-header-name") + 1)).toBe("x-consumer-api-key");
+    expect(args.at(args.indexOf("--mcp-header-env-var") + 1)).toBe("T3_MCP_HEADER_VALUE");
+    expect(args.join(" ")).not.toContain("ck_");
+  });
+
   it("sends only the new follow-up while resuming the exact existing session", () => {
     const args = makeSparkyProcessArgs({
       cwd: "C:\\workspace",
@@ -432,7 +455,7 @@ describe("Sparky session continuity", () => {
   it("does not pass an unverified Models.dev context window to the runtime", () => {
     expect(
       resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {
-        instanceId: "sparky",
+        instanceId: ProviderInstanceId.make("sparky"),
         model: "openai-codex/gpt-5.6-sol",
         contextWindowSource: "models.dev",
         options: [{ id: "contextWindow", value: "1m" }],
@@ -440,7 +463,7 @@ describe("Sparky session continuity", () => {
     ).toBe("258400");
     expect(
       resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {
-        instanceId: "sparky",
+        instanceId: ProviderInstanceId.make("sparky"),
         model: "openai-codex/gpt-5.6-sol",
         contextWindowSource: "provider",
         options: [{ id: "contextWindow", value: "258400" }],
@@ -469,6 +492,60 @@ describe("Sparky session continuity", () => {
 
     expect(args.at(args.indexOf("--image-path") + 1)).toBe("C:\\state\\attachments\\image.png");
     expect(args.at(args.indexOf("--image-mime-type") + 1)).toBe("image/png");
+  });
+
+  it("persists the early session identity so an interrupted turn keeps its chat context", () => {
+    const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "sparky-interrupted-session-"));
+    const sessionId = "11111111-1111-4111-8111-111111111111";
+    const threadId = ThreadId.make("thread-interrupted");
+    const now = "2026-01-01T00:00:00.000Z";
+    const state: { session: ProviderSession } = {
+      session: {
+        provider: ProviderDriverKind.make("sparky"),
+        providerInstanceId: ProviderInstanceId.make("sparky"),
+        status: "running",
+        runtimeMode: "full-access",
+        threadId,
+        cwd,
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+    try {
+      const sessionsDirectory = NodePath.join(cwd, ".sparky", "sessions");
+      NodeFS.mkdirSync(sessionsDirectory, { recursive: true });
+      NodeFS.writeFileSync(
+        NodePath.join(sessionsDirectory, `${sessionId}.jsonl`),
+        "session created before provider work\n",
+      );
+
+      // The runtime publishes this identity before doing provider work. It must
+      // be durable even when interruption prevents a terminal result frame.
+      captureSparkySessionIdentity(state, cwd, threadId, sessionId);
+      state.session = { ...state.session, status: "ready", activeTurnId: undefined };
+
+      const resumedSessionId = resolveSparkySessionId(
+        cwd,
+        String(threadId),
+        state.session.resumeCursor,
+      );
+      const args = makeSparkyProcessArgs({
+        cwd,
+        prompt: "remember the message before I stopped you",
+        model: "openai/gpt-4o",
+        sessionId: resumedSessionId,
+      });
+
+      expect(state.session.resumeCursor).toEqual({
+        threadId: String(threadId),
+        sparkySessionId: sessionId,
+        cwd,
+      });
+      expect(readSparkySessionBinding(cwd, String(threadId))).toBe(sessionId);
+      expect(args.at(args.indexOf("--session") + 1)).toBe(sessionId);
+    } finally {
+      NodeFS.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   it("persists separate thread bindings and restores them after adapter restart", () => {

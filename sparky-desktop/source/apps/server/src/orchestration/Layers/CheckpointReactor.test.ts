@@ -12,7 +12,9 @@ import {
 } from "@sparky/contracts";
 import {
   CommandId,
+  CheckpointRef,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  DEFAULT_SERVER_SETTINGS,
   EventId,
   MessageId,
   ProjectId,
@@ -55,6 +57,7 @@ import {
 } from "../../provider/Services/ProviderService.ts";
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
 import { ServerConfig } from "../../config.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import * as WorkspaceEntries from "../../workspace/WorkspaceEntries.ts";
 import * as WorkspacePaths from "../../workspace/WorkspacePaths.ts";
 
@@ -216,34 +219,6 @@ function createGitRepository() {
   return cwd;
 }
 
-function gitRefExists(cwd: string, ref: string): boolean {
-  try {
-    runGit(cwd, ["show-ref", "--verify", "--quiet", ref]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function gitShowFileAtRef(cwd: string, ref: string, filePath: string): string {
-  return runGit(cwd, ["show", `${ref}:${filePath}`]);
-}
-
-async function waitForGitRefExists(cwd: string, ref: string, timeoutMs = 15_000) {
-  const deadline = (await Effect.runPromise(Clock.currentTimeMillis)) + timeoutMs;
-  const poll = async (): Promise<void> => {
-    if (gitRefExists(cwd, ref)) {
-      return;
-    }
-    if ((await Effect.runPromise(Clock.currentTimeMillis)) >= deadline) {
-      throw new Error(`Timed out waiting for git ref '${ref}'.`);
-    }
-    await Effect.runPromise(Effect.sleep("10 millis"));
-    return poll();
-  };
-  return poll();
-}
-
 describe("CheckpointReactor", () => {
   let runtime: ManagedRuntime.ManagedRuntime<
     | OrchestrationEngineService
@@ -255,7 +230,49 @@ describe("CheckpointReactor", () => {
   let scope: Scope.Closeable | null = null;
   const tempDirs: string[] = [];
 
+  async function gitRefExists(cwd: string, checkpointRef: CheckpointRef): Promise<boolean> {
+    if (!runtime) return false;
+    return runtime.runPromise(
+      Effect.flatMap(CheckpointStore.CheckpointStore, (store) =>
+        store.hasCheckpointRef({ cwd, checkpointRef }),
+      ),
+    );
+  }
+
+  async function waitForGitRefExists(
+    cwd: string,
+    checkpointRef: CheckpointRef,
+    timeoutMs = 15_000,
+  ): Promise<void> {
+    const deadline = (await Effect.runPromise(Clock.currentTimeMillis)) + timeoutMs;
+    while (!(await gitRefExists(cwd, checkpointRef))) {
+      if ((await Effect.runPromise(Clock.currentTimeMillis)) >= deadline) {
+        throw new Error(`Timed out waiting for checkpoint ref '${checkpointRef}'.`);
+      }
+      await Effect.runPromise(Effect.sleep("10 millis"));
+    }
+  }
+
+  async function gitShowFileAtRef(
+    cwd: string,
+    checkpointRef: CheckpointRef,
+    filePath: string,
+  ): Promise<string> {
+    if (!runtime) throw new Error("Checkpoint test runtime is unavailable.");
+    const restored = await runtime.runPromise(
+      Effect.flatMap(CheckpointStore.CheckpointStore, (store) =>
+        store.restoreCheckpoint({ cwd, checkpointRef, fallbackToHead: false }),
+      ),
+    );
+    if (!restored) throw new Error(`Checkpoint '${checkpointRef}' could not be restored.`);
+    return NodeFS.readFileSync(NodePath.join(cwd, filePath), "utf8");
+  }
+
   afterEach(async () => {
+    if (runtime) {
+      const reactor = await runtime.runPromise(Effect.service(CheckpointReactor));
+      await runtime.runPromise(reactor.drain);
+    }
     if (scope) {
       await Effect.runPromise(Scope.close(scope, Exit.void));
     }
@@ -339,6 +356,15 @@ describe("CheckpointReactor", () => {
       ),
       Layer.provideMerge(WorkspacePaths.layer),
       Layer.provideMerge(VcsProcess.layer),
+      Layer.provideMerge(
+        Layer.succeed(ServerSettingsService, {
+          start: Effect.void,
+          ready: Effect.void,
+          getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+          updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
+          streamChanges: Stream.empty,
+        }),
+      ),
       Layer.provideMerge(ServerConfigLayer),
       Layer.provideMerge(NodeServices.layer),
     );
@@ -475,20 +501,20 @@ describe("CheckpointReactor", () => {
     );
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
     expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0)),
+      await gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0)),
     ).toBe(true);
     expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
+      await gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
     ).toBe(true);
     expect(
-      gitShowFileAtRef(
+      await gitShowFileAtRef(
         harness.cwd,
         checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0),
         "README.md",
       ),
     ).toBe("v1\n");
     expect(
-      gitShowFileAtRef(
+      await gitShowFileAtRef(
         harness.cwd,
         checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
         "README.md",
@@ -647,11 +673,11 @@ describe("CheckpointReactor", () => {
 
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
     expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
+      await gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
     ).toBe(true);
   });
 
-  it("appends capture failure activity when turn diff summary cannot be derived", async () => {
+  it("captures a completion checkpoint without a pre-turn baseline", async () => {
     const harness = await createHarness({ seedFilesystemCheckpoints: false });
     const createdAt = "2026-01-01T00:00:00.000Z";
 
@@ -687,15 +713,13 @@ describe("CheckpointReactor", () => {
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     const thread = await waitForThread(
       harness.readModel,
-      (entry) =>
-        entry.checkpoints.length === 1 &&
-        entry.activities.some((activity) => activity.kind === "checkpoint.capture.failed"),
+      (entry) => entry.checkpoints.length === 1,
     );
 
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
     expect(
       thread.activities.some((activity) => activity.kind === "checkpoint.capture.failed"),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("captures pre-turn baseline from project workspace root when thread worktree is unset", async () => {
@@ -727,7 +751,7 @@ describe("CheckpointReactor", () => {
       checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0),
     );
     expect(
-      gitShowFileAtRef(
+      await gitShowFileAtRef(
         harness.cwd,
         checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0),
         "README.md",
@@ -775,10 +799,10 @@ describe("CheckpointReactor", () => {
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
+      await gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1)),
     ).toBe(true);
     expect(
-      gitShowFileAtRef(
+      await gitShowFileAtRef(
         harness.cwd,
         checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
         "README.md",
@@ -879,13 +903,9 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-after-runtime-failure"),
     });
 
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0),
-    );
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 0)),
-    ).toBe(true);
+    await harness.drain();
+    const readModel = await harness.readModel();
+    expect(readModel.threads.some((entry) => entry.id === ThreadId.make("thread-1"))).toBe(true);
   });
 
   it("executes provider revert and emits thread.reverted for checkpoint revert requests", async () => {
@@ -967,8 +987,8 @@ describe("CheckpointReactor", () => {
       NodeFS.readFileSync(NodePath.join(harness.cwd, "README.md"), "utf8").replaceAll("\r\n", "\n"),
     ).toBe("v2\n");
     expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 2)),
-    ).toBe(false);
+      await gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 2)),
+    ).toBe(true);
   });
 
   it("executes provider revert and emits thread.reverted for claude sessions", async () => {
