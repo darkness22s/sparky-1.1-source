@@ -127,6 +127,13 @@ describe("ServerSettings worktree defaults", () => {
   });
 });
 
+describe("ServerSettings ImageView", () => {
+  it("defaults the vision fallback on and accepts an explicit opt-out", () => {
+    expect(decodeServerSettings({}).enableImageView).toBe(true);
+    expect(decodeServerSettingsPatch({ enableImageView: false }).enableImageView).toBe(false);
+  });
+});
+
 describe("ServerSettingsPatch.providerInstances", () => {
   it("treats providerInstances as an optional whole-map replacement", () => {
     const patch = decodeServerSettingsPatch({});

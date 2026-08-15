@@ -2032,16 +2032,9 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
-    case "automation_list":
-      return "calendar-clock";
-    case "automation_create":
-      return "calendar-clock";
-    case "automation_run_now":
-      return "play-circle";
-    case "automation_toggle":
-      return "pause-circle";
-    case "automation_delete":
-      return "trash-2";
+    case "image_view":
+    case "t3-code_image_view":
+      return "eye";
     default:
       return undefined;
   }
