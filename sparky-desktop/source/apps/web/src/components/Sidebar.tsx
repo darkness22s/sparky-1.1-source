@@ -11,6 +11,7 @@ import {
   Globe2Icon,
   LoaderIcon,
   SearchIcon,
+  SettingsIcon,
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
