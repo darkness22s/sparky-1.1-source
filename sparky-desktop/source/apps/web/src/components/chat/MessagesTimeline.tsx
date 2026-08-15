@@ -42,7 +42,6 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   BrainIcon,
-  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -61,15 +60,12 @@ import {
   ListChecksIcon,
   Maximize2Icon,
   MessageCircleIcon,
-  MinusIcon,
   MousePointerClickIcon,
   PaintbrushIcon,
-  PauseCircleIcon,
-  PlayCircleIcon,
+  MinusIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
-  Trash2Icon,
   Undo2Icon,
   WrenchIcon,
   XIcon,
@@ -1841,14 +1837,10 @@ type WorkEntryIconName =
   | "keyboard"
   | "list-checks"
   | "brain"
-  | "calendar-clock"
   | "message-circle"
   | "mouse-pointer-click"
-  | "pause-circle"
-  | "play-circle"
   | "square-pen"
   | "terminal"
-  | "trash-2"
   | "wrench"
   | "x"
   | "zap";
@@ -1909,22 +1901,14 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <ListChecksIcon className={className} aria-hidden />;
     case "brain":
       return <BrainIcon className={className} aria-hidden />;
-    case "calendar-clock":
-      return <CalendarClockIcon className={className} aria-hidden />;
     case "message-circle":
       return <MessageCircleIcon className={className} aria-hidden />;
     case "mouse-pointer-click":
       return <MousePointerClickIcon className={className} aria-hidden />;
-    case "pause-circle":
-      return <PauseCircleIcon className={className} aria-hidden />;
-    case "play-circle":
-      return <PlayCircleIcon className={className} aria-hidden />;
     case "square-pen":
       return <SquarePenIcon className={className} aria-hidden />;
     case "terminal":
       return <TerminalIcon className={className} aria-hidden />;
-    case "trash-2":
-      return <Trash2Icon className={className} aria-hidden />;
     case "wrench":
       return <WrenchIcon className={className} aria-hidden />;
     case "x":
@@ -1987,30 +1971,6 @@ function workEntryRawCommand(
   return rawCommand === workEntry.command.trim() ? null : rawCommand;
 }
 
-function dynamicToolCallExpandedBody(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return null;
-  }
-
-  const record = data as Record<string, unknown>;
-  const metadata: string[] = [];
-  if (typeof record.provider === "string" && record.provider.trim()) {
-    metadata.push(`Provider: ${record.provider.trim()}`);
-  }
-  if (typeof record.errorTag === "string" && record.errorTag.trim()) {
-    metadata.push(`Error type: ${record.errorTag.trim()}`);
-  }
-  if (typeof record.retryCount === "number" && typeof record.maxRetries === "number") {
-    metadata.push(`Retry: ${record.retryCount}/${record.maxRetries}`);
-  }
-
-  const reason = typeof record.reason === "string" ? record.reason.trim() : "";
-  if (reason) {
-    return [metadata.join("\n"), `Error\n${reason}`].filter(Boolean).join("\n\n");
-  }
-  return metadata.length > 0 ? metadata.join("\n") : null;
-}
-
 function buildToolCallExpandedBody(
   workEntry: TimelineWorkEntry,
   workspaceRoot: string | undefined,
@@ -2018,12 +1978,6 @@ function buildToolCallExpandedBody(
   const blocks: string[] = [];
   if (workEntry.itemType === "mcp_tool_call" && workEntry.toolData !== undefined) {
     blocks.push(`MCP call\n${JSON.stringify(workEntry.toolData, null, 2)}`);
-  }
-  if (workEntry.itemType === "dynamic_tool_call" && workEntry.toolData !== undefined) {
-    const dynamicDetails = dynamicToolCallExpandedBody(workEntry.toolData);
-    if (dynamicDetails) {
-      blocks.push(dynamicDetails);
-    }
   }
   const raw = workEntryRawCommand(workEntry);
   if (raw?.trim()) {
@@ -2062,9 +2016,6 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
-    case "image_view":
-    case "t3-code_image_view":
-      return "eye";
     default:
       return undefined;
   }
@@ -2203,7 +2154,6 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
         role: "button" as const,
         tabIndex: 0 as const,
         "aria-label": displayText,
-        "aria-expanded": expanded,
         onClick: () => setExpanded((v) => !v),
         onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
           if (e.key === "Enter" || e.key === " ") {

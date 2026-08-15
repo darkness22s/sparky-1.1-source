@@ -1,20 +1,7 @@
-import { NonNegativeInt, ThreadId } from "@sparky/contracts";
+import { NonNegativeInt, ThreadId, type VcsError } from "@sparky/contracts";
 import * as Schema from "effect/Schema";
 
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
-
-export class CheckpointStoreOperationError extends Schema.TaggedErrorClass<CheckpointStoreOperationError>()(
-  "CheckpointStoreOperationError",
-  {
-    operation: Schema.String,
-    cwd: Schema.String,
-    detail: Schema.String,
-  },
-) {
-  override get message(): string {
-    return `Checkpoint operation failed in ${this.operation} for '${this.cwd}': ${this.detail}`;
-  }
-}
 
 export const CheckpointDiffOperation = Schema.Literals([
   "CheckpointDiffQuery.getTurnDiff",
@@ -80,7 +67,7 @@ export class CheckpointTurnRangeUnavailableError extends Schema.TaggedErrorClass
   }
 }
 
-/** Expected checkpoint metadata does not contain the requested reference. */
+/** Expected checkpoint metadata does not contain the requested Git ref. */
 export class CheckpointRefUnavailableError extends Schema.TaggedErrorClass<CheckpointRefUnavailableError>()(
   "CheckpointRefUnavailableError",
   {
@@ -95,7 +82,7 @@ export class CheckpointRefUnavailableError extends Schema.TaggedErrorClass<Check
   }
 }
 
-export type CheckpointStoreError = CheckpointStoreOperationError;
+export type CheckpointStoreError = VcsError;
 
 export type CheckpointServiceError =
   | CheckpointStoreError

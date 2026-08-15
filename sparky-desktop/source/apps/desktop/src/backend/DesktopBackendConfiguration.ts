@@ -336,7 +336,6 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const backendExposure = yield* serverExposure.backendConfig;
     const sparkyExecutable = environment.platform === "win32" ? "sparky.exe" : "sparky";
-    const configuredSparkyBinaryPath = process.env.SPARKY_BINARY_PATH?.trim();
 
     const bootstrap = {
       mode: "desktop" as const,
@@ -358,16 +357,15 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
-        SPARKY_BINARY_PATH: configuredSparkyBinaryPath ||
-          (environment.isPackaged
-            ? environment.path.join(environment.resourcesPath, "sparky", sparkyExecutable)
-            : environment.path.resolve(
-                environment.rootDir,
-                "../..",
-                "target",
-                "release",
-                sparkyExecutable,
-              )),
+        SPARKY_BINARY_PATH: environment.isPackaged
+          ? environment.path.join(environment.resourcesPath, "sparky", sparkyExecutable)
+          : environment.path.resolve(
+              environment.rootDir,
+              "../..",
+              "target",
+              "release",
+              sparkyExecutable,
+            ),
       },
       // Primary wants process.env (PATH, dev-runner's T3CODE_HOME, etc.).
       extendEnv: true,

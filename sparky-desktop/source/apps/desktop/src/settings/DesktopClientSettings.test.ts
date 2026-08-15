@@ -16,8 +16,6 @@ const clientSettings: ClientSettings = {
   onboardingCompleted: true,
   onboardingUseCase: "Improve an existing codebase",
   cloudDataSharingEnabled: false,
-  profileName: "Your profile",
-  profileImage: "",
   autoOpenPlanSidebar: false,
   confirmThreadArchive: true,
   confirmThreadDelete: false,
@@ -34,8 +32,6 @@ const clientSettings: ClientSettings = {
   sidebarThreadPreviewCount: 6,
   streamingTextAnimation: "lift",
   timestampFormat: "24-hour",
-  streamingTextAnimation: "lift",
-  modelSelectorStyle: "menu",
   wordWrap: true,
 };
 

@@ -707,7 +707,6 @@ export function makeSparkyProcessArgs(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
-  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
@@ -732,9 +731,6 @@ export function makeSparkyProcessArgs(input: {
   ];
   if (selection.baseUrl) {
     args.push("--base-url", selection.baseUrl);
-  }
-  if (input.textOnly) {
-    args.push("--text-only");
   }
   if (input.sessionId) {
     args.push("--session", input.sessionId);
@@ -776,7 +772,6 @@ function runSparky(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
-  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
@@ -1003,7 +998,6 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           ...stamp(threadId, turnId),
           payload: { model },
         });
-        const context = yield* Effect.context();
         const assistantSegments = makeSparkyAssistantSegmenter({
           onStarted: (segmentId) => {
             runEffectSync(
@@ -1090,7 +1084,6 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           maxRetries: SPARKY_RECONNECT_RETRY_COUNT,
           ...(error
             ? {
-                errorTag: errorTag(error),
                 reason: sanitizeSparkyLogDetail(
                   error instanceof Error ? error.message : String(error),
                 ),
@@ -1712,5 +1705,4 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
     return adapter;
   });
 
-export const runSparkyTextGeneration = (input: Parameters<typeof runSparky>[0]) =>
-  runSparky({ ...input, textOnly: true });
+export const runSparkyTextGeneration = runSparky;

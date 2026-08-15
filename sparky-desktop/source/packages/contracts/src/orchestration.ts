@@ -686,16 +686,11 @@ const ThreadUserInputRespondCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
-export const CheckpointRestoreMode = Schema.Literals(["code", "conversation", "both"]);
-export type CheckpointRestoreMode = typeof CheckpointRestoreMode.Type;
-
 const ThreadCheckpointRevertCommand = Schema.Struct({
   type: Schema.Literal("thread.checkpoint.revert"),
   commandId: CommandId,
   threadId: ThreadId,
   turnCount: NonNegativeInt,
-  checkpointRef: Schema.optionalKey(CheckpointRef),
-  mode: Schema.optionalKey(CheckpointRestoreMode),
   createdAt: IsoDateTime,
 });
 
@@ -809,10 +804,6 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   turnCount: NonNegativeInt,
-  checkpointRef: Schema.optionalKey(CheckpointRef),
-  mode: Schema.optionalKey(CheckpointRestoreMode),
-  conversationState: Schema.optionalKey(Schema.Unknown),
-  safetyCheckpointRef: Schema.optionalKey(CheckpointRef),
   createdAt: IsoDateTime,
 });
 
@@ -991,18 +982,12 @@ const ThreadUserInputResponseRequestedPayload = Schema.Struct({
 export const ThreadCheckpointRevertRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
-  checkpointRef: Schema.optionalKey(CheckpointRef),
-  mode: Schema.optionalKey(CheckpointRestoreMode),
   createdAt: IsoDateTime,
 });
 
 export const ThreadRevertedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
-  checkpointRef: Schema.optionalKey(CheckpointRef),
-  mode: Schema.optionalKey(CheckpointRestoreMode),
-  conversationState: Schema.optionalKey(Schema.Unknown),
-  safetyCheckpointRef: Schema.optionalKey(CheckpointRef),
 });
 
 export const ThreadSessionStopRequestedPayload = Schema.Struct({

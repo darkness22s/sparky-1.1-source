@@ -54,7 +54,7 @@ const StageWorkspaceConfig = Schema.Struct({
     libc: Schema.optional(Schema.Array(Schema.String)),
   }),
   // pnpm 11 only reads these from pnpm-workspace.yaml (not package.json#pnpm).
-  // Without allowBuilds the staged `vp install` fails with
+  // Without allowBuilds the staged `vp install --prod` fails with
   // ERR_PNPM_IGNORED_BUILDS for packages that have lifecycle scripts.
   allowBuilds: Schema.optional(Schema.Record(Schema.String, Schema.Boolean)),
   patchedDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -576,10 +576,7 @@ interface StagePackageJson {
   };
 }
 
-// Electron is intentionally a staged devDependency: electron-builder needs the
-// host Electron package to determine the runtime version, while the packaged
-// app's production dependency set remains limited to its runtime libraries.
-export const STAGE_INSTALL_ARGS = ["install"] as const;
+export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ASAR_UNPACK = ["node_modules/@ff-labs/fff-bin-*/**/*"] as const;
 
 export interface MacPasskeySigningConfiguration {
@@ -1591,8 +1588,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
-  const electronVersion =
-    desktopPackageJson.dependencies.electron ?? desktopPackageJson.devDependencies?.electron;
+  const electronVersion = desktopPackageJson.dependencies.electron;
 
   const serverDependencies = serverPackageJson.dependencies;
   if (!serverDependencies || Object.keys(serverDependencies).length === 0) {
@@ -1831,14 +1827,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     yield* fs.copy(path.join(repoRoot, "patches"), path.join(stageAppDir, "patches"));
   }
 
-  yield* Effect.log("[desktop-artifact] Installing staged dependencies...");
+  yield* Effect.log("[desktop-artifact] Installing staged production dependencies...");
   const installCommand = yield* resolveSpawnCommand("vp", [...STAGE_INSTALL_ARGS]);
   yield* runCommand(
     ChildProcess.make(installCommand.command, installCommand.args, {
       cwd: stageAppDir,
       shell: installCommand.shell,
     }),
-    { label: "vp install", verbose: options.verbose },
+    { label: "vp install --prod", verbose: options.verbose },
   );
   // WSL is Windows-only, so only the Windows artifact carries the Linux backend
   // binary; other platforms ignore the prebuild input.

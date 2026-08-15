@@ -6,7 +6,6 @@ import {
 import { connectionAtomRuntime } from "../connection/runtime";
 import {
   linkPrimaryEnvironmentToCloud,
-  provisionPrimaryMachineEndpoint,
   type CloudLinkMode,
   type CloudLinkTarget,
   unlinkPrimaryEnvironmentFromCloud,
@@ -28,13 +27,6 @@ export const linkPrimaryEnvironment = createRuntimeCommand(connectionAtomRuntime
     readonly clerkToken: string;
     readonly mode?: CloudLinkMode;
   }) => linkPrimaryEnvironmentToCloud(input),
-});
-
-export const provisionPrimaryMachine = createRuntimeCommand(connectionAtomRuntime, {
-  label: "web:machines:provision-primary",
-  scheduler: cloudLinkScheduler,
-  concurrency: cloudLinkConcurrency,
-  execute: (input: { readonly target: CloudLinkTarget }) => provisionPrimaryMachineEndpoint(input),
 });
 
 export const unlinkPrimaryEnvironment = createRuntimeCommand(connectionAtomRuntime, {

@@ -247,35 +247,6 @@ export const RelayEnvironmentLinkChallengeResponse = Schema.Struct({
 export type RelayEnvironmentLinkChallengeResponse =
   typeof RelayEnvironmentLinkChallengeResponse.Type;
 
-/**
- * Accountless machine pairing uses the same environment-signed proof as
- * Sparky Connect, but deliberately has no Clerk principal. Only a machine
- * holding the environment signing key can authorize endpoint provisioning.
- */
-export const RelayMachinePairingChallengeRequest = Schema.Struct({
-  managedTunnelsEnabled: Schema.Boolean,
-});
-export type RelayMachinePairingChallengeRequest = typeof RelayMachinePairingChallengeRequest.Type;
-
-export const RelayMachinePairingRequest = Schema.Struct({
-  proof: RelayEnvironmentLinkProof.annotate({
-    description: "Environment-signed proof authorizing an accountless managed tunnel.",
-  }),
-});
-export type RelayMachinePairingRequest = typeof RelayMachinePairingRequest.Type;
-
-export const RelayMachinePairingResponse = Schema.Struct({
-  ok: Schema.Boolean,
-  cloudUserId: TrimmedNonEmptyString,
-  environmentId: EnvironmentId,
-  endpoint: RelayManagedEndpoint,
-  endpointRuntime: Schema.NullOr(RelayManagedEndpointRuntimeConfig),
-  relayIssuer: TrimmedNonEmptyString,
-  environmentCredential: TrimmedNonEmptyString,
-  cloudMintPublicKey: TrimmedNonEmptyString,
-});
-export type RelayMachinePairingResponse = typeof RelayMachinePairingResponse.Type;
-
 export const RelayEnvironmentLinkRequest = Schema.Struct({
   deviceId: Schema.optional(
     TrimmedNonEmptyString.annotate({
@@ -979,24 +950,6 @@ export const RelayClientGroup = HttpApiGroup.make("client")
   .annotate(OpenApi.Description, "Cloud-user environment links and registered devices.")
   .middleware(RelayClientAuth);
 
-export const RelayMachinePairingGroup = HttpApiGroup.make("machinePairing")
-  .add(
-    HttpApiEndpoint.post("createMachinePairingChallenge", "/v1/machines/pairing-challenges", {
-      payload: RelayMachinePairingChallengeRequest,
-      success: RelayEnvironmentLinkChallengeResponse,
-      error: RelayInternalError,
-    }).annotate(OpenApi.Summary, "Create an accountless machine-pairing challenge"),
-    HttpApiEndpoint.post("pairMachine", "/v1/machines/pairings", {
-      payload: RelayMachinePairingRequest,
-      success: RelayMachinePairingResponse,
-      error: RelayEnvironmentLinkErrors,
-    }).annotate(OpenApi.Summary, "Provision an accountless managed machine endpoint"),
-  )
-  .annotate(
-    OpenApi.Description,
-    "Environment-proof authenticated bootstrap for accountless Sparky machine pairing.",
-  );
-
 export const RelayExchangeDpopAccessTokenEndpoint = HttpApiEndpoint.post(
   "exchangeDpopAccessToken",
   "/v1/client/dpop-token",
@@ -1074,7 +1027,6 @@ export const RelayApi = HttpApi.make("RelayApi")
     RelayMetadataGroup,
     RelayMobileGroup,
     RelayClientGroup,
-    RelayMachinePairingGroup,
     RelayTokenGroup,
     RelayDpopClientGroup,
     RelayServerGroup,

@@ -53,6 +53,3 @@ RELEASE_MAC_X64_YML_SIZE = "470"
 RELEASE_MAC_X64_YML_SHA256 = "B42012E3C577174795008285B1E79113E00983D5222ACEE4E0A250F230F62CB1"
 ANALYTICS_ENDPOINT = "https://sensible-buffalo-67.eu-west-1.convex.site/analytics/event"
 DOWNLOADS_DISABLED = "false"
-# Keep the rebuilt release private to the public download surface until launch.
-# Set this to "true" for the one-step launch, then redeploy the worker.
-RELEASE_LAUNCHED = "false"

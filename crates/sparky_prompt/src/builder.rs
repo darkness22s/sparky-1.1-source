@@ -146,23 +146,10 @@ impl PromptBuilder {
             .git_exclude(true)
             .require_git(false)
             .filter_entry(|entry| {
-                let Some(name) = entry.file_name().to_str() else {
-                    return true;
-                };
-                let lower_name = name.to_ascii_lowercase();
-                if matches!(lower_name.as_str(), ".git" | "target" | "node_modules") {
-                    return false;
-                }
-
-                // These are nested checkouts or local runtime homes, not
-                // project context. Walking them on every one-shot turn can
-                // multiply prompt discovery work across the same repository.
-                lower_name != ".worktrees"
-                    && lower_name != ".c"
-                    && lower_name != ".t3"
-                    && lower_name != ".sparky-desktop"
-                    && !lower_name.starts_with(".t3-")
-                    && !lower_name.starts_with(".sparky-")
+                !matches!(
+                    entry.file_name().to_str(),
+                    Some(".git" | "target" | "node_modules")
+                )
             })
             .build()
             .filter_map(Result::ok)

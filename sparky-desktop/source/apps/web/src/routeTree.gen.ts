@@ -1,4 +1,4 @@
-﻿/* eslint-disable */
+/* eslint-disable */
 
 // @ts-nocheck
 
@@ -12,15 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PluginsRouteImport } from './routes/plugins'
 import { Route as ActivityRouteImport } from './routes/activity'
-import { Route as AutomationsRouteImport } from './routes/automations'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
-import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
 import { Route as SettingsPersonalizeRouteImport } from './routes/settings.personalize'
 import { Route as SettingsModelsRouteImport } from './routes/settings.models'
 import { Route as SettingsMemoryRouteImport } from './routes/settings.memory'
-import { Route as SettingsMachinesRouteImport } from './routes/settings.machines'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsInstructionsRouteImport } from './routes/settings.instructions'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
@@ -44,11 +41,6 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AutomationsRoute = AutomationsRouteImport.update({
-  id: '/automations',
-  path: '/automations',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ChatRoute = ChatRouteImport.update({
   id: '/_chat',
   getParentRoute: () => rootRouteImport,
@@ -61,11 +53,6 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
   id: '/source-control',
   path: '/source-control',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsProfileRoute = SettingsProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsPersonalizeRoute = SettingsPersonalizeRouteImport.update({
@@ -81,11 +68,6 @@ const SettingsModelsRoute = SettingsModelsRouteImport.update({
 const SettingsMemoryRoute = SettingsMemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsMachinesRoute = SettingsMachinesRouteImport.update({
-  id: '/machines',
-  path: '/machines',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsKeybindingsRoute = SettingsKeybindingsRouteImport.update({
@@ -129,18 +111,15 @@ export interface FileRoutesByFullPath {
   '/': typeof ChatIndexRoute
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/machines': typeof SettingsMachinesRoute
   '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -148,18 +127,15 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/machines': typeof SettingsMachinesRoute
   '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -170,18 +146,15 @@ export interface FileRoutesById {
   '/_chat': typeof ChatRouteWithChildren
   '/activity': typeof ActivityRoute
   '/plugins': typeof PluginsRoute
-  '/automations': typeof AutomationsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/diagnostics': typeof SettingsDiagnosticsRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/instructions': typeof SettingsInstructionsRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
-  '/settings/machines': typeof SettingsMachinesRoute
   '/settings/memory': typeof SettingsMemoryRoute
   '/settings/models': typeof SettingsModelsRoute
   '/settings/personalize': typeof SettingsPersonalizeRoute
-  '/settings/profile': typeof SettingsProfileRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -193,18 +166,15 @@ export interface FileRouteTypes {
     | '/'
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/machines'
     | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
-    | '/settings/profile'
     | '/settings/source-control'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -212,18 +182,15 @@ export interface FileRouteTypes {
   to:
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/machines'
     | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
-    | '/settings/profile'
     | '/settings/source-control'
     | '/'
     | '/$environmentId/$threadId'
@@ -233,18 +200,15 @@ export interface FileRouteTypes {
     | '/_chat'
     | '/activity'
     | '/plugins'
-    | '/automations'
     | '/settings'
     | '/settings/archived'
     | '/settings/diagnostics'
     | '/settings/general'
     | '/settings/instructions'
     | '/settings/keybindings'
-    | '/settings/machines'
     | '/settings/memory'
     | '/settings/models'
     | '/settings/personalize'
-    | '/settings/profile'
     | '/settings/source-control'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
@@ -255,7 +219,6 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRouteWithChildren
   ActivityRoute: typeof ActivityRoute
   PluginsRoute: typeof PluginsRoute
-  AutomationsRoute: typeof AutomationsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
 }
 
@@ -282,13 +245,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/automations': {
-      id: '/automations'
-      path: '/automations'
-      fullPath: '/automations'
-      preLoaderRoute: typeof AutomationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_chat': {
       id: '/_chat'
       path: ''
@@ -310,13 +266,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsSourceControlRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/profile': {
-      id: '/settings/profile'
-      path: '/profile'
-      fullPath: '/settings/profile'
-      preLoaderRoute: typeof SettingsProfileRouteImport
-      parentRoute: typeof SettingsRoute
-    }
     '/settings/personalize': {
       id: '/settings/personalize'
       path: '/personalize'
@@ -336,13 +285,6 @@ declare module '@tanstack/react-router' {
       path: '/memory'
       fullPath: '/settings/memory'
       preLoaderRoute: typeof SettingsMemoryRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/machines': {
-      id: '/settings/machines'
-      path: '/machines'
-      fullPath: '/settings/machines'
-      preLoaderRoute: typeof SettingsMachinesRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/keybindings': {
@@ -417,11 +359,9 @@ interface SettingsRouteChildren {
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsInstructionsRoute: typeof SettingsInstructionsRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
-  SettingsMachinesRoute: typeof SettingsMachinesRoute
   SettingsMemoryRoute: typeof SettingsMemoryRoute
   SettingsModelsRoute: typeof SettingsModelsRoute
   SettingsPersonalizeRoute: typeof SettingsPersonalizeRoute
-  SettingsProfileRoute: typeof SettingsProfileRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
 }
 
@@ -431,11 +371,9 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsInstructionsRoute: SettingsInstructionsRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
-  SettingsMachinesRoute: SettingsMachinesRoute,
   SettingsMemoryRoute: SettingsMemoryRoute,
   SettingsModelsRoute: SettingsModelsRoute,
   SettingsPersonalizeRoute: SettingsPersonalizeRoute,
-  SettingsProfileRoute: SettingsProfileRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
 }
 
@@ -447,7 +385,6 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ActivityRoute: ActivityRoute,
   PluginsRoute: PluginsRoute,
-  AutomationsRoute: AutomationsRoute,
   SettingsRoute: SettingsRouteWithChildren,
 }
 export const routeTree = rootRouteImport

@@ -48,7 +48,6 @@ describe("mobile provider options", () => {
         subactions: [
           { title: "Medium (default)", state: "on" },
           { title: "High", state: undefined },
-          { title: "Ultra", state: undefined },
         ],
       },
       {

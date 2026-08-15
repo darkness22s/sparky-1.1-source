@@ -1274,58 +1274,6 @@ describe("deriveWorkLogEntries", () => {
     expect(entry?.detail).toBeUndefined();
   });
 
-  it("retains reconnect diagnostics for expandable dynamic tool rows", () => {
-    const [entry] = deriveWorkLogEntries([
-      makeActivity({
-        id: "reconnect-failed",
-        kind: "tool.completed",
-        summary: "Reconnect failed",
-        payload: {
-          itemType: "dynamic_tool_call",
-          status: "failed",
-          title: "Reconnect failed",
-          data: {
-            provider: "sparky",
-            retryCount: 5,
-            maxRetries: 5,
-            errorTag: "ProviderAdapterProcessError",
-            reason: "The provider request timed out.",
-          },
-        },
-      }),
-    ]);
-
-    expect(entry).toMatchObject({
-      itemType: "dynamic_tool_call",
-      toolData: {
-        provider: "sparky",
-        retryCount: 5,
-        maxRetries: 5,
-        errorTag: "ProviderAdapterProcessError",
-        reason: "The provider request timed out.",
-      },
-    });
-  });
-
-  it("shows runtime errors as expandable inline detail", () => {
-    const [entry] = deriveWorkLogEntries([
-      makeActivity({
-        id: "runtime-error-inline",
-        kind: "runtime.error",
-        summary: "Runtime error",
-        tone: "error",
-        payload: { message: "The provider request timed out." },
-        turnId: "turn-inline-error",
-      }),
-    ]);
-
-    expect(entry).toMatchObject({
-      tone: "error",
-      sourceActivityKind: "runtime.error",
-      detail: "The provider request timed out.",
-    });
-  });
-
   it("uses grep raw output summaries instead of repeating the generic tool label", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -1782,13 +1730,10 @@ describe("isLatestTurnSettled", () => {
 
   it("treats a warm reusable running session with no active turn as settled", () => {
     expect(
-      isLatestTurnSettled(
-        latestTurn,
-        makeTestSession({
-          status: "running",
-          activeTurnId: null,
-        }),
-      ),
+      isLatestTurnSettled(latestTurn, {
+        status: "running",
+        activeTurnId: null,
+      }),
     ).toBe(true);
   });
 

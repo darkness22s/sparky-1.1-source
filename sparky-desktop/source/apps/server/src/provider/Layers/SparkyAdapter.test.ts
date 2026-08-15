@@ -10,7 +10,6 @@ import {
   type ProviderSession,
 } from "@sparky/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId } from "@sparky/contracts";
 
 import {
   makeSparkyAssistantSegmenter,
@@ -359,18 +358,6 @@ describe("makeSparkyAssistantSegmenter", () => {
 });
 
 describe("Sparky session continuity", () => {
-  it("uses the provider-native text-only path for metadata generation", () => {
-    const args = makeSparkyProcessArgs({
-      cwd: "C:\\workspace",
-      prompt: "Name this thread",
-      model: "openai-codex/gpt-5.6-sol",
-      textOnly: true,
-    });
-
-    expect(args).toContain("--text-only");
-    expect(args).not.toContain("--session");
-  });
-
   it("passes saved custom instructions into the Sparky runtime", () => {
     const args = makeSparkyProcessArgs({
       cwd: "C:\\workspace",

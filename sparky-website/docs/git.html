@@ -16,7 +16,7 @@
   <div class="docs-layout">
 <aside class="docs-sidebar">
       <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
-        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li><li><a href="release-1.1.2.html">What's New in 1.1.2</a></li><li><a href="memory.html">Memory</a></li></ul>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
       </div>
       <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
         <ul class="docs-nav-items"><li><a href="read-edit.html">Read & Edit Files</a></li>
@@ -33,13 +33,13 @@
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
+        <div class="docs-page-tag">TOOLS</div>
         <h1>Git Operations</h1>
-        <p>Inspect changes, review diffs, and request narrowly scoped branch, commit, and remote operations without losing unrelated work.</p>
+        <p>Stage changes, commit, push, pull, switch branches. Works with GitHub, GitLab, or your own Git server.</p>
       </div>
 
 <h2 id="how-it-works">How it works</h2>
 <p>Sparky interacts with git through the terminal. It can read the status, stage files, create commits, push, pull, and switch branches.</p>
-<p>Git actions affect the repository, not only the current conversation. Name the intended branch, files, remote, and commit scope when they matter. Authentication still comes from the Git configuration and credentials available on your machine.</p>
 
 <h2 id="common-operations">Common operations</h2>
 <div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Example prompts</span></div><div class="docs-code-body"><span class="cmd">"What files have changed?"</span><br>
@@ -52,18 +52,6 @@
 <div class="docs-code-block"><div class="docs-code-header"><span class="docs-code-label">Example prompts</span></div><div class="docs-code-body"><span class="cmd">"Review the changes in my current branch"</span><br>
 <span class="cmd">"Look for security issues in staged files"</span></div></div>
 
-<h2 id="safe-worktree">Protect the working tree</h2>
-<ul>
-<li>Ask Sparky to run <code>git status</code> before editing or staging in a repository that may already be dirty.</li>
-<li>Stage only the files that belong to the requested change when unrelated modifications are present.</li>
-<li>Review the staged diff before committing; the working-tree diff and staged diff can differ.</li>
-<li>Avoid destructive reset, clean, checkout, rebase, or force-push operations unless the exact target and consequence are intentional.</li>
-<li>Resolve a non-fast-forward push by inspecting history first. Do not treat force-pushing as the automatic solution.</li>
-</ul>
-
-<h2 id="verification">Verify before publishing</h2>
-<p>Run the focused tests or build appropriate to the change, inspect the final diff, and confirm the current branch and remote destination. A successful commit only records content locally; a successful push only transfers commits. Neither proves deployment or release completion.</p>
-
 <div class="docs-next"><h3>Next steps</h3><ul>
 <li><a href="read-edit.html">Read & Edit Files</a> — modify before committing</li>
 <li><a href="terminal.html">Terminal Commands</a> — run git directly</li>
@@ -75,8 +63,6 @@
       <ul class="docs-toc-list"><li><a href="#how-it-works">How it works</a></li>
 <li><a href="#common-operations">Common operations</a></li>
 <li><a href="#code-review">Code review</a></li>
-<li><a href="#safe-worktree">Protect the working tree</a></li>
-<li><a href="#verification">Verify before publishing</a></li>
 </ul>
     </aside>
   </div>

@@ -2048,7 +2048,6 @@ dependencies = [
  "base64",
  "clap",
  "dotenvy",
- "futures",
  "serde",
  "serde_json",
  "sparky_agent",

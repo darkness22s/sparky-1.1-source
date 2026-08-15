@@ -23,7 +23,6 @@ import {
 } from "@sparky/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Duration from "effect/Duration";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as PubSub from "effect/PubSub";
@@ -216,29 +215,12 @@ describe("ProviderCommandReactor", () => {
       runtimeSessions.push(session);
       return Effect.succeed(session);
     });
-    const sendTurn = vi.fn((_: unknown) => {
-      const turnId = asTurnId("turn-1");
-      // The reactor now waits for a terminal provider event before asking
-      // the provider for a metadata title. Mirror that lifecycle in the
-      // harness so title tests do not rely on a timing race.
-      return Effect.sleep(Duration.millis(1)).pipe(
-        Effect.andThen(
-          PubSub.publish(runtimeEventPubSub, {
-            eventId: EventId.make("evt-provider-turn-completed"),
-            provider: ProviderDriverKind.make("codex"),
-            threadId: ThreadId.make("thread-1"),
-            turnId,
-            createdAt: now,
-            type: "turn.completed",
-            payload: { state: "completed" },
-          } satisfies ProviderRuntimeEvent),
-        ),
-        Effect.as({
-          threadId: ThreadId.make("thread-1"),
-          turnId,
-        }),
-      );
-    });
+    const sendTurn = vi.fn((_: unknown) =>
+      Effect.succeed({
+        threadId: ThreadId.make("thread-1"),
+        turnId: asTurnId("turn-1"),
+      }),
+    );
     const interruptTurn = vi.fn((_: unknown) => Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
@@ -520,10 +502,6 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
     expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
       message: "Please investigate reconnect failures after restarting the session.",
-      modelSelection: {
-        instanceId: ProviderInstanceId.make("codex"),
-        model: "gpt-5-codex",
-      },
     });
 
     await waitFor(async () => {
@@ -574,45 +552,6 @@ describe("ProviderCommandReactor", () => {
       return (
         readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
         "Generated from text"
-      );
-    });
-  });
-
-  it("uses the first message as a safe fallback when title generation fails", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.meta.update",
-        commandId: CommandId.make("cmd-thread-title-fallback"),
-        threadId: ThreadId.make("thread-1"),
-        title: "New thread",
-      }),
-    );
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-title-fallback"),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("user-message-title-fallback"),
-          role: "user",
-          text: "Fix the reconnect spinner after restarting the app.",
-          attachments: [],
-        },
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        createdAt: now,
-      }),
-    );
-
-    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
-    await waitFor(async () => {
-      const readModel = await harness.readModel();
-      return (
-        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
-        "Fix the reconnect"
       );
     });
   });
@@ -699,13 +638,13 @@ describe("ProviderCommandReactor", () => {
       const readModel = await harness.readModel();
       return (
         readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
-        "Reconnect spinner resume"
+        "Reconnect spinner resume bug"
       );
     });
 
     const readModel = await harness.readModel();
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    expect(thread?.title).toBe("Reconnect spinner resume");
+    expect(thread?.title).toBe("Reconnect spinner resume bug");
   });
 
   it("generates a worktree branch name for the first turn", async () => {

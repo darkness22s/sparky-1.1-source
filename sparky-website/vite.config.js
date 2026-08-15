@@ -18,7 +18,7 @@ const defaultDescription =
   "Sparky is a desktop coding agent for planning, editing, running, and reviewing real software work.";
 const pageSeo = {
   "index.html": {
-    title: "Sparky - Your full AI Coding workspace",
+    title: "Sparky - The desktop coding agent",
     description:
       "Sparky is a focused desktop coding agent that plans, edits, runs, and reviews real work across your projects.",
   },
@@ -57,19 +57,9 @@ const pageSeo = {
     title: "Sparky Docs - Quickstart",
     description: "Set up Sparky and start your first desktop coding agent session.",
   },
-  "docs/release-1.1.2.html": {
-    title: "What's New in Sparky 1.1.2 - Complete App Guide",
-    description:
-      "A detailed cross-platform guide to Sparky 1.1.2, including Memory, sessions, Plan mode, images, tools, streaming, notifications, search, and preview.",
-  },
-  "docs/memory.html": {
-    title: "Sparky Docs - Persistent Memory",
-    description:
-      "Create, scope, search, edit, and troubleshoot global and project memories in Sparky 1.1.2.",
-  },
   "docs/models.html": {
-    title: "Sparky Docs - Models and providers",
-    description: "Connect AI providers and understand provider-authoritative model, context, reasoning, image, and OAuth capabilities in Sparky.",
+    title: "Sparky Docs - Supported models",
+    description: "Review the AI model options available in Sparky and how to choose one for your work.",
   },
   "docs/sessions.html": {
     title: "Sparky Docs - Sessions and threads",

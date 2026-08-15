@@ -17,10 +17,6 @@ export const StreamingTextAnimation = Schema.Literals(["lift", "words"]);
 export type StreamingTextAnimation = typeof StreamingTextAnimation.Type;
 export const DEFAULT_STREAMING_TEXT_ANIMATION: StreamingTextAnimation = "lift";
 
-export const ModelSelectorStyle = Schema.Literals(["menu", "slider"]);
-export type ModelSelectorStyle = typeof ModelSelectorStyle.Type;
-export const DEFAULT_MODEL_SELECTOR_STYLE: ModelSelectorStyle = "menu";
-
 export const SidebarProjectSortOrder = Schema.Literals(["updated_at", "created_at", "manual"]);
 export type SidebarProjectSortOrder = typeof SidebarProjectSortOrder.Type;
 export const DEFAULT_SIDEBAR_PROJECT_SORT_ORDER: SidebarProjectSortOrder = "updated_at";
@@ -51,8 +47,6 @@ export const ClientSettingsSchema = Schema.Struct({
   onboardingCompleted: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   onboardingUseCase: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   cloudDataSharingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  profileName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("Your profile"))),
-  profileImage: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -106,9 +100,6 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   streamingTextAnimation: StreamingTextAnimation.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_STREAMING_TEXT_ANIMATION)),
-  ),
-  modelSelectorStyle: ModelSelectorStyle.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_MODEL_SELECTOR_STYLE)),
   ),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
@@ -393,27 +384,6 @@ export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 export const SparkyPersonality = Schema.Literals(["coding", "everyday"]);
 export type SparkyPersonality = typeof SparkyPersonality.Type;
 
-const PositiveCheckpointInteger = Schema.Int.check(Schema.isGreaterThan(0));
-export const CheckpointSettings = Schema.Struct({
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  maximumCheckpointsPerProject: PositiveCheckpointInteger.pipe(
-    Schema.withDecodingDefault(Effect.succeed(200)),
-  ),
-  maximumTotalStorageBytes: PositiveCheckpointInteger.pipe(
-    Schema.withDecodingDefault(Effect.succeed(10 * 1024 * 1024 * 1024)),
-  ),
-  maximumFileSizeBytes: PositiveCheckpointInteger.pipe(
-    Schema.withDecodingDefault(Effect.succeed(50 * 1024 * 1024)),
-  ),
-  ignoredPaths: Schema.Array(TrimmedNonEmptyString).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  beforeTerminalCommands: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  afterTerminalCommands: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  automaticCleanup: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-});
-export type CheckpointSettings = typeof CheckpointSettings.Type;
-
 export const ServerSettings = Schema.Struct({
   customInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   sparkyPersonality: SparkyPersonality.pipe(
@@ -423,8 +393,6 @@ export const ServerSettings = Schema.Struct({
   // Buffered delivery makes the final segment appear to be missing until the
   // user interrupts or the provider emits turn.completed.
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  enableImageView: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  checkpoints: CheckpointSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -565,23 +533,11 @@ const OpenCodeSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
-const CheckpointSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  maximumCheckpointsPerProject: Schema.optionalKey(PositiveCheckpointInteger),
-  maximumTotalStorageBytes: Schema.optionalKey(PositiveCheckpointInteger),
-  maximumFileSizeBytes: Schema.optionalKey(PositiveCheckpointInteger),
-  ignoredPaths: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
-  beforeTerminalCommands: Schema.optionalKey(Schema.Boolean),
-  afterTerminalCommands: Schema.optionalKey(Schema.Boolean),
-  automaticCleanup: Schema.optionalKey(Schema.Boolean),
-});
-
 export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   customInstructions: Schema.optionalKey(TrimmedString),
   sparkyPersonality: Schema.optionalKey(SparkyPersonality),
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
-  enableImageView: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
@@ -616,8 +572,6 @@ export const ClientSettingsPatch = Schema.Struct({
   onboardingCompleted: Schema.optionalKey(Schema.Boolean),
   onboardingUseCase: Schema.optionalKey(TrimmedString),
   cloudDataSharingEnabled: Schema.optionalKey(Schema.Boolean),
-  profileName: Schema.optionalKey(TrimmedString),
-  profileImage: Schema.optionalKey(TrimmedString),
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
