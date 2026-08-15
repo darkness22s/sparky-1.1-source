@@ -204,6 +204,7 @@ import {
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
+import type { QueuedComposerMessage, QueuedMessageSendRequest } from "./chat/steeringQueue";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -269,6 +270,12 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+const revokeQueuedMessageImages = (message: QueuedComposerMessage) => {
+  for (const image of message.images) {
+    revokeBlobPreviewUrl(image.previewUrl);
+  }
+};
+
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -1199,6 +1206,12 @@ function ChatViewContent(props: ChatViewProps) {
   const composerRef = useComposerHandleContext() ?? localComposerRef;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedComposerMessage[]>([]);
+  const queuedMessagesRef = useRef<QueuedComposerMessage[]>([]);
+  const queuedMessagesThreadKeyRef = useRef(routeThreadKey);
+  const queuedAutoBlockedMessageIdsRef = useRef(new Set<string>());
+  queuedMessagesRef.current = queuedMessages;
+  const queuedDispatchInFlightRef = useRef(false);
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
@@ -4100,22 +4113,31 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
-  const onSend = async (e?: { preventDefault: () => void }) => {
+  const onSend = async (
+    e?: { preventDefault: () => void },
+    request?: QueuedMessageSendRequest,
+  ): Promise<boolean> => {
     e?.preventDefault();
-    if (
-      !activeThread ||
-      isSendBusy ||
-      isConnecting ||
-      activeEnvironmentUnavailable ||
-      sendInFlightRef.current
-    )
-      return;
-    if (activePendingProgress) {
-      onAdvanceActivePendingUserInput();
-      return;
+    const queuedMessage = request?.queuedMessage ?? null;
+    if (!activeThread || isConnecting || activeEnvironmentUnavailable || sendInFlightRef.current) {
+      return false;
     }
-    const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx) return;
+    if (
+      queuedMessage &&
+      ((request?.mode === "steer" && phase !== "running") ||
+        (request?.mode === "auto" && phase === "running"))
+    ) {
+      return false;
+    }
+    if (activePendingProgress && !queuedMessage) {
+      onAdvanceActivePendingUserInput();
+      return true;
+    }
+    if (isSendBusy && (queuedMessage || phase !== "running")) {
+      return false;
+    }
+    const sendCtx = queuedMessage ?? composerRef.current?.getSendContext();
+    if (!sendCtx) return false;
     const {
       images: composerImages,
       terminalContexts: composerTerminalContexts,
@@ -4127,8 +4149,11 @@ function ChatViewContent(props: ChatViewProps) {
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
+      selectedModelOptionsForDispatch: ctxSelectedModelOptionsForDispatch,
+      runtimeMode: ctxRuntimeMode,
+      interactionMode: ctxInteractionMode,
     } = sendCtx;
-    const promptForSend = promptRef.current;
+    const promptForSend = queuedMessage?.prompt ?? promptRef.current;
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -4143,7 +4168,7 @@ function ChatViewContent(props: ChatViewProps) {
         composerPreviewAnnotations.length +
         composerReviewComments.length,
     });
-    if (showPlanFollowUpPrompt && activeProposedPlan) {
+    if (!queuedMessage && showPlanFollowUpPrompt && activeProposedPlan) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
         planMarkdown: activeProposedPlan.planMarkdown,
@@ -4155,7 +4180,7 @@ function ChatViewContent(props: ChatViewProps) {
         text: followUp.text,
         interactionMode: followUp.interactionMode,
       });
-      return;
+      return true;
     }
     const standaloneSlashCommand =
       composerImages.length === 0 &&
@@ -4170,7 +4195,7 @@ function ChatViewContent(props: ChatViewProps) {
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
-      return;
+      return true;
     }
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
@@ -4186,7 +4211,7 @@ function ChatViewContent(props: ChatViewProps) {
           }),
         );
       }
-      return;
+      return false;
     }
     if (!activeProject) {
       toastManager.add(
@@ -4196,7 +4221,33 @@ function ChatViewContent(props: ChatViewProps) {
           description: "This draft no longer points to an available project.",
         }),
       );
-      return;
+      return false;
+    }
+    if (phase === "running" && queuedMessage === null) {
+      const queued: QueuedComposerMessage = {
+        id: newMessageId(),
+        createdAt: new Date().toISOString(),
+        prompt: promptForSend,
+        images: [...composerImages],
+        terminalContexts: [...sendableComposerTerminalContexts],
+        elementContexts: [...composerElementContexts],
+        previewAnnotations: [...composerPreviewAnnotations],
+        reviewComments: [...composerReviewComments],
+        selectedPromptEffort: ctxSelectedPromptEffort,
+        selectedModelOptionsForDispatch: ctxSelectedModelOptionsForDispatch,
+        selectedModelSelection: ctxSelectedModelSelection,
+        selectedProvider: ctxSelectedProvider,
+        selectedModel: ctxSelectedModel,
+        selectedProviderModels: [...ctxSelectedProviderModels],
+        runtimeMode: ctxRuntimeMode,
+        interactionMode: ctxInteractionMode,
+      };
+      queuedMessagesThreadKeyRef.current = routeThreadKey;
+      setQueuedMessages((existing) => [...existing, queued]);
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return true;
     }
     const threadIdForSend = activeThread.id;
     if (import.meta.env.VITE_SPARKY_DEMO === "true") {
@@ -4233,7 +4284,7 @@ function ChatViewContent(props: ChatViewProps) {
           },
         ]);
       }, 500);
-      return;
+      return true;
     }
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
@@ -4247,7 +4298,7 @@ function ChatViewContent(props: ChatViewProps) {
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath;
     if (shouldCreateWorktree && !activeThreadBranch) {
       setThreadError(threadIdForSend, "Select a base branch before sending in New worktree mode.");
-      return;
+      return false;
     }
 
     sendInFlightRef.current = true;
@@ -4352,9 +4403,11 @@ function ChatViewContent(props: ChatViewProps) {
         }),
       );
     }
-    promptRef.current = "";
-    clearComposerDraftContent(composerDraftTarget);
-    composerRef.current?.resetCursorState();
+    if (!queuedMessage) {
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+    }
 
     let firstComposerImageName: string | null = null;
     if (composerImagesSnapshot.length > 0) {
@@ -4402,8 +4455,8 @@ function ChatViewContent(props: ChatViewProps) {
         threadId: threadIdForSend,
         createdAt: messageCreatedAt,
         ...(ctxSelectedModel ? { modelSelection: ctxSelectedModelSelection } : {}),
-        runtimeMode,
-        interactionMode,
+        runtimeMode: ctxRuntimeMode,
+        interactionMode: ctxInteractionMode,
       });
       if (settingsResult._tag === "Failure") {
         failure = settingsResult;
@@ -4426,8 +4479,8 @@ function ChatViewContent(props: ChatViewProps) {
                       projectId: activeProject.id,
                       title,
                       modelSelection: threadCreateModelSelection,
-                      runtimeMode,
-                      interactionMode,
+                      runtimeMode: ctxRuntimeMode,
+                      interactionMode: ctxInteractionMode,
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
                       createdAt: activeThread.createdAt,
@@ -4460,8 +4513,8 @@ function ChatViewContent(props: ChatViewProps) {
           },
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
-          runtimeMode,
-          interactionMode,
+          runtimeMode: ctxRuntimeMode,
+          interactionMode: ctxInteractionMode,
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
         },
@@ -4474,7 +4527,13 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     if (failure !== null) {
+      if (queuedMessage) {
+        setOptimisticUserMessages((existing) =>
+          existing.filter((message) => message.id !== messageIdForSend),
+        );
+      }
       if (
+        queuedMessage === null &&
         promptRef.current.length === 0 &&
         composerImagesRef.current.length === 0 &&
         composerTerminalContextsRef.current.length === 0 &&
@@ -4524,7 +4583,126 @@ function ChatViewContent(props: ChatViewProps) {
       );
       resetLocalDispatch();
     }
+    return turnStartSucceeded;
   };
+
+  const revokeQueuedMessageImages = (message: QueuedComposerMessage) => {
+    for (const image of message.images) {
+      revokeBlobPreviewUrl(image.previewUrl);
+    }
+  };
+
+  const onDeleteQueuedMessage = useCallback((messageId: string) => {
+    setQueuedMessages((existing) => {
+      const message = existing.find((candidate) => candidate.id === messageId);
+      if (!message) return existing;
+      queuedAutoBlockedMessageIdsRef.current.delete(messageId);
+      revokeQueuedMessageImages(message);
+      return existing.filter((candidate) => candidate.id !== messageId);
+    });
+  }, []);
+
+  const sendQueuedMessage = useCallback(
+    async (messageId: string, mode: "auto" | "steer") => {
+      if (queuedDispatchInFlightRef.current) return;
+      if (mode === "steer") {
+        if (
+          phase !== "running" ||
+          isSendBusy ||
+          isConnecting ||
+          activePendingApproval ||
+          activePendingUserInput
+        ) {
+          return;
+        }
+      } else if (
+        phase === "running" ||
+        isSendBusy ||
+        isConnecting ||
+        activePendingApproval ||
+        activePendingUserInput
+      ) {
+        return;
+      }
+
+      const message = queuedMessagesRef.current.find((candidate) => candidate.id === messageId);
+      if (!message) return;
+      if (mode === "auto" && queuedAutoBlockedMessageIdsRef.current.has(messageId)) return;
+      queuedDispatchInFlightRef.current = true;
+      setQueuedMessages((existing) => existing.filter((candidate) => candidate.id !== messageId));
+      try {
+        const sent = await onSend(undefined, { queuedMessage: message, mode });
+        if (sent) {
+          queuedAutoBlockedMessageIdsRef.current.delete(messageId);
+        } else {
+          if (mode === "auto") {
+            queuedAutoBlockedMessageIdsRef.current.add(messageId);
+          }
+          setQueuedMessages((existing) =>
+            existing.some((candidate) => candidate.id === message.id)
+              ? existing
+              : [message, ...existing],
+          );
+        }
+      } finally {
+        queuedDispatchInFlightRef.current = false;
+      }
+    },
+    [activePendingApproval, activePendingUserInput, isConnecting, isSendBusy, onSend, phase],
+  );
+
+  useEffect(() => {
+    if (queuedMessages.length === 0) return;
+    if (queuedMessagesThreadKeyRef.current !== routeThreadKey) return;
+    if (
+      phase === "running" ||
+      isSendBusy ||
+      isConnecting ||
+      activePendingApproval ||
+      activePendingUserInput
+    ) {
+      return;
+    }
+    const nextMessage = queuedMessages[0];
+    if (nextMessage) {
+      void sendQueuedMessage(nextMessage.id, "auto");
+    }
+  }, [
+    activePendingApproval,
+    activePendingUserInput,
+    isConnecting,
+    isSendBusy,
+    phase,
+    queuedMessages,
+    routeThreadKey,
+    sendQueuedMessage,
+  ]);
+
+  const onSteerQueuedMessage = useCallback(
+    (messageId: string) => {
+      void sendQueuedMessage(messageId, "steer");
+    },
+    [sendQueuedMessage],
+  );
+
+  useEffect(() => {
+    return () => {
+      for (const message of queuedMessagesRef.current) {
+        revokeQueuedMessageImages(message);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    queuedMessagesThreadKeyRef.current = routeThreadKey;
+    queuedAutoBlockedMessageIdsRef.current.clear();
+    setQueuedMessages((existing) => {
+      for (const message of existing) {
+        revokeQueuedMessageImages(message);
+      }
+      return [];
+    });
+  }, [routeThreadKey]);
 
   const onInterrupt = async () => {
     if (!activeThread) return;
@@ -5538,7 +5716,17 @@ function ChatViewContent(props: ChatViewProps) {
                         composerImagesRef={composerImagesRef}
                         composerTerminalContextsRef={composerTerminalContextsRef}
                         composerElementContextsRef={composerElementContextsRef}
+                        queuedMessages={queuedMessages}
+                        queuedMessageSteerDisabled={
+                          phase !== "running" ||
+                          isSendBusy ||
+                          isConnecting ||
+                          activePendingApproval !== null ||
+                          activePendingUserInput !== null
+                        }
                         onSend={onSend}
+                        onSteerQueuedMessage={onSteerQueuedMessage}
+                        onDeleteQueuedMessage={onDeleteQueuedMessage}
                         onInterrupt={onInterrupt}
                         onImplementPlanInNewThread={onImplementPlanInNewThread}
                         onRespondToApproval={onRespondToApproval}
