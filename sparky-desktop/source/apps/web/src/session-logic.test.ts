@@ -1784,7 +1784,7 @@ describe("isLatestTurnSettled", () => {
     expect(
       isLatestTurnSettled(
         latestTurn,
-        makeSession({
+        makeTestSession({
           status: "running",
           activeTurnId: null,
         }),
