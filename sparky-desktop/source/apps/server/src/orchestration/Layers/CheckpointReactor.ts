@@ -130,6 +130,16 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
   }
 }
 
+const READ_ONLY_TOOL_NAMES = new Set([
+  "read",
+  "grep",
+  "find",
+  "ls",
+  "web_search",
+  "preview_snapshot",
+  "preview_status",
+]);
+
 function potentiallyMutatingToolEvent(
   event: Extract<ProviderRuntimeEvent, { type: "item.started" | "item.completed" }>,
 ): boolean {

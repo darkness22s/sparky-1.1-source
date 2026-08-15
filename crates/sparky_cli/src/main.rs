@@ -1,11 +1,9 @@
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use clap::Parser;
-use futures::StreamExt;
 use sparky_agent::{AgentLoop, AgentLoopOptions, InteractionMode};
 use sparky_ai::{
     codex_auth_status, login_codex, logout_codex, AnthropicProvider, AssistantMessageEvent,
-    CodexProvider, CompletionOptions, ContentPart, GeminiProvider, LlmProvider, Message,
-    OpenAiProvider,
+    CodexProvider, ContentPart, GeminiProvider, LlmProvider, OpenAiProvider,
 };
 use sparky_config::DEFAULT_CONTEXT_WINDOW_TOKENS;
 use sparky_extensions::{EventBus, JsExtensionRunner, SparkyEvent};
@@ -43,13 +41,6 @@ struct Cli {
 
     #[arg(long = "image-mime-type", value_name = "MIME")]
     image_mime_types: Vec<String>,
-
-    #[arg(
-        long,
-        hide = true,
-        help = "Run one provider-native text generation without agent tools or session state"
-    )]
-    text_only: bool,
 
     #[arg(long, help = "Reasoning effort for models that support it")]
     effort: Option<String>,
@@ -197,89 +188,6 @@ fn write_stream_event(event: &AssistantMessageEvent) {
         }
         _ => {}
     }
-}
-
-async fn run_text_only(provider: Arc<dyn LlmProvider>, cli: &Cli) -> anyhow::Result<()> {
-    let prompt = if cli.prompt_stdin {
-        let mut prompt = String::new();
-        tokio::io::stdin().read_to_string(&mut prompt).await?;
-        anyhow::ensure!(!prompt.trim().is_empty(), "Prompt stdin was empty");
-        prompt
-    } else {
-        cli.prompt.clone().unwrap_or_default()
-    };
-    anyhow::ensure!(!prompt.trim().is_empty(), "Prompt was empty");
-
-    let messages = vec![
-        Message::system(
-            "You are Sparky's concise text-generation helper. Follow the requested output format exactly. Do not use tools or explain your work.",
-        ),
-        Message::user(prompt),
-    ];
-    let options = CompletionOptions {
-        model: cli.model.clone(),
-        temperature: Some(0.2),
-        max_tokens: Some(64),
-        reasoning_effort: cli.effort.clone(),
-        tools: Vec::new(),
-        ..Default::default()
-    };
-    let mut stream = provider.stream(&messages, &options).await?;
-    let mut response = String::new();
-
-    while let Some(event) = stream.next().await {
-        match event {
-            AssistantMessageEvent::TextDelta(delta) => {
-                if cli.json_stream {
-                    write_json_line(serde_json::json!({
-                        "type": "delta",
-                        "delta": delta,
-                    }));
-                }
-                response.push_str(&delta);
-            }
-            AssistantMessageEvent::ThinkingDelta(delta) => {
-                if cli.json_stream {
-                    write_json_line(serde_json::json!({
-                        "type": "thinking_delta",
-                        "delta": delta,
-                    }));
-                }
-            }
-            AssistantMessageEvent::Done { usage } => {
-                if cli.json_stream {
-                    if let Some(usage) = usage {
-                        write_json_line(serde_json::json!({
-                            "type": "usage",
-                            "promptTokens": usage.prompt_tokens,
-                            "completionTokens": usage.completion_tokens,
-                            "totalTokens": usage.total_tokens,
-                            "cumulativeTotalTokens": usage.total_tokens,
-                        }));
-                    }
-                }
-            }
-            AssistantMessageEvent::Error(error) => anyhow::bail!(error),
-            AssistantMessageEvent::ToolCallDelta { .. }
-            | AssistantMessageEvent::ProviderState(_) => {}
-        }
-    }
-
-    anyhow::ensure!(
-        !response.trim().is_empty(),
-        "Provider returned an empty text-generation response"
-    );
-    if cli.json_stream {
-        write_json_line(serde_json::json!({
-            "type": "result",
-            "response": response,
-        }));
-    } else if cli.json {
-        println!("{}", serde_json::json!({ "response": response }));
-    } else {
-        println!("{}", response);
-    }
-    Ok(())
 }
 
 struct ProgressIndicator {
@@ -469,11 +377,6 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(OpenAiProvider::new(key, cli.base_url.clone()))
         }
     };
-
-    if cli.text_only {
-        run_text_only(provider, &cli).await?;
-        return Ok(());
-    }
 
     let memory_store = std::sync::Arc::new(tokio::sync::Mutex::new(
         MemoryStore::load(&cli.cwd, None).await?,

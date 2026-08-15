@@ -74,7 +74,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
     readonly developmentDockIconPath: string;
   }
->()("@sparky/desktop/app/DesktopEnvironment") {}
+>()("@t3tools/desktop/app/DesktopEnvironment") {}
 
 const APP_BASE_NAME = "Sparky";
 
@@ -152,9 +152,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const configuredBaseDir = config.t3Home;
   const baseDir = Option.getOrElse(configuredBaseDir, () => path.join(homeDirectory, ".sparky"));
   const rootDir = path.resolve(input.dirname, "../../..");
-  const appRoot = input.isPackaged
-    ? input.appPath
-    : Option.getOrElse(config.desktopAppRoot, () => rootDir);
+  const appRoot = input.isPackaged ? input.appPath : rootDir;
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
@@ -190,12 +188,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     browserArtifactsDir: path.join(stateDir, "browser-artifacts"),
     rootDir,
     appRoot,
-    backendEntryPath: Option.getOrElse(config.desktopBackendEntry, () =>
-      path.join(appRoot, "apps/server/dist/bin.mjs"),
-    ),
-    backendCwd: input.isPackaged
-      ? homeDirectory
-      : Option.getOrElse(config.desktopBackendCwd, () => appRoot),
+    backendEntryPath: path.join(appRoot, "apps/server/dist/bin.mjs"),
+    backendCwd: input.isPackaged ? homeDirectory : appRoot,
     preloadPath: path.join(input.dirname, "preload.cjs"),
     appUpdateYmlPath: input.isPackaged
       ? path.join(resourcesPath, "app-update.yml")

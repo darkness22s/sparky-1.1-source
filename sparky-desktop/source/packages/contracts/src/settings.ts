@@ -51,8 +51,6 @@ export const ClientSettingsSchema = Schema.Struct({
   onboardingCompleted: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   onboardingUseCase: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   cloudDataSharingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  profileName: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("Your profile"))),
-  profileImage: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -423,7 +421,6 @@ export const ServerSettings = Schema.Struct({
   // Buffered delivery makes the final segment appear to be missing until the
   // user interrupts or the provider emits turn.completed.
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  enableImageView: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   checkpoints: CheckpointSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -581,7 +578,7 @@ export const ServerSettingsPatch = Schema.Struct({
   customInstructions: Schema.optionalKey(TrimmedString),
   sparkyPersonality: Schema.optionalKey(SparkyPersonality),
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
-  enableImageView: Schema.optionalKey(Schema.Boolean),
+  checkpoints: Schema.optionalKey(CheckpointSettingsPatch),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
@@ -616,8 +613,6 @@ export const ClientSettingsPatch = Schema.Struct({
   onboardingCompleted: Schema.optionalKey(Schema.Boolean),
   onboardingUseCase: Schema.optionalKey(TrimmedString),
   cloudDataSharingEnabled: Schema.optionalKey(Schema.Boolean),
-  profileName: Schema.optionalKey(TrimmedString),
-  profileImage: Schema.optionalKey(TrimmedString),
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),

@@ -25,9 +25,6 @@ import { mergeGitStatusParts } from "@sparky/shared/git";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 
 const DEFAULT_VCS_STATUS_REFRESH_INTERVAL = Duration.seconds(30);
-// Upstream fetches are opt-in. The desktop can still refresh explicitly, but
-// a background network Git fetch must not compete with an active agent turn.
-const DEFAULT_AUTOMATIC_REMOTE_REFRESH_INTERVAL = Duration.zero;
 const VCS_STATUS_REFRESH_FAILURE_BASE_DELAY = Duration.seconds(30);
 const VCS_STATUS_REFRESH_FAILURE_MAX_DELAY = Duration.minutes(15);
 const MAX_FAILURE_DIAGNOSTIC_VALUES = 8;
@@ -515,7 +512,7 @@ export const make = Effect.gen(function* () {
         yield* retainRemotePoller(
           cwd,
           options?.automaticRemoteRefreshInterval ??
-            Effect.succeed(DEFAULT_AUTOMATIC_REMOTE_REFRESH_INTERVAL),
+            Effect.succeed(DEFAULT_VCS_STATUS_REFRESH_INTERVAL),
           cachedStatus?.remote === null || cachedStatus?.remote === undefined,
         );
 

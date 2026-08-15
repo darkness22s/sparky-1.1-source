@@ -16,8 +16,6 @@ import {
   WS_METHODS,
 } from "@sparky/contracts";
 import {
-  RelayEnvironmentLinkChallengeResponse,
-  RelayMachinePairingResponse,
   type RelayClientDeviceRecord,
   type RelayClientEnvironmentRecord,
   type RelayEnvironmentLinkResponse,
@@ -391,97 +389,6 @@ export function unlinkPrimaryEnvironmentFromCloud(input: {
 export type CloudLinkMode = "managed" | "publish_only";
 
 const PUBLISH_ONLY_PROVIDER_KIND = "manual" satisfies RelayManagedEndpointProviderKind;
-const decodeMachinePairingChallenge = Schema.decodeUnknownSync(
-  RelayEnvironmentLinkChallengeResponse,
-);
-const decodeMachinePairingResponse = Schema.decodeUnknownSync(RelayMachinePairingResponse);
-
-async function postAccountlessRelay<A>(input: {
-  readonly url: string;
-  readonly payload: unknown;
-  readonly decode: (value: unknown) => A;
-}): Promise<A> {
-  const response = await fetch(input.url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(input.payload),
-  });
-  if (!response.ok) {
-    throw new Error(`Relay request failed with HTTP ${response.status}.`);
-  }
-  return input.decode(await response.json());
-}
-
-/** Provisions an internet-reachable endpoint using only an environment-signed proof. */
-export function provisionPrimaryMachineEndpoint(input: {
-  readonly target: CloudLinkTarget;
-}): Effect.Effect<string, CloudEnvironmentLinkError, EnvironmentRegistry | HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    const configuredRelayUrl = relayUrl();
-    if (!configuredRelayUrl) {
-      return yield* new CloudEnvironmentLinkError({
-        message: "Sparky's remote pairing relay is not configured.",
-      });
-    }
-    yield* ensureRelayClientAvailable(EnvironmentId.make(input.target.environmentId));
-    const environmentClient = yield* makeEnvironmentHttpApiClient(input.target.httpBaseUrl);
-    const challenge = yield* Effect.tryPromise({
-      try: () =>
-        postAccountlessRelay({
-          url: `${configuredRelayUrl}/v1/machines/pairing-challenges`,
-          payload: { managedTunnelsEnabled: true },
-          decode: decodeMachinePairingChallenge,
-        }),
-      catch: (cause) =>
-        new CloudEnvironmentLinkError({
-          message: "Could not start remote machine pairing.",
-          cause,
-        }),
-    });
-    const proof = yield* environmentClient.connect
-      .linkProof({
-        headers: {},
-        payload: {
-          challenge: challenge.challenge,
-          relayIssuer: configuredRelayUrl,
-          endpoint: {
-            httpBaseUrl: input.target.httpBaseUrl,
-            wsBaseUrl: input.target.wsBaseUrl,
-            providerKind: MANAGED_ENDPOINT_PROVIDER_KIND,
-          },
-          origin: endpointOrigin(input.target.httpBaseUrl),
-        },
-      })
-      .pipe(Effect.mapError(environmentApiError("Could not authorize remote machine pairing.")));
-    const pairing = yield* Effect.tryPromise({
-      try: () =>
-        postAccountlessRelay({
-          url: `${configuredRelayUrl}/v1/machines/pairings`,
-          payload: { proof },
-          decode: decodeMachinePairingResponse,
-        }),
-      catch: (cause) =>
-        new CloudEnvironmentLinkError({
-          message: "Could not provision the remote machine endpoint.",
-          cause,
-        }),
-    });
-    yield* environmentClient.connect
-      .relayConfig({
-        headers: {},
-        payload: {
-          relayUrl: configuredRelayUrl,
-          relayIssuer: pairing.relayIssuer,
-          cloudUserId: pairing.cloudUserId,
-          environmentCredential: pairing.environmentCredential,
-          cloudMintPublicKey: pairing.cloudMintPublicKey,
-          endpointRuntime: pairing.endpointRuntime,
-        },
-      })
-      .pipe(Effect.mapError(environmentApiError("Could not start the remote machine endpoint.")));
-    return pairing.endpoint.httpBaseUrl;
-  }).pipe(Effect.provide(primaryEnvironmentHttpLayer));
-}
 
 export function linkPrimaryEnvironmentToCloud(input: {
   readonly target: CloudLinkTarget;

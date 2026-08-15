@@ -55,32 +55,6 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
 }
 
-interface ComposerMachineSelectorProps {
-  environmentId: EnvironmentId;
-  availableEnvironments: readonly EnvironmentOption[];
-  envLocked: boolean;
-  onEnvironmentChange: (environmentId: EnvironmentId) => void;
-}
-
-export const ComposerMachineSelector = memo(function ComposerMachineSelector({
-  environmentId,
-  availableEnvironments,
-  envLocked,
-  onEnvironmentChange,
-}: ComposerMachineSelectorProps) {
-  if (availableEnvironments.length < 2) return null;
-  return (
-    <div className="mx-auto flex w-full max-w-3xl items-center px-2.5 pb-3 pt-1 sm:px-3">
-      <BranchToolbarEnvironmentSelector
-        envLocked={envLocked}
-        environmentId={environmentId}
-        availableEnvironments={availableEnvironments}
-        onEnvironmentChange={onEnvironmentChange}
-      />
-    </div>
-  );
-});
-
 interface MobileRunContextSelectorProps {
   envLocked: boolean;
   envModeLocked: boolean;
@@ -163,7 +137,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
         {showEnvironmentPicker && availableEnvironments && onEnvironmentChange ? (
           <>
             <MenuGroup>
-              <MenuGroupLabel>Machines · Run on</MenuGroupLabel>
+              <MenuGroupLabel>Run on</MenuGroupLabel>
               <MenuRadioGroup
                 value={environmentId}
                 onValueChange={(value) => onEnvironmentChange(value as EnvironmentId)}

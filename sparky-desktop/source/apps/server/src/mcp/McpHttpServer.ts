@@ -13,8 +13,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
-import { ImageViewToolkitHandlersLive } from "./toolkits/imageView/handlers.ts";
-import { ImageViewToolkit } from "./toolkits/imageView/tools.ts";
+import { AutomationToolkit, AutomationToolkitHandlersLive } from "./toolkits/automations/tools.ts";
 import {
   PreviewSnapshotToolkitHandlersLive,
   PreviewStandardToolkitHandlersLive,
@@ -205,14 +204,14 @@ const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnaps
   Layer.provide(PreviewSnapshotToolkitHandlersLive),
 );
 
-const ImageViewToolkitRegistrationLive = McpServer.toolkit(ImageViewToolkit).pipe(
-  Layer.provide(ImageViewToolkitHandlersLive),
+const AutomationToolkitRegistrationLive = McpServer.toolkit(AutomationToolkit).pipe(
+  Layer.provide(AutomationToolkitHandlersLive),
 );
 
 export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewStandardToolkitRegistrationLive,
   PreviewSnapshotRegistrationLive,
-  ImageViewToolkitRegistrationLive,
+  AutomationToolkitRegistrationLive,
 );
 
 const McpTransportLive = McpServer.layerHttp({

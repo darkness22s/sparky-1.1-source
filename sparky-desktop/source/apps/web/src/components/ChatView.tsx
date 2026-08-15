@@ -135,7 +135,7 @@ import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
-import { BranchToolbar, ComposerMachineSelector } from "./BranchToolbar";
+import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
@@ -1392,18 +1392,6 @@ function ChatViewContent(props: ChatViewProps) {
   const threadError = isServerThread
     ? (localServerError ?? serverThread?.session?.lastError ?? null)
     : localDraftError;
-  const hasInlineRuntimeError = Boolean(
-    isServerThread &&
-    threadError &&
-    activeThread?.latestTurn &&
-    activeThread.activities.some(
-      (activity) =>
-        activity.kind === "runtime.error" &&
-        activity.turnId !== null &&
-        activity.turnId === activeThread.latestTurn?.turnId,
-    ),
-  );
-  const visibleThreadError = hasInlineRuntimeError ? null : threadError;
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
@@ -5550,7 +5538,7 @@ function ChatViewContent(props: ChatViewProps) {
         {/* Error banner */}
         <ProviderStatusBanner status={activeProviderStatus} />
         <ThreadErrorBanner
-          error={visibleThreadError}
+          error={threadError}
           onDismiss={() => setThreadError(activeThread.id, null)}
         />
         {/* Main content area with optional plan sidebar */}
@@ -5776,7 +5764,7 @@ function ChatViewContent(props: ChatViewProps) {
                             : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
                         )}
                       >
-                        {isGitRepo ? (
+                        {isGitRepo && (
                           <div className="pointer-events-auto">
                             <BranchToolbar
                               environmentId={activeThread.environmentId}
@@ -5804,16 +5792,7 @@ function ChatViewContent(props: ChatViewProps) {
                               availableEnvironments={logicalProjectEnvironments}
                             />
                           </div>
-                        ) : hasMultipleEnvironments ? (
-                          <div className="pointer-events-auto">
-                            <ComposerMachineSelector
-                              environmentId={activeThread.environmentId}
-                              availableEnvironments={logicalProjectEnvironments}
-                              envLocked={envLocked}
-                              onEnvironmentChange={onEnvironmentChange}
-                            />
-                          </div>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   </div>
