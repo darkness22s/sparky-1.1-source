@@ -32,6 +32,7 @@ const clientSettings: ClientSettings = {
   sidebarThreadPreviewCount: 6,
   streamingTextAnimation: "lift",
   timestampFormat: "24-hour",
+  modelSelectorStyle: "menu",
   wordWrap: true,
 };
 
