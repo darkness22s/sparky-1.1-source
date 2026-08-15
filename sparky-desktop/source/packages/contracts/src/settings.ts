@@ -424,6 +424,7 @@ export const ServerSettings = Schema.Struct({
   // user interrupts or the provider emits turn.completed.
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   enableImageView: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  checkpoints: CheckpointSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
