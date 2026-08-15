@@ -77,6 +77,7 @@ import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommand
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { VoiceDictationControl } from "./VoiceDictationControl";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -366,6 +367,11 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
+  voiceDictationDisabled: boolean;
+  onVoiceDictationStart: () => void;
+  onVoiceDictationTranscript: (transcript: string) => void;
+  onVoiceDictationError: (message: string) => void;
+  onVoiceDictationActiveChange: (active: boolean) => void;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -382,6 +388,13 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
       ) : null}
+      <VoiceDictationControl
+        disabled={props.voiceDictationDisabled}
+        onActiveChange={props.onVoiceDictationActiveChange}
+        onError={props.onVoiceDictationError}
+        onStart={props.onVoiceDictationStart}
+        onTranscript={props.onVoiceDictationTranscript}
+      />
       <ComposerPrimaryActions
         compact={props.compact}
         pendingAction={props.pendingAction}
@@ -924,9 +937,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [isVoiceDictating, setIsVoiceDictating] = useState(false);
   const isMobileViewport = useMediaQuery("max-sm");
   const isComposerCollapsedMobile =
-    isMobileViewport && !forceExpandedOnMobile && !isComposerFocused;
+    isMobileViewport && !forceExpandedOnMobile && !isComposerFocused && !isVoiceDictating;
 
   // ------------------------------------------------------------------
   // Refs
@@ -943,6 +957,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const mobileComposerExpandReleaseFrameRef = useRef<number | null>(null);
   const mobileComposerExpandInFlightRef = useRef(false);
   const dragDepthRef = useRef(0);
+  const dictationInsertionRef = useRef<{ prompt: string; cursor: number } | null>(null);
 
   // ------------------------------------------------------------------
   // Derived: composer send state
@@ -1938,6 +1953,36 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   };
 
+  const captureVoiceDictationInsertionPoint = useCallback(() => {
+    const snapshot = readComposerSnapshot();
+    dictationInsertionRef.current = {
+      prompt: snapshot.value,
+      cursor: snapshot.cursor,
+    };
+  }, [readComposerSnapshot]);
+
+  const insertVoiceDictationTranscript = useCallback(
+    (transcript: string) => {
+      const cleanedTranscript = transcript.trim();
+      if (cleanedTranscript.length === 0) return;
+
+      const currentPrompt = promptRef.current;
+      const capturedPoint = dictationInsertionRef.current;
+      const cursor =
+        capturedPoint?.prompt === currentPrompt
+          ? clampCollapsedComposerCursor(currentPrompt, capturedPoint.cursor)
+          : currentPrompt.length;
+      const beforeCursor = currentPrompt.slice(0, cursor);
+      const afterCursor = currentPrompt.slice(cursor);
+      const leadingSpace = beforeCursor.length > 0 && !/\s$/.test(beforeCursor) ? " " : "";
+      const trailingSpace = afterCursor.length > 0 && !/^\s/.test(afterCursor) ? " " : "";
+
+      dictationInsertionRef.current = null;
+      applyPromptReplacement(cursor, cursor, `${leadingSpace}${cleanedTranscript}${trailingSpace}`);
+    },
+    [applyPromptReplacement, promptRef],
+  );
+
   // File-tree drags land as mentions. Handled in the capture phase so the
   // editor never sees the drop; the load-bearing rules (native stop, "move"
   // effect, no eager focus) live in makeComposerMentionDragHandlers.
@@ -2674,6 +2719,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   isPreparingWorktree={isPreparingWorktree}
                   hasSendableContent={composerSendState.hasSendableContent}
+                  voiceDictationDisabled={
+                    isConnecting ||
+                    isComposerApprovalState ||
+                    pendingUserInputs.length > 0 ||
+                    phase === "running" ||
+                    projectSelectionRequired
+                  }
+                  onVoiceDictationStart={captureVoiceDictationInsertionPoint}
+                  onVoiceDictationTranscript={insertVoiceDictationTranscript}
+                  onVoiceDictationError={(message) => {
+                    toastManager.add({
+                      type: "error",
+                      title: "Voice dictation unavailable",
+                      description: message,
+                    });
+                  }}
+                  onVoiceDictationActiveChange={setIsVoiceDictating}
                   preserveComposerFocusOnPointerDown={isMobileViewport}
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}
