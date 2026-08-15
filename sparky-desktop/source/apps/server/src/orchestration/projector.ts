@@ -619,6 +619,37 @@ export function projectEvent(
             return nextBase;
           }
 
+          if (payload.mode === "code") {
+            return {
+              ...nextBase,
+              threads: updateThread(nextBase.threads, payload.threadId, {
+                updatedAt: event.occurredAt,
+              }),
+            };
+          }
+
+          if (typeof payload.conversationState === "object" && payload.conversationState !== null) {
+            const restored = payload.conversationState as Record<string, unknown>;
+            if (
+              Array.isArray(restored.messages) &&
+              Array.isArray(restored.proposedPlans) &&
+              Array.isArray(restored.activities) &&
+              Array.isArray(restored.checkpoints)
+            ) {
+              return {
+                ...nextBase,
+                threads: updateThread(nextBase.threads, payload.threadId, {
+                  messages: restored.messages as typeof thread.messages,
+                  proposedPlans: restored.proposedPlans as typeof thread.proposedPlans,
+                  activities: restored.activities as typeof thread.activities,
+                  checkpoints: restored.checkpoints as typeof thread.checkpoints,
+                  latestTurn: (restored.latestTurn ?? null) as typeof thread.latestTurn,
+                  updatedAt: event.occurredAt,
+                }),
+              };
+            }
+          }
+
           const checkpoints = thread.checkpoints
             .filter((entry) => entry.checkpointTurnCount <= payload.turnCount)
             .toSorted((left, right) => left.checkpointTurnCount - right.checkpointTurnCount)

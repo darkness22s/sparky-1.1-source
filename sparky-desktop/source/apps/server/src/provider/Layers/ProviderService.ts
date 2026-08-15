@@ -554,37 +554,38 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
     event: ProviderRuntimeEvent,
   ): Effect.Effect<void> =>
-    Effect.sync(() => correlateRuntimeEventWithInstance(source, event)).pipe(
-      Effect.flatMap((canonicalEvent) =>
+    Effect.flatMap(
+      Effect.sync(() => correlateRuntimeEventWithInstance(source, event)),
+      (canonicalEvent) =>
         observeTurnLatency(canonicalEvent).pipe(
-          Effect.andThen(
-            increment(providerRuntimeEventsTotal, {
-              provider: canonicalEvent.provider,
-              eventType: canonicalEvent.type,
-            }),
+            Effect.andThen(
+              increment(providerRuntimeEventsTotal, {
+                provider: canonicalEvent.provider,
+                eventType: canonicalEvent.type,
+              }),
+            ),
+            // Publish before the persistence side effect. A slow SQLite write
+            // must not hold back the first delta or the terminal lifecycle event.
+            Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+            Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
+            Effect.andThen(
+              canonicalEvent.type === "turn.completed" ||
+                canonicalEvent.type === "turn.aborted" ||
+                canonicalEvent.type === "runtime.error" ||
+                canonicalEvent.type === "session.exited"
+                ? clearTurnLatency(canonicalEvent.threadId)
+                : Effect.void,
+            ),
           ),
-          // Publish before the persistence side effect. A slow SQLite write
-          // must not hold back the first delta or the terminal lifecycle event.
-          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
-          Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
-          Effect.andThen(
-            canonicalEvent.type === "turn.completed" ||
-              canonicalEvent.type === "turn.aborted" ||
-              canonicalEvent.type === "runtime.error" ||
-              canonicalEvent.type === "session.exited"
-              ? clearTurnLatency(canonicalEvent.threadId)
-              : Effect.void,
-          ),
-        ),
-      ),
-      withMetrics({
-        timer: providerRuntimeEventProcessingDuration,
-        attributes: {
-          provider: source.provider,
-          eventType: event.type,
-        },
-      }),
-    );
+    ).pipe(
+        withMetrics({
+          timer: providerRuntimeEventProcessingDuration,
+          attributes: {
+            provider: source.provider,
+            eventType: event.type,
+          },
+        }),
+      );
 
   // `subscribedAdapters` is our source-of-truth for "which instance adapters
   // are currently wired into the runtime event bus". It both tracks the set
@@ -1091,7 +1092,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const routed = yield* resolveRoutableSession({
           threadId: input.threadId,
           operation: "ProviderService.interruptTurn",
-          allowRecovery: true,
+          // Interrupt is a local control operation. Never start a new provider
+          // session just to interrupt a turn whose in-memory session vanished.
+          allowRecovery: false,
         });
         metricProvider = routed.adapter.provider;
         yield* Effect.annotateCurrentSpan({
@@ -1100,9 +1103,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.thread_id": input.threadId,
           "provider.turn_id": input.turnId,
         });
-        yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        if (routed.isActive) {
+          yield* routed.adapter.interruptTurn(routed.threadId, input.turnId);
+        }
         yield* analytics.record("provider.turn.interrupted", {
           provider: routed.adapter.provider,
+          providerSessionActive: routed.isActive,
         });
       }).pipe(
         withMetrics({

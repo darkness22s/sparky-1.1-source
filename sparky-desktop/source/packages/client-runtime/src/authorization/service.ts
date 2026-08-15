@@ -55,7 +55,7 @@ export class RemoteEnvironmentAuthorization extends Context.Service<
       >;
     }) => Effect.Effect<AuthorizedRemoteEnvironment, ConnectionAttemptError>;
   }
->()("@t3tools/client-runtime/authorization/service/RemoteEnvironmentAuthorization") {}
+>()("@sparky/client-runtime/authorization/service/RemoteEnvironmentAuthorization") {}
 
 const TOKEN_EXPIRY_SAFETY_MARGIN_MS = 60_000;
 const CACHED_ENDPOINT_FAILURE_THRESHOLD = 2;

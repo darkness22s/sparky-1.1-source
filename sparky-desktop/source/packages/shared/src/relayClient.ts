@@ -132,7 +132,7 @@ export interface RelayClientShape {
 }
 
 export class RelayClient extends Context.Service<RelayClient, RelayClientShape>()(
-  "@t3tools/shared/relayClient",
+  "@sparky/shared/relayClient",
 ) {}
 
 function executableFileName(platform: NodeJS.Platform): string {

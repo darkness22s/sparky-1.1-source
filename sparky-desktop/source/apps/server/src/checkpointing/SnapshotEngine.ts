@@ -67,7 +67,12 @@ export type SnapshotEntry =
       readonly mode: number;
     }
   | { readonly path: string; readonly type: "directory"; readonly mode: number }
-  | { readonly path: string; readonly type: "symlink"; readonly target: string; readonly mode: number };
+  | {
+      readonly path: string;
+      readonly type: "symlink";
+      readonly target: string;
+      readonly mode: number;
+    };
 
 export interface SnapshotManifest {
   readonly version: 1;
@@ -79,13 +84,34 @@ export interface SnapshotManifest {
   readonly approximateSize: number;
 }
 
-interface SnapshotRefRecord {
+export interface CheckpointMetadata {
+  readonly sessionId?: string;
+  readonly projectId?: string;
+  readonly toolCallId?: string;
+  readonly label?: string;
+  readonly reason?: string;
+  readonly parentCheckpointRef?: string;
+  readonly automatic?: boolean;
+  readonly pinned?: boolean;
+  readonly turnCount?: number;
+  /** Sanitized event-sourced thread state. Never contains credentials or runtime handles. */
+  readonly conversationState?: unknown;
+  readonly changedFiles?: ReadonlyArray<{
+    readonly path: string;
+    readonly previousPath?: string;
+    readonly kind: "added" | "modified" | "deleted" | "renamed";
+    readonly binary: boolean;
+  }>;
+}
+
+export interface SnapshotRefRecord {
   readonly version: 1;
   readonly checkpointRef: string;
   readonly manifestHash: string;
   readonly projectId: string;
   readonly projectRoot: string;
   readonly updatedAt: string;
+  readonly metadata?: CheckpointMetadata;
 }
 
 interface HashCacheRecord {
@@ -111,6 +137,14 @@ export interface SnapshotCaptureResult {
   readonly manifest: SnapshotManifest;
   readonly manifestHash: string;
   readonly reusedManifest: boolean;
+  readonly record: SnapshotRefRecord;
+}
+
+export interface SnapshotCleanupResult {
+  readonly deletedCheckpointRefs: ReadonlyArray<string>;
+  readonly retainedCheckpointRefs: ReadonlyArray<string>;
+  readonly bytesFreed: number;
+  readonly totalBytes: number;
 }
 
 export interface SnapshotRestoreResult {
@@ -167,7 +201,10 @@ function compileGlob(pattern: string): RegExp {
   return new RegExp(normalized.includes("/") ? `^${output}$` : `(^|/)${output}$`);
 }
 
-function parseIgnoreRules(contents: string, configured: ReadonlyArray<string>): ReadonlyArray<IgnoreRule> {
+function parseIgnoreRules(
+  contents: string,
+  configured: ReadonlyArray<string>,
+): ReadonlyArray<IgnoreRule> {
   return [...contents.split(/\r?\n/u), ...configured]
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith("#"))
@@ -183,7 +220,11 @@ function parseIgnoreRules(contents: string, configured: ReadonlyArray<string>): 
     });
 }
 
-function isIgnoredByRules(path: string, isDirectory: boolean, rules: ReadonlyArray<IgnoreRule>): boolean {
+function isIgnoredByRules(
+  path: string,
+  isDirectory: boolean,
+  rules: ReadonlyArray<IgnoreRule>,
+): boolean {
   let ignored = false;
   for (const rule of rules) {
     if ((!rule.directoryOnly || isDirectory) && rule.pattern.test(path)) {
@@ -258,9 +299,9 @@ async function writeAtomically(path: string, contents: string | Uint8Array): Pro
 
 export class SnapshotEngine {
   readonly #storageRoot: string;
-  readonly #maxFileSizeBytes: number;
+  #maxFileSizeBytes: number;
   readonly #concurrency: number;
-  readonly #ignoredPaths: ReadonlyArray<string>;
+  #ignoredPaths: ReadonlyArray<string>;
   readonly #queues = new Map<string, Promise<unknown>>();
 
   constructor(options: SnapshotEngineOptions) {
@@ -270,18 +311,38 @@ export class SnapshotEngine {
     this.#ignoredPaths = options.ignoredPaths ?? [];
   }
 
+  configure(options: {
+    readonly maxFileSizeBytes?: number;
+    readonly ignoredPaths?: ReadonlyArray<string>;
+  }): void {
+    if (options.maxFileSizeBytes !== undefined) {
+      this.#maxFileSizeBytes = Math.max(1, options.maxFileSizeBytes);
+    }
+    if (options.ignoredPaths !== undefined) {
+      this.#ignoredPaths = [...options.ignoredPaths];
+    }
+  }
+
   projectId(cwd: string): string {
     const canonical = NodePath.resolve(cwd);
     return sha256(process.platform === "win32" ? canonical.toLowerCase() : canonical).slice(0, 24);
   }
 
-  async capture(cwd: string, checkpointRef: string): Promise<SnapshotCaptureResult> {
+  async capture(
+    cwd: string,
+    checkpointRef: string,
+    metadata?: CheckpointMetadata,
+  ): Promise<SnapshotCaptureResult> {
     const root = await realpath(NodePath.resolve(cwd));
     if (isInside(root, this.#storageRoot) || isInside(this.#storageRoot, root)) {
       throw new Error("Checkpoint storage and project root must not contain one another.");
     }
     const projectId = this.projectId(root);
-    return this.#serialize(projectId, async () => this.#captureUnlocked(root, projectId, checkpointRef));
+    return this.#serialize("__storage__", () =>
+      this.#serialize(projectId, async () =>
+        this.#captureUnlocked(root, projectId, checkpointRef, metadata),
+      ),
+    );
   }
 
   async has(cwd: string, checkpointRef: string): Promise<boolean> {
@@ -289,6 +350,127 @@ export class SnapshotEngine {
     return this.#readRef(this.projectId(root), checkpointRef)
       .then(() => true)
       .catch(() => false);
+  }
+
+  async getRecord(cwd: string, checkpointRef: string): Promise<SnapshotRefRecord | null> {
+    const root = await realpath(NodePath.resolve(cwd));
+    return this.#readRef(this.projectId(root), checkpointRef).catch(() => null);
+  }
+
+  async listRecords(cwd: string): Promise<ReadonlyArray<SnapshotRefRecord>> {
+    const root = await realpath(NodePath.resolve(cwd));
+    return this.#listRecords(this.projectId(root));
+  }
+
+  async pin(cwd: string, checkpointRef: string, pinned = true): Promise<boolean> {
+    const record = await this.getRecord(cwd, checkpointRef);
+    if (!record) return false;
+    return this.updateMetadata(cwd, checkpointRef, { ...record.metadata, pinned });
+  }
+
+  async updateMetadata(
+    cwd: string,
+    checkpointRef: string,
+    metadata: CheckpointMetadata,
+  ): Promise<boolean> {
+    const root = await realpath(NodePath.resolve(cwd));
+    const projectId = this.projectId(root);
+    return this.#serialize(projectId, async () => {
+      const record = await this.#readRef(projectId, checkpointRef).catch(() => null);
+      if (!record) return false;
+      await writeAtomically(
+        this.#refPath(projectId, checkpointRef),
+        JSON.stringify({
+          ...record,
+          updatedAt: new Date().toISOString(),
+          metadata,
+        } satisfies SnapshotRefRecord),
+      );
+      return true;
+    });
+  }
+
+  async cleanup(
+    cwd: string,
+    maximumCheckpoints = 200,
+    maximumTotalStorageBytes?: number,
+  ): Promise<SnapshotCleanupResult> {
+    const root = await realpath(NodePath.resolve(cwd));
+    const projectId = this.projectId(root);
+    return this.#serialize("__storage__", () =>
+      this.#serialize(projectId, async () => {
+        const beforeBytes = await this.#directorySize(this.#storageRoot);
+        const records = [...(await this.#listRecords(projectId))].sort((left, right) =>
+          right.updatedAt.localeCompare(left.updatedAt),
+        );
+        const protectedRefs = new Set<string>();
+        const latest = records[0];
+        if (latest) protectedRefs.add(latest.checkpointRef);
+        const newestTaskStart = records.find((record) => record.metadata?.reason === "task-start");
+        const newestTaskComplete = records.find(
+          (record) => record.metadata?.reason === "task-complete",
+        );
+        if (newestTaskStart) protectedRefs.add(newestTaskStart.checkpointRef);
+        if (newestTaskComplete) protectedRefs.add(newestTaskComplete.checkpointRef);
+        for (const record of records) {
+          if (record.metadata?.pinned === true || record.metadata?.automatic === false) {
+            protectedRefs.add(record.checkpointRef);
+          }
+        }
+        // Keep parent links for all protected checkpoints, even though snapshot
+        // manifests are independently restorable.
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const record of records) {
+            if (!protectedRefs.has(record.checkpointRef)) continue;
+            const parent = record.metadata?.parentCheckpointRef;
+            if (parent && !protectedRefs.has(parent)) {
+              protectedRefs.add(parent);
+              changed = true;
+            }
+          }
+        }
+        const retained = new Set(protectedRefs);
+        for (const record of records) {
+          if (retained.size >= Math.max(1, maximumCheckpoints)) break;
+          retained.add(record.checkpointRef);
+        }
+        const deleted = records.filter((record) => !retained.has(record.checkpointRef));
+        await Promise.all(
+          deleted.map((record) =>
+            rm(this.#refPath(projectId, record.checkpointRef), { force: true }),
+          ),
+        );
+        await this.#garbageCollect();
+
+        let totalBytes = await this.#directorySize(this.#storageRoot);
+        if (maximumTotalStorageBytes && totalBytes > maximumTotalStorageBytes) {
+          const storageCandidates = records
+            .filter(
+              (record) =>
+                retained.has(record.checkpointRef) && !protectedRefs.has(record.checkpointRef),
+            )
+            .toSorted((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+          for (const record of storageCandidates) {
+            if (totalBytes <= maximumTotalStorageBytes) break;
+            await rm(this.#refPath(projectId, record.checkpointRef), { force: true });
+            retained.delete(record.checkpointRef);
+            deleted.push(record);
+            await this.#garbageCollect();
+            totalBytes = await this.#directorySize(this.#storageRoot);
+          }
+        }
+        return {
+          deletedCheckpointRefs: deleted.map((record) => record.checkpointRef),
+          retainedCheckpointRefs: records
+            .filter((record) => retained.has(record.checkpointRef))
+            .map((record) => record.checkpointRef),
+          bytesFreed: Math.max(0, beforeBytes - totalBytes),
+          totalBytes,
+        };
+      }),
+    );
   }
 
   async restore(cwd: string, checkpointRef: string): Promise<SnapshotRestoreResult | null> {
@@ -331,13 +513,15 @@ export class SnapshotEngine {
     root: string,
     projectId: string,
     checkpointRef: string,
+    metadata?: CheckpointMetadata,
   ): Promise<SnapshotCaptureResult> {
     const projectDir = NodePath.join(this.#storageRoot, "projects", projectId);
     await mkdir(NodePath.join(projectDir, "refs"), { recursive: true });
     await this.#recoverTemporaryFiles(projectDir);
-    const ignoreContents = await readFile(NodePath.join(root, ".sparkycheckpointignore"), "utf8").catch(
-      () => "",
-    );
+    const ignoreContents = await readFile(
+      NodePath.join(root, ".sparkycheckpointignore"),
+      "utf8",
+    ).catch(() => "");
     const rules = parseIgnoreRules(ignoreContents, this.#ignoredPaths);
     const cachePath = NodePath.join(projectDir, "metadata-cache.json");
     const previousCache: Record<string, HashCacheRecord> = await readFile(cachePath, "utf8")
@@ -346,21 +530,39 @@ export class SnapshotEngine {
     const nextCache: Record<string, HashCacheRecord> = {};
     const entries: SnapshotEntry[] = [];
     const excluded: Array<{ path: string; reason: string }> = [];
-    const files: Array<{ absolute: string; relative: string; size: number; mode: number; mtimeMs: number }> = [];
+    const files: Array<{
+      absolute: string;
+      relative: string;
+      size: number;
+      mode: number;
+      mtimeMs: number;
+    }> = [];
 
     const visit = async (directory: string): Promise<void> => {
       const children = await readdir(directory, { withFileTypes: true });
       if (directory !== root && children.length === 0) {
         const info = await lstat(directory);
-        entries.push({ path: normalizeRelativePath(NodePath.relative(root, directory)), type: "directory", mode: info.mode });
+        entries.push({
+          path: normalizeRelativePath(NodePath.relative(root, directory)),
+          type: "directory",
+          mode: info.mode,
+        });
       }
       for (const child of children) {
         const absolute = NodePath.join(directory, child.name);
         const relative = normalizeRelativePath(NodePath.relative(root, absolute));
         const defaultExcluded = DEFAULT_EXCLUDED_NAMES.has(child.name);
-        const explicitlyIncluded = rules.some((rule) => rule.negated && rule.pattern.test(relative));
-        if ((defaultExcluded && !explicitlyIncluded) || isIgnoredByRules(relative, child.isDirectory(), rules)) {
-          excluded.push({ path: relative, reason: defaultExcluded ? "default-ignore" : "checkpoint-ignore" });
+        const explicitlyIncluded = rules.some(
+          (rule) => rule.negated && rule.pattern.test(relative),
+        );
+        if (
+          (defaultExcluded && !explicitlyIncluded) ||
+          isIgnoredByRules(relative, child.isDirectory(), rules)
+        ) {
+          excluded.push({
+            path: relative,
+            reason: defaultExcluded ? "default-ignore" : "checkpoint-ignore",
+          });
           continue;
         }
         const info = await lstat(absolute);
@@ -386,7 +588,10 @@ export class SnapshotEngine {
           excluded.push({ path: relative, reason: "file-size-limit" });
           continue;
         }
-        if (DEFAULT_BINARY_EXTENSIONS.has(NodePath.extname(child.name).toLowerCase()) && info.size > 1024 * 1024) {
+        if (
+          DEFAULT_BINARY_EXTENSIONS.has(NodePath.extname(child.name).toLowerCase()) &&
+          info.size > 1024 * 1024
+        ) {
           excluded.push({ path: relative, reason: "large-generated-binary" });
           continue;
         }
@@ -396,27 +601,36 @@ export class SnapshotEngine {
     await visit(root);
 
     let cursor = 0;
-    const workers = Array.from({ length: Math.min(this.#concurrency, Math.max(files.length, 1)) }, async () => {
-      while (cursor < files.length) {
-        const file = files[cursor++]!;
-        const cached = previousCache[file.relative];
-        const hash =
-          cached && cached.size === file.size && cached.mtimeMs === file.mtimeMs
-            ? cached.hash
-            : sha256(await readFile(file.absolute));
-        const objectPath = this.#objectPath(hash);
-        await stat(objectPath).catch(async () => {
-          await mkdir(NodePath.dirname(objectPath), { recursive: true });
-          const temporary = `${objectPath}.${process.pid}.${randomUUID()}.tmp`;
-          await copyFile(file.absolute, temporary);
-          await rename(temporary, objectPath).catch(async () => {
-            await rm(temporary, { force: true });
+    const workers = Array.from(
+      { length: Math.min(this.#concurrency, Math.max(files.length, 1)) },
+      async () => {
+        while (cursor < files.length) {
+          const file = files[cursor++]!;
+          const cached = previousCache[file.relative];
+          const hash =
+            cached && cached.size === file.size && cached.mtimeMs === file.mtimeMs
+              ? cached.hash
+              : sha256(await readFile(file.absolute));
+          const objectPath = this.#objectPath(hash);
+          await stat(objectPath).catch(async () => {
+            await mkdir(NodePath.dirname(objectPath), { recursive: true });
+            const temporary = `${objectPath}.${process.pid}.${randomUUID()}.tmp`;
+            await copyFile(file.absolute, temporary);
+            await rename(temporary, objectPath).catch(async () => {
+              await rm(temporary, { force: true });
+            });
           });
-        });
-        nextCache[file.relative] = { size: file.size, mtimeMs: file.mtimeMs, hash };
-        entries.push({ path: file.relative, type: "file", hash, size: file.size, mode: file.mode });
-      }
-    });
+          nextCache[file.relative] = { size: file.size, mtimeMs: file.mtimeMs, hash };
+          entries.push({
+            path: file.relative,
+            type: "file",
+            hash,
+            size: file.size,
+            mode: file.mode,
+          });
+        }
+      },
+    );
     await Promise.all(workers);
     entries.sort((left, right) => left.path.localeCompare(right.path));
     excluded.sort((left, right) => left.path.localeCompare(right.path));
@@ -427,12 +641,17 @@ export class SnapshotEngine {
       createdAt: new Date().toISOString(),
       entries,
       excluded,
-      approximateSize: entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0),
+      approximateSize: entries.reduce(
+        (total, entry) => total + (entry.type === "file" ? entry.size : 0),
+        0,
+      ),
     };
     const manifestIdentity = JSON.stringify({ ...manifest, createdAt: undefined });
     const manifestHash = sha256(manifestIdentity);
     const manifestPath = this.#manifestPath(manifestHash);
-    const reusedManifest = await stat(manifestPath).then(() => true).catch(() => false);
+    const reusedManifest = await stat(manifestPath)
+      .then(() => true)
+      .catch(() => false);
     if (!reusedManifest) await writeAtomically(manifestPath, JSON.stringify(manifest));
     const refRecord: SnapshotRefRecord = {
       version: 1,
@@ -441,10 +660,11 @@ export class SnapshotEngine {
       projectId,
       projectRoot: root,
       updatedAt: new Date().toISOString(),
+      ...(metadata ? { metadata } : {}),
     };
     await writeAtomically(this.#refPath(projectId, checkpointRef), JSON.stringify(refRecord));
     await writeAtomically(cachePath, JSON.stringify(nextCache));
-    return { manifest, manifestHash, reusedManifest };
+    return { manifest, manifestHash, reusedManifest, record: refRecord };
   }
 
   async #restoreUnlocked(root: string, manifest: SnapshotManifest): Promise<SnapshotRestoreResult> {
@@ -470,7 +690,9 @@ export class SnapshotEngine {
       else if (
         existing.type !== entry.type ||
         (entry.type === "file" && existing.type === "file" && existing.hash !== entry.hash) ||
-        (entry.type === "symlink" && existing.type === "symlink" && existing.target !== entry.target)
+        (entry.type === "symlink" &&
+          existing.type === "symlink" &&
+          existing.target !== entry.target)
       ) {
         modified.push(entry.path);
       }
@@ -501,19 +723,30 @@ export class SnapshotEngine {
   }
 
   async #diffManifests(from: SnapshotManifest, to: SnapshotManifest): Promise<SnapshotDiff> {
-    const before = new Map(from.entries.filter((entry) => entry.type === "file").map((entry) => [entry.path, entry]));
-    const after = new Map(to.entries.filter((entry) => entry.type === "file").map((entry) => [entry.path, entry]));
+    const before = new Map(
+      from.entries.filter((entry) => entry.type === "file").map((entry) => [entry.path, entry]),
+    );
+    const after = new Map(
+      to.entries.filter((entry) => entry.type === "file").map((entry) => [entry.path, entry]),
+    );
     const files: SnapshotDiffFile[] = [];
     const deleted = [...before.values()].filter((entry) => !after.has(entry.path));
     const added = [...after.values()].filter((entry) => !before.has(entry.path));
     const renamedAdded = new Set<string>();
     const renamedDeleted = new Set<string>();
     for (const oldEntry of deleted) {
-      const renamed = added.find((entry) => entry.hash === oldEntry.hash && !renamedAdded.has(entry.path));
+      const renamed = added.find(
+        (entry) => entry.hash === oldEntry.hash && !renamedAdded.has(entry.path),
+      );
       if (renamed) {
         renamedAdded.add(renamed.path);
         renamedDeleted.add(oldEntry.path);
-        files.push({ path: renamed.path, previousPath: oldEntry.path, kind: "renamed", binary: false });
+        files.push({
+          path: renamed.path,
+          previousPath: oldEntry.path,
+          kind: "renamed",
+          binary: false,
+        });
       }
     }
     for (const entry of deleted) {
@@ -571,7 +804,10 @@ export class SnapshotEngine {
   }
 
   #assertManifestMatchesRoot(manifest: SnapshotManifest, root: string, projectId: string): void {
-    if (manifest.projectId !== projectId || NodePath.resolve(manifest.projectRoot) !== NodePath.resolve(root)) {
+    if (
+      manifest.projectId !== projectId ||
+      NodePath.resolve(manifest.projectRoot) !== NodePath.resolve(root)
+    ) {
       throw new Error("Checkpoint belongs to a different project root.");
     }
   }
@@ -582,18 +818,96 @@ export class SnapshotEngine {
       throw new Error(`Invalid checkpoint path: ${relative}`);
     }
     const target = NodePath.resolve(root, ...normalized.split("/"));
-    if (!isInside(root, target)) throw new Error(`Checkpoint path escapes project root: ${relative}`);
+    if (!isInside(root, target))
+      throw new Error(`Checkpoint path escapes project root: ${relative}`);
     return target;
   }
 
+  async #garbageCollect(): Promise<void> {
+    const projectsDirectory = NodePath.join(this.#storageRoot, "projects");
+    const projectEntries = await readdir(projectsDirectory, { withFileTypes: true }).catch(
+      () => [],
+    );
+    const referencedManifests = new Set<string>();
+    for (const projectEntry of projectEntries) {
+      if (!projectEntry.isDirectory()) continue;
+      for (const record of await this.#listRecords(projectEntry.name)) {
+        referencedManifests.add(record.manifestHash);
+      }
+    }
+
+    const referencedObjects = new Set<string>();
+    for (const manifestHash of referencedManifests) {
+      const manifest = await this.#readManifest(manifestHash).catch(() => null);
+      if (!manifest) continue;
+      for (const entry of manifest.entries) {
+        if (entry.type === "file") referencedObjects.add(entry.hash);
+      }
+    }
+
+    const manifestDirectory = NodePath.join(this.#storageRoot, "manifests");
+    const manifestFiles = await readdir(manifestDirectory).catch(() => [] as string[]);
+    await Promise.all(
+      manifestFiles
+        .filter((file) => file.endsWith(".json") && !referencedManifests.has(file.slice(0, -5)))
+        .map((file) => rm(NodePath.join(manifestDirectory, file), { force: true })),
+    );
+    const objectDirectory = NodePath.join(this.#storageRoot, "objects");
+    const objectBuckets = await readdir(objectDirectory, { withFileTypes: true }).catch(() => []);
+    for (const bucket of objectBuckets) {
+      if (!bucket.isDirectory()) continue;
+      const bucketPath = NodePath.join(objectDirectory, bucket.name);
+      const objectFiles = await readdir(bucketPath).catch(() => [] as string[]);
+      await Promise.all(
+        objectFiles
+          .filter((file) => !referencedObjects.has(`${bucket.name}${file}`))
+          .map((file) => rm(NodePath.join(bucketPath, file), { force: true })),
+      );
+    }
+  }
+
+  async #listRecords(projectId: string): Promise<ReadonlyArray<SnapshotRefRecord>> {
+    const directory = NodePath.join(this.#storageRoot, "projects", projectId, "refs");
+    const files = await readdir(directory).catch(() => [] as string[]);
+    const records = await Promise.all(
+      files
+        .filter((file) => file.endsWith(".json"))
+        .map((file) =>
+          readFile(NodePath.join(directory, file), "utf8")
+            .then((contents) => JSON.parse(contents) as SnapshotRefRecord)
+            .catch(() => null),
+        ),
+    );
+    return records.filter((record): record is SnapshotRefRecord => record?.version === 1);
+  }
+
+  async #directorySize(directory: string): Promise<number> {
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    let total = 0;
+    for (const entry of entries) {
+      const path = NodePath.join(directory, entry.name);
+      if (entry.isDirectory()) total += await this.#directorySize(path);
+      else if (entry.isFile())
+        total += await stat(path)
+          .then((info) => info.size)
+          .catch(() => 0);
+    }
+    return total;
+  }
+
   async #readRef(projectId: string, checkpointRef: string): Promise<SnapshotRefRecord> {
-    return JSON.parse(await readFile(this.#refPath(projectId, checkpointRef), "utf8")) as SnapshotRefRecord;
+    return JSON.parse(
+      await readFile(this.#refPath(projectId, checkpointRef), "utf8"),
+    ) as SnapshotRefRecord;
   }
 
   async #readManifest(hash: string): Promise<SnapshotManifest> {
     const contents = await readFile(this.#manifestPath(hash), "utf8");
     const manifest = JSON.parse(contents) as SnapshotManifest;
-    if (manifest.version !== 1 || sha256(JSON.stringify({ ...manifest, createdAt: undefined })) !== hash) {
+    if (
+      manifest.version !== 1 ||
+      sha256(JSON.stringify({ ...manifest, createdAt: undefined })) !== hash
+    ) {
       throw new Error(`Checkpoint manifest is missing or corrupt: ${hash}`);
     }
     return manifest;
@@ -608,7 +922,13 @@ export class SnapshotEngine {
   }
 
   #refPath(projectId: string, checkpointRef: string): string {
-    return NodePath.join(this.#storageRoot, "projects", projectId, "refs", `${sha256(checkpointRef)}.json`);
+    return NodePath.join(
+      this.#storageRoot,
+      "projects",
+      projectId,
+      "refs",
+      `${sha256(checkpointRef)}.json`,
+    );
   }
 
   async #recoverTemporaryFiles(directory: string): Promise<void> {
