@@ -2901,7 +2901,7 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
-            <SidebarMenuButton
+          <SidebarMenuButton
             size="sm"
             isActive={pathname.startsWith("/settings")}
             className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
