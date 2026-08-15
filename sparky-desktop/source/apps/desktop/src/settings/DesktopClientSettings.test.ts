@@ -16,6 +16,8 @@ const clientSettings: ClientSettings = {
   onboardingCompleted: true,
   onboardingUseCase: "Improve an existing codebase",
   cloudDataSharingEnabled: false,
+  profileName: "Your profile",
+  profileImage: "",
   autoOpenPlanSidebar: false,
   confirmThreadArchive: true,
   confirmThreadDelete: false,
