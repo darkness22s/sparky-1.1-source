@@ -73,7 +73,7 @@ describe("resolveBranchToolbarValue", () => {
     ).toBe("feature/base");
   });
 
-  it("shows the actual checked-out ref when not selecting a new worktree base", () => {
+  it("keeps the active thread ref when the shared checkout is on another ref", () => {
     expect(
       resolveBranchToolbarValue({
         envMode: "local",
@@ -81,7 +81,7 @@ describe("resolveBranchToolbarValue", () => {
         activeThreadBranch: "feature/base",
         currentGitBranch: "main",
       }),
-    ).toBe("main");
+    ).toBe("feature/base");
   });
 });
 

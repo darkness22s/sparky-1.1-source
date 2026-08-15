@@ -386,8 +386,15 @@ export function resolveThreadBranchMetadataPatch(
 export function resolveLiveThreadBranchUpdate(input: {
   threadBranch: string | null;
   gitStatus: VcsStatusResult | null;
+  isSharedCheckout?: boolean;
 }): { branch: string | null } | null {
   if (!input.gitStatus) {
+    return null;
+  }
+
+  // Live status from the main checkout is shared by every local thread. Once
+  // a local thread has an explicit branch, keep that branch thread-scoped.
+  if (input.isSharedCheckout && input.threadBranch !== null) {
     return null;
   }
 
