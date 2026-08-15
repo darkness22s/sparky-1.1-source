@@ -10,6 +10,7 @@ import {
   type ProviderSession,
 } from "@sparky/contracts";
 import { describe, expect, it } from "vite-plus/test";
+import { ProviderInstanceId } from "@sparky/contracts";
 
 import {
   makeSparkyAssistantSegmenter,

@@ -7,6 +7,7 @@ import {
   type ModelSelection,
   type ProjectScript,
   type ProjectId,
+  isProjectlessProjectId,
   type ProviderApprovalDecision,
   ProviderInstanceId,
   type ServerProvider,
@@ -1518,6 +1519,10 @@ function ChatViewContent(props: ChatViewProps) {
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
   const activeProject = useProject(activeProjectRef);
+  const isProjectlessChat = activeThread
+    ? isProjectlessProjectId(activeThread.projectId)
+    : activeProjectRef?.projectId !== undefined &&
+      isProjectlessProjectId(activeProjectRef.projectId);
   const activeEnvironmentShell = useEnvironmentQuery(
     activeThread ? environmentShell.stateAtom(activeThread.environmentId) : null,
   );
@@ -2320,7 +2325,7 @@ function ChatViewContent(props: ChatViewProps) {
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
   // Default true while loading to avoid toolbar flicker.
-  const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
+  const isGitRepo = !isProjectlessChat && (gitStatusQuery.data?.isRepo ?? true);
   const initialDiffPanelGitScope =
     gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
@@ -5335,7 +5340,7 @@ function ChatViewContent(props: ChatViewProps) {
             activeThreadId={activeThread.id}
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
-            activeProjectName={activeProject?.title}
+            activeProjectName={isProjectlessChat ? undefined : activeProject?.title}
             openInCwd={gitCwd}
             activeProjectScripts={activeProject?.scripts}
             preferredScriptId={
@@ -5460,8 +5465,10 @@ function ChatViewContent(props: ChatViewProps) {
                         }
                       >
                         <DraftHeroHeadline
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
+                          activeProjectRef={isProjectlessChat ? null : activeProjectRef}
+                          activeProjectTitle={
+                            isProjectlessChat ? null : (activeProject?.title ?? null)
+                          }
                         />
                       </div>
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
