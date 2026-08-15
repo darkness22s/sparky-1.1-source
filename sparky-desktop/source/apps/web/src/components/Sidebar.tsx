@@ -11,7 +11,6 @@ import {
   Globe2Icon,
   LoaderIcon,
   SearchIcon,
-  SettingsIcon,
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
@@ -132,6 +131,7 @@ import {
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
+import { ProfileSidebarFooter } from "./profile/ProfileSidebarFooter";
 import { SidebarStageBackdrop, resolveSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { Kbd } from "./ui/kbd";
 import {

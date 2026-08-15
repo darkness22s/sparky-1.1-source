@@ -1,18 +1,17 @@
 import { useCallback, type ComponentType } from "react";
 import {
   ArchiveIcon,
-  ArrowLeftIcon,
   BoxesIcon,
   SlidersHorizontalIcon,
   BrainIcon,
   KeyboardIcon,
   Settings2Icon,
+  UserCircleIcon,
 } from "lucide-react";
-import { useCanGoBack, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 
 import {
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarMenu,
   SidebarMenuButton,
@@ -20,8 +19,10 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "../ui/sidebar";
+import { ProfileSidebarFooter } from "../profile/ProfileSidebarFooter";
 
 export type SettingsSectionPath =
+  | "/settings/profile"
   | "/settings/general"
   | "/settings/personalize"
   | "/settings/keybindings"
@@ -34,6 +35,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   to: SettingsSectionPath;
   icon: ComponentType<{ className?: string }>;
 }> = [
+  { label: "Profile", to: "/settings/profile", icon: UserCircleIcon },
   { label: "General", to: "/settings/general", icon: Settings2Icon },
   { label: "Personalize", to: "/settings/personalize", icon: SlidersHorizontalIcon },
   { label: "Keybindings", to: "/settings/keybindings", icon: KeyboardIcon },
@@ -44,7 +46,6 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
-  const canGoBack = useCanGoBack();
   const { isMobile, setOpenMobile } = useSidebar();
   const handleSectionClick = useCallback(
     (to: SettingsSectionPath) => {
@@ -55,17 +56,6 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
     },
     [isMobile, navigate, setOpenMobile],
   );
-  const handleBackClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    if (canGoBack) {
-      window.history.back();
-      return;
-    }
-    void navigate({ to: "/" });
-  }, [canGoBack, isMobile, navigate, setOpenMobile]);
-
   return (
     <>
       <SidebarContent className="overflow-x-hidden">
@@ -103,22 +93,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
       </SidebarContent>
 
       <SidebarSeparator />
-      <SidebarFooter className="p-2">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-          <SidebarMenu className="min-w-0">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                className="gap-2 px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                onClick={handleBackClick}
-              >
-                <ArrowLeftIcon className="size-4" />
-                <span>Back</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </div>
-      </SidebarFooter>
+      <ProfileSidebarFooter includeBack />
     </>
   );
 }
