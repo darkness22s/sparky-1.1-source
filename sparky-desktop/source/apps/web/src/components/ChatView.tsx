@@ -255,6 +255,7 @@ import {
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
 import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
+import { EnvironmentPanel } from "./EnvironmentPanel";
 import { RightPanelSheet } from "./RightPanelSheet";
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -1434,6 +1435,7 @@ function ChatViewContent(props: ChatViewProps) {
     selectActiveRightPanel(state.byThreadKey, activeThreadRef),
   );
   const diffOpen = activeRightPanelKind === "diff";
+  const environmentOpen = activeRightPanelKind === "environment";
   const rightPanelState = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, activeThreadRef),
   );
@@ -2948,6 +2950,35 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef || !activeProject) return;
     useRightPanelStore.getState().open(activeThreadRef, "files");
   }, [activeProject, activeThreadRef]);
+  const addEnvironmentSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "environment");
+  }, [activeThreadRef]);
+  const toggleEnvironmentPanel = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "environment");
+  }, [activeThreadRef]);
+  const closeEnvironmentPanel = useCallback(() => {
+    if (!activeThreadRef) return;
+    setMaximizedRightPanelThreadKey(null);
+    useRightPanelStore.getState().close(activeThreadRef);
+  }, [activeThreadRef]);
+  const openEnvironmentTerminal = useCallback(
+    (terminalId: string) => {
+      if (!activeThreadRef) return;
+      useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
+      setTerminalFocusRequestId((value) => value + 1);
+    },
+    [activeThreadRef],
+  );
+  const openEnvironmentBrowser = useCallback(
+    (tabId: string) => {
+      if (!activeThreadRef || !isPreviewSupportedInRuntime()) return;
+      useRightPanelStore.getState().openBrowser(activeThreadRef, tabId);
+      setActivePreviewTab(activeThreadRef, tabId);
+    },
+    [activeThreadRef],
+  );
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -3100,13 +3131,31 @@ function ChatViewContent(props: ChatViewProps) {
     if (rightPanelOpen) {
       if (planSidebarOpen) {
         closePlanSidebar();
+      } else if (environmentOpen) {
+        toggleEnvironmentPanel();
+        setMaximizedRightPanelThreadKey(null);
       } else {
         closePreviewPanel();
       }
       return;
     }
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
-  }, [activeThreadRef, closePlanSidebar, closePreviewPanel, planSidebarOpen, rightPanelOpen]);
+  }, [
+    activeThreadRef,
+    closePlanSidebar,
+    closePreviewPanel,
+    environmentOpen,
+    planSidebarOpen,
+    rightPanelOpen,
+    toggleEnvironmentPanel,
+  ]);
+  const closeActiveRightPanel = useCallback(() => {
+    if (planSidebarOpen) {
+      closePlanSidebar();
+      return;
+    }
+    closeEnvironmentPanel();
+  }, [closeEnvironmentPanel, closePlanSidebar, planSidebarOpen]);
   const toggleRightPanelMaximized = useCallback(() => {
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
@@ -5221,6 +5270,14 @@ function ChatViewContent(props: ChatViewProps) {
         timestampFormat={timestampFormat}
         mode="embedded"
       />
+    ) : activeRightPanelSurface?.kind === "environment" ? (
+      <EnvironmentPanel
+        threadRef={activeThreadRef}
+        cwd={gitStatusCwd}
+        onOpenDiff={addDiffSurface}
+        onOpenTerminal={openEnvironmentTerminal}
+        onOpenBrowser={openEnvironmentBrowser}
+      />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
       activeWorkspaceRoot ? (
@@ -5608,15 +5665,17 @@ function ChatViewContent(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
+          onAddEnvironment={addEnvironmentSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
+          environmentAvailable={activeThreadRef !== null}
         >
           {rightPanelContent}
         </RightPanelTabs>
       ) : null}
       {shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
-        <RightPanelSheet open onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}>
+        <RightPanelSheet open onClose={closeActiveRightPanel}>
           <RightPanelTabs
             mode="sheet"
             layoutControls={panelToggleControls}
@@ -5635,9 +5694,11 @@ function ChatViewContent(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
+            onAddEnvironment={addEnvironmentSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
+            environmentAvailable={activeThreadRef !== null}
           >
             {rightPanelContent}
           </RightPanelTabs>

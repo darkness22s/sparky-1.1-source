@@ -2918,7 +2918,7 @@ export class PreviewManager extends Context.Service<
       listener: RecordingFrameListener,
     ) => Effect.Effect<void, never, Scope.Scope>;
   }
->()("@t3tools/desktop/preview/Manager/PreviewManager") {}
+>()("@sparky/desktop/preview/Manager/PreviewManager") {}
 
 export const make = Effect.gen(function* PreviewManagerMake() {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;

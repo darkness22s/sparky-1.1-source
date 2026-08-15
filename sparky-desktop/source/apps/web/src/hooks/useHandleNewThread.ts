@@ -48,6 +48,8 @@ export function useNewThreadHandler() {
         envMode?: DraftThreadEnvMode;
         startFromOrigin?: boolean;
         replace?: boolean;
+        forceNew?: boolean;
+        initialPrompt?: string;
       },
     ): Promise<void> => {
       const {
@@ -57,6 +59,7 @@ export function useNewThreadHandler() {
         applyStickyState,
         setDraftThreadContext,
         setLogicalProjectDraftThreadId,
+        setPrompt,
       } = useComposerDraftStore.getState();
       const currentRouteTarget = getCurrentRouteTarget();
       const project = projects.find(
@@ -73,6 +76,7 @@ export function useNewThreadHandler() {
       const hasWorktreePathOption = options?.worktreePath !== undefined;
       const hasEnvModeOption = options?.envMode !== undefined;
       const hasStartFromOriginOption = options?.startFromOrigin !== undefined;
+      const forceNew = options?.forceNew === true;
       const storedDraftThread = getDraftSessionByLogicalProjectKey(logicalProjectKey);
       const storedDraftThreadRef = storedDraftThread
         ? scopeThreadRef(storedDraftThread.environmentId, storedDraftThread.threadId)
@@ -89,7 +93,7 @@ export function useNewThreadHandler() {
           ? getDraftThread(currentRouteTarget.threadRef)
           : getDraftSession(currentRouteTarget.draftId)
         : null;
-      if (reusableStoredDraftThread) {
+      if (!forceNew && reusableStoredDraftThread) {
         return (async () => {
           if (
             hasBranchOption ||
@@ -127,6 +131,7 @@ export function useNewThreadHandler() {
       }
 
       if (
+        !forceNew &&
         latestActiveDraftThread &&
         currentRouteTarget?.kind === "draft" &&
         latestActiveDraftThread.logicalProjectKey === logicalProjectKey &&
@@ -178,6 +183,9 @@ export function useNewThreadHandler() {
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
         applyStickyState(draftId);
+        if (options?.initialPrompt !== undefined) {
+          setPrompt(draftId, options.initialPrompt);
+        }
 
         await router.navigate({
           to: "/draft/$draftId",

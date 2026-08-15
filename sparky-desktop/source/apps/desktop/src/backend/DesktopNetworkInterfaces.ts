@@ -37,7 +37,7 @@ export class DesktopNetworkInterfaces extends Context.Service<
   {
     readonly read: Effect.Effect<NetworkInterfaces>;
   }
->()("@t3tools/desktop/backend/DesktopNetworkInterfaces") {}
+>()("@sparky/desktop/backend/DesktopNetworkInterfaces") {}
 
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;

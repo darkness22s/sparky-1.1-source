@@ -190,7 +190,7 @@ export class DesktopSavedEnvironments extends Context.Service<
       environmentId: string,
     ) => Effect.Effect<void, DesktopSavedEnvironmentsMutationError>;
   }
->()("@t3tools/desktop/settings/DesktopSavedEnvironments") {}
+>()("@sparky/desktop/settings/DesktopSavedEnvironments") {}
 
 function toPersistedSavedEnvironmentRecord(
   record: PersistedSavedEnvironmentStorageRecord,

@@ -116,7 +116,7 @@ const STREAMING_TEXT_ANIMATION_OPTIONS = [
   { value: "words", label: "Word dissolve" },
 ] as const;
 
-const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("sparky");
 
 function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
@@ -1300,17 +1300,24 @@ export function ProviderSettingsPanel() {
     const driver = providerSettings.provider;
     const defaultInstanceId = defaultInstanceIdForDriver(driver);
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
-    const legacyConfig = legacyProviders[providerSettings.provider]!;
-    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider]!;
+    const legacyConfig = legacyProviders[providerSettings.provider];
+    const defaultLegacyConfig = defaultLegacyProviders[providerSettings.provider];
     const effectiveInstance: ProviderInstanceConfig =
       explicitInstance ??
       ({
         driver,
-        enabled: legacyConfig.enabled,
-        config: legacyConfig,
+        enabled:
+          typeof legacyConfig === "object" &&
+          legacyConfig !== null &&
+          "enabled" in legacyConfig &&
+          typeof legacyConfig.enabled === "boolean"
+            ? legacyConfig.enabled
+            : true,
+        config: legacyConfig ?? {},
       } satisfies ProviderInstanceConfig);
     const isDirty =
-      explicitInstance !== undefined || !Equal.equals(legacyConfig, defaultLegacyConfig);
+      explicitInstance !== undefined ||
+      (legacyConfig !== undefined && !Equal.equals(legacyConfig, defaultLegacyConfig));
     rows.push({
       instanceId: defaultInstanceId,
       instance: effectiveInstance,
