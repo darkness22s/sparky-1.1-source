@@ -44,6 +44,7 @@ pub struct PromptBuilder {
     custom_prompt: Option<String>,
     append_prompt: Option<String>,
     plan_mode: bool,
+    workspace_context: bool,
 }
 
 impl PromptBuilder {
@@ -53,6 +54,7 @@ impl PromptBuilder {
             custom_prompt: None,
             append_prompt: None,
             plan_mode: false,
+            workspace_context: true,
         }
     }
 
@@ -71,7 +73,15 @@ impl PromptBuilder {
         self
     }
 
+    pub fn with_workspace_context(mut self, enabled: bool) -> Self {
+        self.workspace_context = enabled;
+        self
+    }
+
     pub async fn load_context_files(&self) -> Vec<ContextFile> {
+        if !self.workspace_context {
+            return Vec::new();
+        }
         let project_files = self.project_files();
         self.load_context_files_from(&project_files).await
     }
@@ -103,6 +113,9 @@ impl PromptBuilder {
     }
 
     pub async fn load_skills(&self) -> Vec<Skill> {
+        if !self.workspace_context {
+            return Vec::new();
+        }
         let project_files = self.project_files();
         self.load_skills_from(&project_files).await
     }
@@ -191,7 +204,9 @@ impl PromptBuilder {
                     p.push_str("\n\n");
                     p.push_str(app);
                 }
-                p.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+                if self.workspace_context {
+                    p.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+                }
                 return p;
             }
         }
@@ -423,7 +438,11 @@ Do not provide a long play-by-play of tool calls.\n\
         // single walk per prompt build; repeated compaction/retry turns can
         // otherwise pay for two full recursive scans before the provider sees
         // any input.
-        let project_files = self.project_files();
+        let project_files = if self.workspace_context {
+            self.project_files()
+        } else {
+            Vec::new()
+        };
         let ctx_files = self.load_context_files_from(&project_files).await;
         if !ctx_files.is_empty() {
             prompt.push_str("\n\n<project_context>\n");
@@ -448,7 +467,9 @@ Do not provide a long play-by-play of tool calls.\n\
             prompt.push_str("</skills>\n");
         }
 
-        prompt.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+        if self.workspace_context {
+            prompt.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+        }
         prompt
     }
 }
@@ -496,5 +517,24 @@ mod tests {
         assert!(prompt.contains("Do not issue multiple edits to the same file"));
         assert!(prompt.contains("Never repeat identical failed arguments"));
         assert!(!prompt.contains("Keep `oldText`"));
+    }
+
+    #[tokio::test]
+    async fn project_free_prompt_omits_workspace_inventory_and_cwd() {
+        let directory = tempfile::tempdir().expect("temporary workspace");
+        std::fs::write(
+            directory.path().join("AGENTS.md"),
+            "Do not expose this context.",
+        )
+        .expect("context file");
+
+        let prompt = PromptBuilder::new(directory.path().to_string_lossy())
+            .with_workspace_context(false)
+            .build()
+            .await;
+
+        assert!(!prompt.contains("Do not expose this context."));
+        assert!(!prompt.contains("<project_context>"));
+        assert!(!prompt.contains("Current working directory:"));
     }
 }

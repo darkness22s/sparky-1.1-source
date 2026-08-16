@@ -79,7 +79,6 @@ import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
-import { ComposerExtensionReferences } from "./ComposerExtensionReferences";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
@@ -446,7 +445,7 @@ export interface ChatComposerHandle {
 
 export interface ChatComposerProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
-  environmentId: EnvironmentId;
+  environmentId: EnvironmentId | null;
   routeKind: "server" | "draft";
   routeThreadRef: ScopedThreadRef;
   draftId: DraftId | null;
@@ -514,6 +513,7 @@ export interface ChatComposerProps {
   keybindings: ResolvedKeybindingsConfig;
   terminalOpen: boolean;
   gitCwd: string | null;
+  workspaceContextEnabled: boolean;
 
   // Refs the parent needs kept in sync
   promptRef: React.RefObject<string>;
@@ -604,6 +604,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     keybindings,
     terminalOpen,
     gitCwd,
+    workspaceContextEnabled,
     promptRef,
     composerRef,
     composerImagesRef,
@@ -635,10 +636,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerDraft = useComposerThreadDraft(composerDraftTarget);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
-  const composerTerminalContexts = composerDraft.terminalContexts;
-  const composerElementContexts = composerDraft.elementContexts;
-  const composerPreviewAnnotations = composerDraft.previewAnnotations;
-  const composerReviewComments = composerDraft.reviewComments;
+  const composerTerminalContexts = workspaceContextEnabled ? composerDraft.terminalContexts : [];
+  const composerElementContexts = workspaceContextEnabled ? composerDraft.elementContexts : [];
+  const composerPreviewAnnotations = workspaceContextEnabled
+    ? composerDraft.previewAnnotations
+    : [];
+  const composerReviewComments = workspaceContextEnabled ? composerDraft.reviewComments : [];
   const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
 
   const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
@@ -952,18 +955,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   // Derived: composer trigger / menu
   // ------------------------------------------------------------------
-  const composerTriggerKind = composerTrigger?.kind ?? null;
-  const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
+  const activeComposerTrigger =
+    !workspaceContextEnabled && composerTrigger?.kind === "path" ? null : composerTrigger;
+  const composerTriggerKind = activeComposerTrigger?.kind ?? null;
+  const pathTriggerQuery =
+    activeComposerTrigger?.kind === "path" ? activeComposerTrigger.query : "";
   const isPathTrigger = composerTriggerKind === "path";
   const workspaceEntries = useComposerPathSearch({
-    environmentId,
+    environmentId: workspaceContextEnabled ? environmentId : null,
     cwd: isPathTrigger ? gitCwd : null,
     query: isPathTrigger ? pathTriggerQuery : null,
   });
 
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
-    if (!composerTrigger) return [];
-    if (composerTrigger.kind === "path") {
+    if (!activeComposerTrigger) return [];
+    if (activeComposerTrigger.kind === "path") {
       return workspaceEntries.entries.map((entry) => ({
         id: `path:${entry.kind}:${entry.path}`,
         type: "path",
@@ -973,7 +979,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         description: entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))),
       }));
     }
-    if (composerTrigger.kind === "slash-command") {
+    if (activeComposerTrigger.kind === "slash-command") {
       const builtInSlashCommandItems = [
         {
           id: "slash:model",
@@ -1007,34 +1013,35 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           description: command.description ?? command.input?.hint ?? "Run provider command",
         }),
       );
-      const query = composerTrigger.query.trim().toLowerCase();
+      const query = activeComposerTrigger.query.trim().toLowerCase();
       const slashCommandItems = [...builtInSlashCommandItems, ...providerSlashCommandItems];
       if (!query) {
         return slashCommandItems;
       }
       return searchSlashCommandItems(slashCommandItems, query);
     }
-    if (composerTrigger.kind === "skill") {
-      return searchProviderSkills(selectedProviderStatus?.skills ?? [], composerTrigger.query).map(
-        (skill) => ({
-          id: `skill:${selectedProvider}:${skill.name}`,
-          type: "skill" as const,
-          provider: selectedProvider,
-          skill,
-          label: formatProviderSkillDisplayName(skill),
-          description:
-            skill.shortDescription ??
-            skill.description ??
-            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-        }),
-      );
+    if (activeComposerTrigger.kind === "skill") {
+      return searchProviderSkills(
+        selectedProviderStatus?.skills ?? [],
+        activeComposerTrigger.query,
+      ).map((skill) => ({
+        id: `skill:${selectedProvider}:${skill.name}`,
+        type: "skill" as const,
+        provider: selectedProvider,
+        skill,
+        label: formatProviderSkillDisplayName(skill),
+        description:
+          skill.shortDescription ??
+          skill.description ??
+          (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
+      }));
     }
     return [];
-  }, [composerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries.entries]);
+  }, [activeComposerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries.entries]);
 
-  const composerMenuOpen = Boolean(composerTrigger);
-  const composerMenuSearchKey = composerTrigger
-    ? `${composerTrigger.kind}:${composerTrigger.query.trim().toLowerCase()}`
+  const composerMenuOpen = Boolean(activeComposerTrigger);
+  const composerMenuSearchKey = activeComposerTrigger
+    ? `${activeComposerTrigger.kind}:${activeComposerTrigger.query.trim().toLowerCase()}`
     : null;
   const activeComposerMenuItem = useMemo(() => {
     const activeItemId = resolveComposerMenuActiveItemId({
@@ -1122,14 +1129,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       scheduleComposerFocus();
     },
     [composerDraftTarget, promptRef, scheduleComposerFocus, setComposerDraftPrompt],
-  );
-
-  const handleExtensionReference = useCallback(
-    (reference: string) => {
-      const currentPrompt = promptRef.current.trimEnd();
-      setPromptFromTraits(`${currentPrompt}${currentPrompt.length > 0 ? " " : ""}${reference}`);
-    },
-    [promptRef, setPromptFromTraits],
   );
 
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
@@ -2344,8 +2343,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   isLoading={isComposerMenuLoading}
                   triggerKind={composerTriggerKind}
                   groupSlashCommandSections={
-                    composerTrigger?.kind === "slash-command" &&
-                    composerTrigger.query.trim().length === 0
+                    activeComposerTrigger?.kind === "slash-command" &&
+                    activeComposerTrigger.query.trim().length === 0
                   }
                   emptyStateText={composerMenuEmptyState}
                   activeItemId={activeComposerMenuItem?.id ?? null}
@@ -2476,12 +2475,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ))}
                 </div>
               )}
-
-            {!isComposerApprovalState &&
-            !projectSelectionRequired &&
-            pendingUserInputs.length === 0 ? (
-              <ComposerExtensionReferences onReference={handleExtensionReference} />
-            ) : null}
 
             <div className="relative">
               <ComposerPromptEditor

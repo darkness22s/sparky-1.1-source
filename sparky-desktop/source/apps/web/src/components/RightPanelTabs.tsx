@@ -58,6 +58,7 @@ interface RightPanelTabsProps {
   diffAvailable: boolean;
   filesAvailable: boolean;
   environmentAvailable: boolean;
+  workspaceAvailable: boolean;
   children: ReactNode;
 }
 
@@ -143,7 +144,7 @@ function RightPanelEmptyState(props: {
     },
     {
       label: "Environment",
-      description: "Monitor the live workspace and Ultra agents.",
+      description: "Monitor the live workspace and thread resources.",
       icon: Workflow,
       available: props.environmentAvailable,
       disabledReason: null,
@@ -458,7 +459,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 </div>
               );
             })}
-            {props.surfaces.length > 0 ? (
+            {props.workspaceAvailable && props.surfaces.length > 0 ? (
               <Menu>
                 <MenuTrigger
                   className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"

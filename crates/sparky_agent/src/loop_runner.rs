@@ -20,6 +20,7 @@ pub enum InteractionMode {
 
 pub struct AgentLoopOptions {
     pub cwd: String,
+    pub workspace_context: bool,
     pub model_name: String,
     pub temperature: Option<f32>,
     pub reasoning_effort: Option<String>,
@@ -809,6 +810,7 @@ impl Default for AgentLoopOptions {
     fn default() -> Self {
         Self {
             cwd: ".".to_string(),
+            workspace_context: true,
             model_name: "gpt-4o".to_string(),
             temperature: Some(0.7),
             reasoning_effort: None,
@@ -940,6 +942,7 @@ impl AgentLoop {
         let tools_schemas = self.tool_registry.get_schemas_for_mode(plan_mode);
 
         let prompt_builder = PromptBuilder::new(&self.options.cwd)
+            .with_workspace_context(self.options.workspace_context)
             .with_append_prompt(self.options.append_system_prompt.clone())
             .with_plan_mode(plan_mode);
         let mut system_prompt = prompt_builder.build().await;

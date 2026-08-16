@@ -40,6 +40,7 @@ interface PackageJson {
   version: string;
   engines: Record<string, string>;
   files: string[];
+  scripts?: Record<string, string>;
   dependencies: Record<string, string>;
   overrides: Record<string, string>;
 }
@@ -323,6 +324,12 @@ const publishCmd = Command.make(
             version,
             engines: serverPackageJson.engines,
             files: serverPackageJson.files,
+            scripts: {
+              // A global npm install is the product's installation flow. The
+              // package creates the same shortcut as `sparky install` so the
+              // user never has to manage a second setup step.
+              postinstall: "node dist/launcher.mjs install",
+            },
             dependencies: resolveCatalogDependencies(
               serverPackageJson.dependencies,
               workspaceCatalog,
@@ -349,9 +356,15 @@ const publishCmd = Command.make(
         () =>
           Effect.gen(function* () {
             const args = createVpPmPublishArgs(config);
-            const spawnCommand = yield* resolveSpawnCommand("vp", ["pm", ...args]);
+            const vpBinary = path.join(
+              repoRoot,
+              "node_modules",
+              ".bin",
+              process.platform === "win32" ? "vp.cmd" : "vp",
+            );
+            const spawnCommand = yield* resolveSpawnCommand(vpBinary, ["pm", ...args]);
 
-            yield* Effect.log(`[cli] Running: vp pm ${args.join(" ")}`);
+            yield* Effect.log(`[cli] Running: ${vpBinary} pm ${args.join(" ")}`);
             yield* runCommand(
               ChildProcess.make(spawnCommand.command, spawnCommand.args, {
                 cwd: repoRoot,

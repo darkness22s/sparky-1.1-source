@@ -62,6 +62,18 @@ export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boo
   return entry.enabled && entry.isAvailable && entry.status === "ready";
 }
 
+/**
+ * Whether an enabled, available instance may contribute its current model
+ * list. A streamed snapshot can already carry usable models while its probe
+ * status is still warning/error, so model flattening must not require the
+ * stricter `ready` state used for the provider rail.
+ */
+export function isProviderInstanceModelListAvailable(
+  entry: Pick<ProviderInstanceEntry, "enabled" | "isAvailable">,
+): boolean {
+  return entry.enabled && entry.isAvailable;
+}
+
 /** Picker rails contain configured, enabled instances only. */
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
   return entry.enabled;

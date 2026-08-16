@@ -23,6 +23,7 @@ import {
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type ProviderWorkspaceContext,
 } from "@sparky/contracts";
 import { causeErrorTag } from "@sparky/shared/observability";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
@@ -148,12 +149,15 @@ function toRuntimePayloadFromSession(
   session: ProviderSession,
   extra?: {
     readonly modelSelection?: unknown;
+    readonly workspaceContext?: ProviderWorkspaceContext;
     readonly lastRuntimeEvent?: string;
     readonly lastRuntimeEventAt?: string;
   },
 ): Record<string, unknown> {
+  const workspaceContext = extra?.workspaceContext ?? session.workspaceContext;
   return {
-    cwd: session.cwd ?? null,
+    ...(workspaceContext !== "none" && session.cwd !== undefined ? { cwd: session.cwd } : {}),
+    ...(workspaceContext !== undefined ? { workspaceContext } : {}),
     model: session.model ?? null,
     ...(session.contextWindowTokens !== undefined
       ? { contextWindowTokens: session.contextWindowTokens }
@@ -244,6 +248,16 @@ function readPersistedCwd(
   if (typeof rawCwd !== "string") return undefined;
   const trimmed = rawCwd.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readPersistedWorkspaceContext(
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
+): ProviderWorkspaceContext | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const value = "workspaceContext" in runtimePayload ? runtimePayload.workspaceContext : undefined;
+  return value === "project" || value === "none" ? value : undefined;
 }
 
 const dieOnMissingBindingInstanceId = (
@@ -419,6 +433,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     threadId: ThreadId,
     extra?: {
       readonly modelSelection?: unknown;
+      readonly workspaceContext?: ProviderWorkspaceContext;
       readonly lastRuntimeEvent?: string;
       readonly lastRuntimeEventAt?: string;
     },
@@ -558,34 +573,34 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       Effect.sync(() => correlateRuntimeEventWithInstance(source, event)),
       (canonicalEvent) =>
         observeTurnLatency(canonicalEvent).pipe(
-            Effect.andThen(
-              increment(providerRuntimeEventsTotal, {
-                provider: canonicalEvent.provider,
-                eventType: canonicalEvent.type,
-              }),
-            ),
-            // Publish before the persistence side effect. A slow SQLite write
-            // must not hold back the first delta or the terminal lifecycle event.
-            Effect.andThen(publishRuntimeEvent(canonicalEvent)),
-            Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
-            Effect.andThen(
-              canonicalEvent.type === "turn.completed" ||
-                canonicalEvent.type === "turn.aborted" ||
-                canonicalEvent.type === "runtime.error" ||
-                canonicalEvent.type === "session.exited"
-                ? clearTurnLatency(canonicalEvent.threadId)
-                : Effect.void,
-            ),
+          Effect.andThen(
+            increment(providerRuntimeEventsTotal, {
+              provider: canonicalEvent.provider,
+              eventType: canonicalEvent.type,
+            }),
           ),
+          // Publish before the persistence side effect. A slow SQLite write
+          // must not hold back the first delta or the terminal lifecycle event.
+          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+          Effect.andThen(persistRuntimeEventState(canonicalEvent, source)),
+          Effect.andThen(
+            canonicalEvent.type === "turn.completed" ||
+              canonicalEvent.type === "turn.aborted" ||
+              canonicalEvent.type === "runtime.error" ||
+              canonicalEvent.type === "session.exited"
+              ? clearTurnLatency(canonicalEvent.threadId)
+              : Effect.void,
+          ),
+        ),
     ).pipe(
-        withMetrics({
-          timer: providerRuntimeEventProcessingDuration,
-          attributes: {
-            provider: source.provider,
-            eventType: event.type,
-          },
-        }),
-      );
+      withMetrics({
+        timer: providerRuntimeEventProcessingDuration,
+        attributes: {
+          provider: source.provider,
+          eventType: event.type,
+        },
+      }),
+    );
 
   // `subscribedAdapters` is our source-of-truth for "which instance adapters
   // are currently wired into the runtime event bus". It both tracks the set
@@ -699,26 +714,38 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         );
       }
 
+      const persistedWorkspaceContext = readPersistedWorkspaceContext(input.binding.runtimePayload);
       const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
       const persistedModelSelection = stabilizeModelSelectionWithPersistedContext(
         readPersistedModelSelection(input.binding.runtimePayload),
         input.binding.runtimePayload,
       );
 
-      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
+      if (persistedWorkspaceContext !== "none") {
+        yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
+      }
       const resumed = yield* adapter
         .startSession({
           threadId: input.binding.threadId,
           provider: input.binding.provider,
           providerInstanceId: bindingInstanceId,
-          ...(persistedCwd ? { cwd: persistedCwd } : {}),
+          ...(persistedWorkspaceContext ? { workspaceContext: persistedWorkspaceContext } : {}),
+          ...(persistedCwd && persistedWorkspaceContext !== "none" ? { cwd: persistedCwd } : {}),
           ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
           runtimeMode: input.binding.runtimeMode ?? "full-access",
         })
-        .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
+        .pipe(
+          Effect.onError(() =>
+            persistedWorkspaceContext === "none"
+              ? Effect.void
+              : clearMcpSession(input.binding.threadId),
+          ),
+        );
       if (resumed.provider !== adapter.provider) {
-        yield* clearMcpSession(input.binding.threadId);
+        if (persistedWorkspaceContext !== "none") {
+          yield* clearMcpSession(input.binding.threadId);
+        }
         return yield* toValidationError(
           input.operation,
           `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
@@ -758,6 +785,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
       );
     }
+    const persistedWorkspaceContext = readPersistedWorkspaceContext(binding.runtimePayload);
     const instanceId = yield* requireBindingInstanceId(input.operation, binding);
     const adapter = yield* registry.getByInstance(instanceId);
 
@@ -768,6 +796,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: true,
+        workspaceContext: persistedWorkspaceContext,
       } as const;
     }
 
@@ -777,6 +806,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: false,
+        workspaceContext: persistedWorkspaceContext,
       } as const;
     }
 
@@ -789,6 +819,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       instanceId,
       threadId: input.threadId,
       isActive: true,
+      workspaceContext: persistedWorkspaceContext,
     } as const;
   });
 
@@ -882,11 +913,18 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           (persistedBinding?.providerInstanceId === resolvedInstanceId
             ? persistedBinding.resumeCursor
             : undefined);
+        const persistedWorkspaceContext = persistedBindingMatchesInstance
+          ? readPersistedWorkspaceContext(persistedBinding?.runtimePayload)
+          : undefined;
+        const effectiveWorkspaceContext: ProviderWorkspaceContext =
+          input.workspaceContext ?? persistedWorkspaceContext ?? "project";
         const effectiveCwd =
-          input.cwd ??
-          (persistedBinding?.providerInstanceId === resolvedInstanceId
-            ? readPersistedCwd(persistedBinding.runtimePayload)
-            : undefined);
+          effectiveWorkspaceContext === "none"
+            ? undefined
+            : (input.cwd ??
+              (persistedBinding?.providerInstanceId === resolvedInstanceId
+                ? readPersistedCwd(persistedBinding.runtimePayload)
+                : undefined));
         yield* Effect.annotateCurrentSpan({
           "provider.kind": resolvedProvider,
           "provider.resume_cursor.source":
@@ -907,7 +945,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.cwd.effective": effectiveCwd ?? "",
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
-        yield* prepareMcpSession(threadId, resolvedInstanceId);
+        if (effectiveWorkspaceContext !== "none") {
+          yield* prepareMcpSession(threadId, resolvedInstanceId);
+        }
         const session = yield* adapter
           .startSession({
             ...input,
@@ -915,13 +955,22 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             ...(effectiveModelSelection !== undefined
               ? { modelSelection: effectiveModelSelection }
               : {}),
+            ...(effectiveWorkspaceContext !== undefined
+              ? { workspaceContext: effectiveWorkspaceContext }
+              : {}),
             ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
             ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
           })
-          .pipe(Effect.onError(() => clearMcpSession(threadId)));
+          .pipe(
+            Effect.onError(() =>
+              effectiveWorkspaceContext === "none" ? Effect.void : clearMcpSession(threadId),
+            ),
+          );
 
         if (session.provider !== adapter.provider) {
-          yield* clearMcpSession(threadId);
+          if (effectiveWorkspaceContext !== "none") {
+            yield* clearMcpSession(threadId);
+          }
           return yield* toValidationError(
             "ProviderService.startSession",
             `Adapter/provider mismatch: requested '${adapter.provider}', received '${session.provider}'.`,
@@ -938,6 +987,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         });
         yield* upsertSessionBinding(sessionWithInstance, threadId, {
           modelSelection: effectiveModelSelection,
+          workspaceContext: effectiveWorkspaceContext,
         });
         yield* analytics.record("provider.session.started", {
           provider: sessionWithInstance.provider,
@@ -1217,7 +1267,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         if (routed.isActive) {
           yield* routed.adapter.stopSession(routed.threadId);
         }
-        yield* clearMcpSession(input.threadId);
+        if (routed.workspaceContext !== "none") {
+          yield* clearMcpSession(input.threadId);
+        }
         yield* directory.upsert({
           threadId: input.threadId,
           provider: routed.adapter.provider,

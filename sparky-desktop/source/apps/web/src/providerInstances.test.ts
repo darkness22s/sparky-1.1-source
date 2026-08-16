@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
+  isProviderInstanceModelListAvailable,
   isProviderInstancePickerReady,
   isProviderInstancePickerVisible,
   resolveSelectableProviderInstance,
@@ -15,6 +16,8 @@ function provider(input: {
   enabled?: boolean;
   availability?: ServerProvider["availability"];
   displayName?: string;
+  status?: ServerProvider["status"];
+  models?: ServerProvider["models"];
 }): ServerProvider {
   return {
     instanceId: ProviderInstanceId.make(input.instanceId),
@@ -23,11 +26,11 @@ function provider(input: {
     enabled: input.enabled ?? true,
     installed: true,
     version: null,
-    status: "ready",
+    status: input.status ?? "ready",
     ...(input.availability ? { availability: input.availability } : {}),
     auth: { status: "authenticated" },
     checkedAt: "2026-01-01T00:00:00.000Z",
-    models: [],
+    models: input.models ?? [],
     slashCommands: [],
     skills: [],
   };
@@ -53,6 +56,31 @@ describe("isProviderInstancePickerReady", () => {
     ]);
 
     expect(entry && isProviderInstancePickerReady(entry)).toBe(true);
+  });
+
+  it("accepts an enabled, available instance while its model-bearing snapshot is warning", () => {
+    const [entry] = deriveProviderInstanceEntries([
+      provider({
+        provider: ProviderDriverKind.make("sparky"),
+        instanceId: "sparky",
+        status: "warning",
+        models: [
+          {
+            slug: "openai/gpt-4o-mini",
+            name: "GPT-4o mini",
+            isCustom: false,
+            capabilities: {},
+          },
+        ],
+      }),
+    ]);
+
+    expect(entry && isProviderInstanceModelListAvailable(entry)).toBe(true);
+    expect(entry && isProviderInstancePickerReady(entry)).toBe(false);
+    expect(entry && isProviderInstanceModelListAvailable({ ...entry, enabled: false })).toBe(false);
+    expect(entry && isProviderInstanceModelListAvailable({ ...entry, isAvailable: false })).toBe(
+      false,
+    );
   });
 });
 

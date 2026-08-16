@@ -42,15 +42,13 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   BrainIcon,
+  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
   CircleAlertIcon,
   EyeIcon,
   Code2Icon,
-  FileDiffIcon,
   FileIcon,
   FilePenLineIcon,
   FilePlus2Icon,
@@ -61,13 +59,17 @@ import {
   KeyboardIcon,
   LoaderCircleIcon,
   ListChecksIcon,
+  Maximize2Icon,
   MessageCircleIcon,
+  MinusIcon,
   MousePointerClickIcon,
   PaintbrushIcon,
-  MinusIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
+  Trash2Icon,
   Undo2Icon,
   WrenchIcon,
   XIcon,
@@ -112,7 +114,6 @@ import {
   type ParsedPreviewAnnotation,
 } from "~/lib/previewAnnotation";
 import { cn } from "~/lib/utils";
-import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@sparky/contracts/settings";
 import type { StreamingTextAnimation } from "@sparky/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
@@ -142,12 +143,13 @@ interface TimelineRowSharedState {
   timestampFormat: TimestampFormat;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;
+  workspaceContextEnabled: boolean;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   streamingTextAnimation: StreamingTextAnimation;
-  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadEnvironmentId: EnvironmentId | null;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
@@ -186,7 +188,8 @@ interface MessagesTimelineProps {
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
-  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadEnvironmentId: EnvironmentId | null;
+  workspaceContextEnabled?: boolean;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -222,6 +225,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
+  workspaceContextEnabled = true,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -339,7 +343,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       revertTurnCountByUserMessageId,
     ],
   );
-  const rows = useStableRows(rawRows);
+  const rowsForDisplay = useMemo(
+    () =>
+      workspaceContextEnabled
+        ? rawRows
+        : rawRows.filter((row) => row.kind !== "work" && row.kind !== "work-toggle"),
+    [rawRows, workspaceContextEnabled],
+  );
+  const rows = useStableRows(rowsForDisplay);
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
@@ -435,13 +446,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () => ({
       timestampFormat,
       routeThreadKey,
-      threadRef: parseScopedThreadKey(routeThreadKey),
-      markdownCwd,
+      threadRef: workspaceContextEnabled ? parseScopedThreadKey(routeThreadKey) : null,
+      workspaceContextEnabled,
+      markdownCwd: workspaceContextEnabled ? markdownCwd : undefined,
       resolvedTheme,
-      workspaceRoot,
+      workspaceRoot: workspaceContextEnabled ? workspaceRoot : undefined,
       skills,
       streamingTextAnimation,
-      activeThreadEnvironmentId,
+      activeThreadEnvironmentId: workspaceContextEnabled ? activeThreadEnvironmentId : null,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
@@ -451,6 +463,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [
       timestampFormat,
       routeThreadKey,
+      workspaceContextEnabled,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -884,23 +897,28 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
-  const terminalContexts = displayedUserMessage.contexts;
+  const terminalContexts = ctx.workspaceContextEnabled ? displayedUserMessage.contexts : [];
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
   let visibleText = displayedUserMessage.visibleText;
-  while (true) {
-    const extracted = extractTrailingPreviewAnnotation(visibleText);
-    if (!extracted.annotation) break;
-    previewAnnotations.unshift(extracted.annotation);
-    visibleText = extracted.promptText;
+  if (ctx.workspaceContextEnabled) {
+    while (true) {
+      const extracted = extractTrailingPreviewAnnotation(visibleText);
+      if (!extracted.annotation) break;
+      previewAnnotations.unshift(extracted.annotation);
+      visibleText = extracted.promptText;
+    }
   }
-  const elementContextState = extractTrailingElementContexts(visibleText);
-  const elementContexts = [
-    ...displayedUserMessage.elementContexts,
-    ...elementContextState.contexts,
-  ];
-  const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
+  const elementContextState = ctx.workspaceContextEnabled
+    ? extractTrailingElementContexts(visibleText)
+    : { contexts: [], promptText: visibleText };
+  const elementContexts = ctx.workspaceContextEnabled
+    ? [...displayedUserMessage.elementContexts, ...elementContextState.contexts]
+    : [];
+  const previewImages = ctx.workspaceContextEnabled
+    ? userImages.filter((image) => image.name.startsWith("preview-annotation-"))
+    : [];
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
-  const canRevertAgentWork = typeof row.revertTurnCount === "number";
+  const canRevertAgentWork = ctx.workspaceContextEnabled && typeof row.revertTurnCount === "number";
 
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -1048,8 +1066,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           skills={ctx.skills}
         />
         <AssistantChangedFilesSection
-          turnSummary={row.assistantTurnDiffSummary}
-          routeThreadKey={ctx.routeThreadKey}
+          turnSummary={ctx.workspaceContextEnabled ? row.assistantTurnDiffSummary : undefined}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
@@ -1315,16 +1332,14 @@ function WorkGroupToggleTimelineRow({
   );
 }
 
-/** Subscribes directly to the UI state store for expand/collapse state,
- *  so toggling re-renders only this component — not the entire list. */
+const INLINE_CHANGED_FILES_LIMIT = 3;
+
 const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection({
   turnSummary,
-  routeThreadKey,
   resolvedTheme,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary | undefined;
-  routeThreadKey: string;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
@@ -1332,45 +1347,15 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
   const checkpointFiles = turnSummary.files;
   if (checkpointFiles.length === 0) return null;
 
-  return (
-    <AssistantChangedFilesSectionInner
-      turnSummary={turnSummary}
-      checkpointFiles={checkpointFiles}
-      routeThreadKey={routeThreadKey}
-      resolvedTheme={resolvedTheme}
-      onOpenTurnDiff={onOpenTurnDiff}
-    />
-  );
-});
-
-/** Inner component that only mounts when there are actual changed files,
- *  so the store subscription is unconditional (no hooks after early return). */
-function AssistantChangedFilesSectionInner({
-  turnSummary,
-  checkpointFiles,
-  routeThreadKey,
-  resolvedTheme,
-  onOpenTurnDiff,
-}: {
-  turnSummary: TurnDiffSummary;
-  checkpointFiles: TurnDiffSummary["files"];
-  routeThreadKey: string;
-  resolvedTheme: "light" | "dark";
-  onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-}) {
-  const allDirectoriesExpanded = useUiStateStore(
-    (store) => store.threadChangedFilesExpandedById[routeThreadKey]?.[turnSummary.turnId] ?? true,
-  );
-  const setExpanded = useUiStateStore((store) => store.setThreadChangedFilesExpanded);
+  const inlineFiles = checkpointFiles.slice(0, INLINE_CHANGED_FILES_LIMIT);
   const summaryStat = summarizeTurnDiffStats(checkpointFiles);
+  const changedFilesLabel = `${checkpointFiles.length} changed file${checkpointFiles.length === 1 ? "" : "s"}`;
 
   return (
     <div className="mt-4 rounded-2xl border border-input bg-background p-2 pt-4 shadow-xs/5 not-dark:bg-clip-padding dark:bg-input/32">
       <div className="sticky top-2 z-10 mb-3 flex items-center justify-between gap-2 bg-background px-2 before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] dark:bg-[color-mix(in_srgb,var(--foreground)_2.5%,var(--background))] dark:before:bg-[color-mix(in_srgb,var(--foreground)_2.5%,var(--background))]">
         <p className="flex items-center gap-1 whitespace-nowrap font-medium text-foreground text-xs leading-4">
-          <span>
-            {checkpointFiles.length} changed file{checkpointFiles.length === 1 ? "" : "s"}
-          </span>
+          <span>{changedFilesLabel}</span>
           {hasNonZeroStat(summaryStat) && (
             <DiffStatLabel
               additions={summaryStat.additions}
@@ -1380,63 +1365,36 @@ function AssistantChangedFilesSectionInner({
             />
           )}
         </p>
-        <div className="flex items-center gap-1.5">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="outline"
-                  className="!size-[22px]"
-                  aria-label={allDirectoriesExpanded ? "Collapse all" : "Expand all"}
-                  data-scroll-anchor-ignore
-                  onClick={() =>
-                    setExpanded(routeThreadKey, turnSummary.turnId, !allDirectoriesExpanded)
-                  }
-                />
-              }
-            >
-              {allDirectoriesExpanded ? (
-                <ChevronsDownUpIcon className="size-3" />
-              ) : (
-                <ChevronsUpDownIcon className="size-3" />
-              )}
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {allDirectoriesExpanded ? "Collapse all" : "Expand all"}
-            </TooltipPopup>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="outline"
-                  className="!size-[22px]"
-                  aria-label="View diff"
-                  onClick={() => onOpenTurnDiff(turnSummary.turnId, checkpointFiles[0]?.path)}
-                />
-              }
-            >
-              <FileDiffIcon className="size-3" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">View diff</TooltipPopup>
-          </Tooltip>
-        </div>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                className="!size-[22px]"
+                aria-label={`View all ${changedFilesLabel} in diff panel`}
+                data-scroll-anchor-ignore
+                onClick={() => onOpenTurnDiff(turnSummary.turnId)}
+              />
+            }
+          >
+            <Maximize2Icon className="size-3" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">View all files in diff panel</TooltipPopup>
+        </Tooltip>
       </div>
       <ChangedFilesTree
         key={`changed-files-tree:${turnSummary.turnId}`}
         turnId={turnSummary.turnId}
-        files={checkpointFiles}
-        allDirectoriesExpanded={allDirectoriesExpanded}
+        files={inlineFiles}
+        allDirectoriesExpanded
         resolvedTheme={resolvedTheme}
         onOpenTurnDiff={onOpenTurnDiff}
       />
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Leaf components
@@ -1900,10 +1858,14 @@ type WorkEntryIconName =
   | "keyboard"
   | "list-checks"
   | "brain"
+  | "calendar-clock"
   | "message-circle"
   | "mouse-pointer-click"
+  | "pause-circle"
+  | "play-circle"
   | "square-pen"
   | "terminal"
+  | "trash-2"
   | "wrench"
   | "x"
   | "zap";
@@ -1964,14 +1926,22 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <ListChecksIcon className={className} aria-hidden />;
     case "brain":
       return <BrainIcon className={className} aria-hidden />;
+    case "calendar-clock":
+      return <CalendarClockIcon className={className} aria-hidden />;
     case "message-circle":
       return <MessageCircleIcon className={className} aria-hidden />;
     case "mouse-pointer-click":
       return <MousePointerClickIcon className={className} aria-hidden />;
+    case "pause-circle":
+      return <PauseCircleIcon className={className} aria-hidden />;
+    case "play-circle":
+      return <PlayCircleIcon className={className} aria-hidden />;
     case "square-pen":
       return <SquarePenIcon className={className} aria-hidden />;
     case "terminal":
       return <TerminalIcon className={className} aria-hidden />;
+    case "trash-2":
+      return <Trash2Icon className={className} aria-hidden />;
     case "wrench":
       return <WrenchIcon className={className} aria-hidden />;
     case "x":
@@ -2109,6 +2079,19 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
+    case "image_view":
+    case "t3-code_image_view":
+      return "eye";
+    case "automation_list":
+      return "calendar-clock";
+    case "automation_create":
+      return "calendar-clock";
+    case "automation_run_now":
+      return "play-circle";
+    case "automation_toggle":
+      return "pause-circle";
+    case "automation_delete":
+      return "trash-2";
     default:
       return undefined;
   }

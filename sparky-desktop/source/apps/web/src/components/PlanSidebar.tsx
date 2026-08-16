@@ -59,7 +59,7 @@ interface PlanSidebarProps {
   activePlan: ActivePlanState | null;
   activeProposedPlan: LatestProposedPlanState | null;
   label?: string;
-  environmentId: EnvironmentId;
+  environmentId: EnvironmentId | null;
   threadRef?: ScopedThreadRef | undefined;
   markdownCwd: string | undefined;
   workspaceRoot: string | undefined;
@@ -101,12 +101,13 @@ const PlanSidebar = memo(function PlanSidebar({
   }, [planMarkdown]);
 
   const handleSaveToWorkspace = useCallback(() => {
-    if (!workspaceRoot || !planMarkdown) return;
+    if (!workspaceRoot || !environmentId || !planMarkdown) return;
+    const targetEnvironmentId = environmentId;
     const filename = buildProposedPlanMarkdownFilename(planMarkdown);
     setIsSavingToWorkspace(true);
     void (async () => {
       const result = await writeProjectFile({
-        environmentId,
+        environmentId: targetEnvironmentId,
         input: {
           cwd: workspaceRoot,
           relativePath: filename,
@@ -182,7 +183,7 @@ const PlanSidebar = memo(function PlanSidebar({
                 <MenuItem onClick={handleDownload}>Download as markdown</MenuItem>
                 <MenuItem
                   onClick={handleSaveToWorkspace}
-                  disabled={!workspaceRoot || isSavingToWorkspace}
+                  disabled={!workspaceRoot || !environmentId || isSavingToWorkspace}
                 >
                   Save to workspace
                 </MenuItem>

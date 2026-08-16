@@ -341,7 +341,7 @@ async function main(): Promise<void> {
   const homeDir = resolveSparkyHome();
   const layout = await createLayout(homeDir);
 
-  if (command === "setup") {
+  if (command === "setup" || command === "install") {
     const shortcutPath = await createShortcut(layout);
     console.log(`Sparky home: ${layout.homeDir}`);
     console.log(`Desktop shortcut: ${shortcutPath}`);

@@ -11,8 +11,10 @@ import {
   getProjectSortTimestamp,
   hasUnseenCompletion,
   isContextMenuPointerDown,
+  isProjectFreeChatThread,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
+  partitionSidebarThreadsByScope,
   resolveProjectStatusIndicator,
   resolveSidebarNewThreadSeedContext,
   resolveSidebarNewThreadEnvMode,
@@ -30,15 +32,36 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  UNSCOPED_CHAT_PROJECT_ID,
 } from "@sparky/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   type Project,
+  type SidebarThreadSummary,
   type Thread,
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("isProjectFreeChatThread", () => {
+  it("recognizes only the unscoped chat sentinel", () => {
+    expect(isProjectFreeChatThread({ projectId: UNSCOPED_CHAT_PROJECT_ID })).toBe(true);
+    expect(isProjectFreeChatThread({ projectId: ProjectId.make("project-1") })).toBe(false);
+  });
+});
+
+describe("partitionSidebarThreadsByScope", () => {
+  it("keeps unscoped chats out of project groups", () => {
+    const chatThread = { projectId: UNSCOPED_CHAT_PROJECT_ID } as SidebarThreadSummary;
+    const projectThread = { projectId: ProjectId.make("project-1") } as SidebarThreadSummary;
+
+    expect(partitionSidebarThreadsByScope([chatThread, projectThread])).toEqual({
+      chatThreads: [chatThread],
+      projectThreads: [projectThread],
+    });
+  });
+});
 
 describe("archiveSelectedThreadEntries", () => {
   const entries = [{ threadKey: "one" }, { threadKey: "two" }, { threadKey: "three" }] as const;

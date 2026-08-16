@@ -22,6 +22,8 @@ import {
   RuntimeMode,
 } from "./orchestration.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderWorkspaceContext } from "./providerWorkspaceContext.ts";
+export { ProviderWorkspaceContext };
 
 const ProviderSessionStatus = Schema.Literals([
   "connecting",
@@ -39,6 +41,8 @@ export const ProviderSession = Schema.Struct({
   providerInstanceId: Schema.optional(ProviderInstanceId),
   status: ProviderSessionStatus,
   runtimeMode: RuntimeMode,
+  /** Public project CWD; omitted for project-free sessions. */
+  workspaceContext: Schema.optional(ProviderWorkspaceContext),
   cwd: Schema.optional(TrimmedNonEmptyString),
   model: Schema.optional(TrimmedNonEmptyString),
   /** Provider-reported or explicitly selected capacity for this model. */
@@ -58,6 +62,8 @@ export const ProviderSessionStartInput = Schema.Struct({
   provider: Schema.optional(ProviderDriverKind),
   // See ProviderSession for the migration story.
   providerInstanceId: Schema.optional(ProviderInstanceId),
+  /** Explicitly disables project/workspace context for project-free chats. */
+  workspaceContext: Schema.optional(ProviderWorkspaceContext),
   cwd: Schema.optional(TrimmedNonEmptyString),
   modelSelection: Schema.optional(ModelSelection),
   resumeCursor: Schema.optional(Schema.Unknown),

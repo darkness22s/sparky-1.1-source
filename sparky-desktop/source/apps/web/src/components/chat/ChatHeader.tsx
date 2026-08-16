@@ -19,7 +19,7 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { cn } from "~/lib/utils";
 
 interface ChatHeaderProps {
-  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadEnvironmentId: EnvironmentId | undefined;
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
@@ -42,11 +42,12 @@ interface ChatHeaderProps {
 
 export function shouldShowOpenInPicker(input: {
   readonly activeProjectName: string | undefined;
-  readonly activeThreadEnvironmentId: EnvironmentId;
+  readonly activeThreadEnvironmentId: EnvironmentId | undefined;
   readonly primaryEnvironmentId: EnvironmentId | null;
 }): boolean {
   return (
     Boolean(input.activeProjectName) &&
+    input.activeThreadEnvironmentId !== undefined &&
     input.primaryEnvironmentId !== null &&
     input.activeThreadEnvironmentId === input.primaryEnvironmentId
   );
@@ -100,7 +101,7 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
-        {activeProjectScripts && (
+        {activeProjectScripts && activeThreadEnvironmentId && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}
             keybindings={keybindings}
@@ -111,7 +112,7 @@ export const ChatHeader = memo(function ChatHeader({
             onDeleteScript={onDeleteProjectScript}
           />
         )}
-        {showOpenInPicker && (
+        {showOpenInPicker && activeThreadEnvironmentId && (
           <OpenInPicker
             environmentId={activeThreadEnvironmentId}
             keybindings={keybindings}
@@ -119,7 +120,7 @@ export const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && (
+        {activeProjectName && activeThreadEnvironmentId && (
           <GitActionsControl
             gitCwd={gitCwd}
             activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}

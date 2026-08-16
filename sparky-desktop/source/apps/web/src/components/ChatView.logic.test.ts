@@ -5,6 +5,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   TurnId,
+  UNSCOPED_CHAT_PROJECT_ID,
 } from "@sparky/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -20,6 +21,8 @@ import {
   hasServerAcknowledgedLocalDispatch,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
+  resolveChatServerConfig,
+  resolveLocalDraftModelSelection,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
 } from "./ChatView.logic";
@@ -76,6 +79,53 @@ const readySession = {
   lastError: null,
   updatedAt: "2026-03-29T00:00:10.000Z",
 };
+
+describe("stateless chat model context", () => {
+  it("uses the primary provider config for project-free drafts", () => {
+    expect(
+      resolveChatServerConfig({
+        activeThread: { projectId: UNSCOPED_CHAT_PROJECT_ID },
+        activeEnvironmentConfig: "scoped",
+        primaryEnvironmentConfig: "primary",
+      }),
+    ).toBe("primary");
+    expect(
+      resolveChatServerConfig({
+        activeThread: { projectId },
+        activeEnvironmentConfig: "scoped",
+        primaryEnvironmentConfig: "primary",
+      }),
+    ).toBe("scoped");
+  });
+
+  it("uses the environment model instead of the Codex fallback", () => {
+    const configuredSelection = {
+      instanceId: ProviderInstanceId.make("sparky"),
+      model: "openai/gpt-4o-mini",
+    };
+    const fallbackSelection = {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.6-sol",
+    };
+
+    expect(
+      resolveLocalDraftModelSelection({
+        draftProjectId: UNSCOPED_CHAT_PROJECT_ID,
+        projectModelSelection: null,
+        environmentModelSelection: configuredSelection,
+        fallbackModelSelection: fallbackSelection,
+      }),
+    ).toEqual(configuredSelection);
+    expect(
+      resolveLocalDraftModelSelection({
+        draftProjectId: projectId,
+        projectModelSelection: configuredSelection,
+        environmentModelSelection: fallbackSelection,
+        fallbackModelSelection: fallbackSelection,
+      }),
+    ).toEqual(configuredSelection);
+  });
+});
 
 describe("buildThreadTurnInterruptInput", () => {
   it("targets the session's active running turn", () => {

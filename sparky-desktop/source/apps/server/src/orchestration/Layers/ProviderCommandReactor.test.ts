@@ -20,6 +20,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  UNSCOPED_CHAT_PROJECT_ID,
 } from "@sparky/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -146,6 +147,7 @@ describe("ProviderCommandReactor", () => {
     readonly threadModelSelection?: ModelSelection;
     readonly sessionModelSwitch?: "unsupported" | "in-session";
     readonly requiresNewThreadForModelChange?: boolean;
+    readonly threadProjectId?: ProjectId;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -415,7 +417,7 @@ describe("ProviderCommandReactor", () => {
         type: "thread.create",
         commandId: CommandId.make("cmd-thread-create"),
         threadId: ThreadId.make("thread-1"),
-        projectId: asProjectId("project-1"),
+        projectId: input?.threadProjectId ?? asProjectId("project-1"),
         title: "Thread",
         modelSelection: modelSelection,
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -482,6 +484,36 @@ describe("ProviderCommandReactor", () => {
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("does not pass project workspace context to provider sessions for unscoped chats", async () => {
+    const harness = await createHarness({ threadProjectId: UNSCOPED_CHAT_PROJECT_ID });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-unscoped"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-unscoped"),
+          role: "user",
+          text: "hello without a project",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      workspaceContext: "none",
+    });
+    expect(harness.startSession.mock.calls[0]?.[1]).not.toHaveProperty("cwd");
+    expect(harness.generateThreadTitle).not.toHaveBeenCalled();
   });
 
   it("generates a thread title on the first turn", async () => {
@@ -804,54 +836,6 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  it("runs and records an Ultra workflow before forwarding a sanitized provider turn", async () => {
-    const harness = await createHarness();
-    const now = "2026-01-01T00:00:00.000Z";
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-ultra"),
-        threadId: ThreadId.make("thread-1"),
-        message: {
-          messageId: asMessageId("user-message-ultra"),
-          role: "user",
-          text: "Coordinate a focused implementation and verification pass.",
-          attachments: [],
-        },
-        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5-codex", [
-          { id: "effort", value: "ultra" },
-        ]),
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        createdAt: now,
-      }),
-    );
-
-    await waitFor(() => harness.startSession.mock.calls.length === 1);
-    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
-
-    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
-      modelSelection: {
-        instanceId: ProviderInstanceId.make("codex"),
-        model: "gpt-5-codex",
-      },
-    });
-    const readModel = await harness.readModel();
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-    const activities =
-      thread?.activities.filter((activity) => activity.kind === "ultra.workflow.updated") ?? [];
-    expect(activities).toHaveLength(1);
-    expect(activities[0]?.payload).toMatchObject({
-      threadId: "thread-1",
-      status: "Completed",
-      agents: expect.arrayContaining([
-        expect.objectContaining({ name: "Analyst", status: "completed" }),
-        expect.objectContaining({ name: "Implementer", status: "completed" }),
-        expect.objectContaining({ name: "Verifier", status: "completed" }),
-      ]),
-    });
-  });
   it("forwards claude effort options through session start and turn send", async () => {
     const harness = await createHarness({
       threadModelSelection: {
@@ -1342,6 +1326,38 @@ describe("ProviderCommandReactor", () => {
       },
       runtimeMode: "approval-required",
     });
+  });
+
+  it("starts project-free threads without workspace context", async () => {
+    const harness = await createHarness({
+      threadProjectId: UNSCOPED_CHAT_PROJECT_ID,
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-project-free"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-project-free"),
+          role: "user",
+          text: "hello without a project",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      threadId: ThreadId.make("thread-1"),
+      workspaceContext: "none",
+    });
+    expect(harness.startSession.mock.calls[0]?.[1]).not.toHaveProperty("cwd");
   });
 
   it("restarts claude sessions when claude effort changes", async () => {

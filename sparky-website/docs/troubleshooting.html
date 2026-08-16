@@ -41,6 +41,12 @@
 <h2 id="api-key">API key not set</h2>
 <p>Set the matching environment variable or paste the key in <strong>Settings, Models</strong>.</p>
 
+<h2 id="opencode-limit">OpenCode free usage limit</h2>
+<p>If an OpenCode Zen model reports <code>FreeUsageLimitError</code>, the quota comes from OpenCode Zen rather than OpenAI. Confirm the OpenCode key is configured, then choose another model or wait for the upstream limit to reset.</p>
+
+<h2 id="outdated-runtime">Project-free chat says the runtime is outdated</h2>
+<p>Project-free chats require a Sparky runtime that supports <code>--no-workspace-context</code>. Rebuild or update the desktop binary, then retry the chat.</p>
+
 <h2 id="slow">Sparky seems slow or hangs</h2>
 <p>Waiting for AI response or long command. Press <strong>Ctrl+C</strong> to interrupt. Try a different model if responses are consistently slow.</p>
 
@@ -62,6 +68,8 @@
     <aside class="docs-toc">
       <div class="docs-toc-title">On this page</div>
       <ul class="docs-toc-list"><li><a href="#api-key">API key not set</a></li>
+<li><a href="#opencode-limit">OpenCode free usage limit</a></li>
+<li><a href="#outdated-runtime">Project-free runtime outdated</a></li>
 <li><a href="#slow">Slow or hangs</a></li>
 <li><a href="#wrong-edit">Wrong edit</a></li>
 <li><a href="#timeout">Command timed out</a></li>
@@ -72,7 +80,7 @@
 <footer class="footer"><div class="container"><div class="footer-inner">
     <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
     <span class="footer-tagline">local · private · your call</span>
-    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="../licenses.html">Legal &amp; licenses</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
   </div></div></footer>
 </body>
 </html>

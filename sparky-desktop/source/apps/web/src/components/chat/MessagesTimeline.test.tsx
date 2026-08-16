@@ -384,8 +384,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("whitespace-nowrap");
     expect(markup).toContain("!size-[22px]");
     expect(markup).toContain("size-3");
-    expect(markup).toContain('aria-label="Collapse all"');
-    expect(markup).toContain('aria-label="View diff"');
+    expect(markup).toContain('aria-label="View all 1 changed file in diff panel"');
     expect(markup).toContain("1 changed file");
   });
 

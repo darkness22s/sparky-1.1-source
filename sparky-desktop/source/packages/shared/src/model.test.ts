@@ -80,11 +80,6 @@ describe("descriptor helpers", () => {
           { id: "medium", label: "Medium" },
           { id: "high", label: "High", isDefault: true },
           { id: "ultrathink", label: "Ultrathink" },
-          {
-            id: "ultra",
-            label: "Ultra",
-            description: "Delegate this task through a generated multi-agent workflow.",
-          },
         ],
         currentValue: "medium",
         promptInjectedValues: ["ultrathink"],
@@ -102,7 +97,7 @@ describe("descriptor helpers", () => {
     ]);
   });
 
-  it("adds Ultra to the first selectable provider option without mutating capabilities", () => {
+  it("preserves provider option descriptors without injecting synthetic reasoning levels", () => {
     const descriptors = getProviderOptionDescriptors({ caps: codexCaps });
 
     expect(descriptors[0]).toMatchObject({
@@ -110,11 +105,6 @@ describe("descriptor helpers", () => {
       options: [
         { id: "xhigh", label: "Extra High" },
         { id: "high", label: "High", isDefault: true },
-        {
-          id: "ultra",
-          label: "Ultra",
-          description: "Delegate this task through a generated multi-agent workflow.",
-        },
       ],
     });
     expect(codexCaps.optionDescriptors?.[0]).toMatchObject({

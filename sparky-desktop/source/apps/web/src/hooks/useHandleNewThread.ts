@@ -24,7 +24,10 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { readThreadShell, useProjects, useServerConfigs, useThread } from "../state/entities";
-import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
+import {
+  resolveNewDraftStartFromOrigin,
+  shouldApplyStickyModelSelection,
+} from "../lib/chatThreadActions";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
@@ -182,7 +185,9 @@ export function useNewThreadHandler() {
             }),
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
-        applyStickyState(draftId);
+        if (shouldApplyStickyModelSelection(projectRef.projectId)) {
+          applyStickyState(draftId);
+        }
         if (options?.initialPrompt !== undefined) {
           setPrompt(draftId, options.initialPrompt);
         }

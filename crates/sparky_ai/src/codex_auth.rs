@@ -1,12 +1,18 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use rand::RngCore;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use std::process::Command as StdCommand;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 const JWT_CLAIM_PATH: &str = "https://api.openai.com/auth";
+const OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+const OAUTH_ISSUER: &str = "https://auth.openai.com";
+const OAUTH_PORTS: [u16; 2] = [1455, 1457];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexCredentials {
@@ -52,13 +58,6 @@ fn codex_home() -> anyhow::Result<PathBuf> {
         return Ok(PathBuf::from(path));
     }
     Ok(home_dir()?.join(".codex"))
-}
-
-fn codex_binary() -> PathBuf {
-    std::env::var_os("SPARKY_CODEX_BINARY_PATH")
-        .or_else(|| std::env::var_os("CODEX_BINARY_PATH"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("codex"))
 }
 
 pub fn codex_auth_path() -> anyhow::Result<PathBuf> {
@@ -118,128 +117,215 @@ fn read_managed_credentials(path: &Path) -> anyhow::Result<CodexCredentials> {
     })
 }
 
-async fn run_codex(args: &[&str]) -> anyhow::Result<()> {
-    let output = Command::new(codex_binary())
-        .args(args)
-        .env("CODEX_HOME", codex_home()?)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|error| {
-            anyhow::anyhow!(
-                "Unable to start the Codex CLI. Install Codex or set SPARKY_CODEX_BINARY_PATH: {error}"
-            )
-        })?;
-    if output.status.success() {
-        return Ok(());
+async fn refresh_managed_auth() -> anyhow::Result<()> {
+    let refresh_token = read_managed_credentials(&codex_auth_path()?)?.refresh;
+    let response = Client::new()
+        .post(format!("{OAUTH_ISSUER}/oauth/token"))
+        .json(&json!({
+            "client_id": OAUTH_CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }))
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(|error| anyhow::anyhow!("ChatGPT token refresh failed: {error}"))?;
+    #[derive(Deserialize)]
+    struct RefreshResponse {
+        id_token: Option<String>,
+        access_token: String,
+        refresh_token: Option<String>,
     }
-    let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    anyhow::bail!(
-        "Codex {} failed{}",
-        args.join(" "),
-        if detail.is_empty() {
-            format!(" (exit code {})", output.status.code().unwrap_or(-1))
-        } else {
-            format!(": {detail}")
-        }
-    )
-}
-
-async fn write_rpc_line(
-    stdin: &mut tokio::process::ChildStdin,
-    value: Value,
-) -> anyhow::Result<()> {
-    stdin.write_all(value.to_string().as_bytes()).await?;
-    stdin.write_all(b"\n").await?;
-    stdin.flush().await?;
+    let refreshed: RefreshResponse = response.json().await?;
+    let RefreshResponse {
+        id_token,
+        access_token,
+        refresh_token,
+    } = refreshed;
+    let path = codex_auth_path()?;
+    let existing: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+    let mut tokens = existing.get("tokens").cloned().unwrap_or_else(|| json!({}));
+    tokens["access_token"] = Value::String(access_token);
+    tokens["id_token"] = id_token
+        .map(Value::String)
+        .unwrap_or_else(|| tokens["access_token"].clone());
+    if let Some(refresh_token) = refresh_token {
+        tokens["refresh_token"] = Value::String(refresh_token);
+    }
+    let updated = json!({ "auth_mode": "chatgpt", "tokens": tokens });
+    std::fs::write(path, serde_json::to_vec_pretty(&updated)?)?;
     Ok(())
 }
 
-async fn read_rpc_response(
-    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
-    id: i64,
-) -> anyhow::Result<Value> {
-    loop {
-        let line = tokio::time::timeout(std::time::Duration::from_secs(30), lines.next_line())
-            .await
-            .map_err(|_| anyhow::anyhow!("Codex authentication refresh timed out"))??
-            .ok_or_else(|| {
-                anyhow::anyhow!("Codex app-server closed during authentication refresh")
-            })?;
-        let value: Value = serde_json::from_str(&line)?;
-        if value["id"].as_i64() != Some(id) {
+fn build_oauth_authorize_url(redirect_uri: &str, state: &str, challenge: &str) -> String {
+    let mut query = url::form_urlencoded::Serializer::new(String::new());
+    query.append_pair("response_type", "code");
+    query.append_pair("client_id", OAUTH_CLIENT_ID);
+    query.append_pair("redirect_uri", redirect_uri);
+    query.append_pair(
+        "scope",
+        "openid profile email offline_access api.connectors.read api.connectors.invoke",
+    );
+    query.append_pair("code_challenge", challenge);
+    query.append_pair("code_challenge_method", "S256");
+    query.append_pair("id_token_add_organizations", "true");
+    query.append_pair("codex_cli_simplified_flow", "true");
+    query.append_pair("state", state);
+    query.append_pair("originator", "sparky");
+    format!("{OAUTH_ISSUER}/oauth/authorize?{}", query.finish())
+}
+
+async fn oauth_login() -> anyhow::Result<()> {
+    let mut listener = None;
+    for port in OAUTH_PORTS {
+        match TcpListener::bind(("127.0.0.1", port)).await {
+            Ok(value) => {
+                listener = Some(value);
+                break;
+            }
+            Err(_) => continue,
+        }
+    }
+    let listener = listener
+        .ok_or_else(|| anyhow::anyhow!("Unable to start the ChatGPT login callback server"))?;
+    let port = listener.local_addr()?.port();
+
+    let mut random = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut random);
+    let state = URL_SAFE_NO_PAD.encode(random);
+    rand::thread_rng().fill_bytes(&mut random);
+    let verifier = URL_SAFE_NO_PAD.encode(random);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let redirect_uri = format!("http://localhost:{port}/auth/callback");
+    let auth_url = build_oauth_authorize_url(&redirect_uri, &state, &challenge);
+    open_oauth_browser(&auth_url);
+
+    let code = loop {
+        let (mut stream, _) = listener.accept().await?;
+        let mut request = vec![0u8; 8192];
+        let size = stream.read(&mut request).await?;
+        let request = String::from_utf8_lossy(&request[..size]);
+        let target = request
+            .lines()
+            .next()
+            .and_then(|line| line.strip_prefix("GET "))
+            .and_then(|line| line.split_whitespace().next())
+            .ok_or_else(|| anyhow::anyhow!("Invalid OAuth callback request"))?;
+        let parsed = url::Url::parse(&format!("http://localhost{target}"))?;
+        if parsed.path() != "/auth/callback" {
+            write_oauth_response(&mut stream, "Not Found", "404 Not Found").await?;
             continue;
         }
-        if !value["error"].is_null() {
-            anyhow::bail!("Codex authentication refresh failed: {}", value["error"]);
+        let params: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+        if params.get("state").map(String::as_str) != Some(state.as_str()) {
+            write_oauth_response(&mut stream, "State mismatch", "400 Bad Request").await?;
+            continue;
         }
-        return Ok(value["result"].clone());
+        if let Some(error) = params.get("error") {
+            let description = params
+                .get("error_description")
+                .map(String::as_str)
+                .unwrap_or(error);
+            write_oauth_response(&mut stream, "Sign-in was cancelled", "400 Bad Request").await?;
+            anyhow::bail!("ChatGPT sign-in failed: {description}");
+        }
+        let code = params
+            .get("code")
+            .filter(|value| !value.is_empty())
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!("ChatGPT sign-in did not return an authorization code")
+            })?;
+        write_oauth_response(
+            &mut stream,
+            "Sign-in complete. You can return to Sparky.",
+            "200 OK",
+        )
+        .await?;
+        break code;
+    };
+
+    #[derive(Deserialize)]
+    struct TokenResponse {
+        id_token: String,
+        access_token: String,
+        refresh_token: String,
     }
+    let response = Client::new()
+        .post(format!("{OAUTH_ISSUER}/oauth/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code.as_str()),
+            ("redirect_uri", redirect_uri.as_str()),
+            ("client_id", OAUTH_CLIENT_ID),
+            ("code_verifier", verifier.as_str()),
+        ])
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(|error| anyhow::anyhow!("ChatGPT token exchange failed: {error}"))?;
+    let tokens: TokenResponse = response.json().await?;
+    let account_id = account_id(&tokens.access_token)?;
+    let path = codex_auth_path()?;
+    let directory = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Invalid ChatGPT credentials path"))?;
+    std::fs::create_dir_all(directory)?;
+    let data = json!({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "id_token": tokens.id_token,
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
+            "account_id": account_id,
+        }
+    });
+    std::fs::write(path, serde_json::to_vec_pretty(&data)?)?;
+    Ok(())
 }
 
-/// Ask Codex's supported app-server to refresh its managed ChatGPT tokens.
-/// Sparky never writes or logs the token file; it only reads the refreshed
-/// credentials after app-server has completed the normal managed flow.
-async fn refresh_managed_auth() -> anyhow::Result<()> {
-    let mut child = Command::new(codex_binary())
-        .arg("app-server")
-        .env("CODEX_HOME", codex_home()?)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|error| anyhow::anyhow!("Unable to start Codex app-server: {error}"))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Codex app-server stdin was unavailable"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Codex app-server stdout was unavailable"))?;
-    let mut lines = BufReader::new(stdout).lines();
-
-    write_rpc_line(
-        &mut stdin,
-        json!({
-            "method": "initialize",
-            "id": 1,
-            "params": {
-                "clientInfo": {
-                    "name": "sparky",
-                    "title": "Sparky",
-                    "version": env!("CARGO_PKG_VERSION")
-                },
-                "capabilities": { "experimentalApi": true }
-            }
-        }),
-    )
-    .await?;
-    let _ = read_rpc_response(&mut lines, 1).await?;
-    write_rpc_line(&mut stdin, json!({ "method": "initialized" })).await?;
-    write_rpc_line(
-        &mut stdin,
-        json!({ "method": "account/read", "id": 2, "params": { "refreshToken": true } }),
-    )
-    .await?;
-    let result = read_rpc_response(&mut lines, 2).await?;
-    anyhow::ensure!(
-        !result["account"].is_null(),
-        "Codex is not signed in with ChatGPT"
-    );
-    let _ = child.kill().await;
+async fn write_oauth_response(
+    stream: &mut tokio::net::TcpStream,
+    body: &str,
+    status: &str,
+) -> anyhow::Result<()> {
+    let body = body.as_bytes();
+    stream
+        .write_all(
+            format!(
+                "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .as_bytes(),
+        )
+        .await?;
+    stream.write_all(body).await?;
     Ok(())
+}
+
+fn open_oauth_browser(url: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = StdCommand::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = StdCommand::new("open").arg(url).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = StdCommand::new("xdg-open").arg(url).spawn();
+    }
 }
 
 pub async fn login_codex() -> anyhow::Result<CodexAuthStatus> {
-    run_codex(&["login"]).await?;
+    oauth_login().await?;
     let status = codex_auth_status();
     anyhow::ensure!(
         status.authenticated,
-        "Codex login finished without a usable ChatGPT session"
+        "ChatGPT login finished without a usable session"
     );
     Ok(status)
 }
@@ -256,7 +342,12 @@ pub fn codex_auth_status() -> CodexAuthStatus {
 }
 
 pub async fn logout_codex() -> anyhow::Result<CodexAuthStatus> {
-    run_codex(&["logout"]).await?;
+    let path = codex_auth_path()?;
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     Ok(codex_auth_status())
 }
 

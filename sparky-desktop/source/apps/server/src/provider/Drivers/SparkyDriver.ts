@@ -122,10 +122,7 @@ export function resolveSparkyTextGenerationRuntimeOptions(input: {
   readonly contextWindow?: string | undefined;
 } {
   const { modelSelection, environment } = input;
-  const reasoningEffort = getModelSelectionStringOptionValue(
-    modelSelection,
-    "reasoningEffort",
-  );
+  const reasoningEffort = getModelSelectionStringOptionValue(modelSelection, "reasoningEffort");
   const contextWindow = resolveSparkyRuntimeContextWindow(
     modelSelection.model,
     modelSelection,
@@ -153,12 +150,7 @@ function makeTextGeneration(input: {
   readonly binaryPath: string;
   readonly environment: NodeJS.ProcessEnv;
 }): TextGeneration.TextGeneration["Service"] {
-  const run = (
-    operation: string,
-    cwd: string,
-    modelSelection: ModelSelection,
-    prompt: string,
-  ) =>
+  const run = (operation: string, cwd: string, modelSelection: ModelSelection, prompt: string) =>
     runSparkyTextGeneration({
       binaryPath: input.binaryPath,
       cwd,
@@ -232,8 +224,7 @@ function makeTextGeneration(input: {
       ).pipe(
         Effect.map((result) => {
           const parsed = parseJsonObject(result.response);
-          const rawTitle =
-            typeof parsed?.title === "string" ? parsed.title : result.response;
+          const rawTitle = typeof parsed?.title === "string" ? parsed.title : result.response;
           return { title: sanitizeThreadTitle(rawTitle) };
         }),
       ),
@@ -315,6 +306,11 @@ export const SparkyDriver: ProviderDriver<
               return personalityPrompt + custom;
             }),
             Effect.orElseSucceed(() => ""),
+          ),
+        getImageViewEnabled: () =>
+          serverSettings.getSettings.pipe(
+            Effect.map((settings) => settings.enableImageView),
+            Effect.orElseSucceed(() => false),
           ),
       });
       const maintenanceCapabilities = makeManualOnlyProviderMaintenanceCapabilities({

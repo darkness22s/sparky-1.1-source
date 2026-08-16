@@ -6,12 +6,14 @@ import {
   type OrchestrationEvent,
   ProviderDriverKind,
   ProviderInstanceId,
+  UNSCOPED_CHAT_PROJECT_ID,
   type ProjectId,
   type OrchestrationSession,
   type OrchestrationThread,
   type ProviderRuntimeEvent,
-  ThreadId,
   type ProviderSession,
+  type ProviderWorkspaceContext,
+  ThreadId,
   type RuntimeMode,
   type TurnId,
 } from "@sparky/contracts";
@@ -30,7 +32,6 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
 
-import { runUltraWorkflow, isUltraModelSelection } from "../UltraWorkflowRuntime.ts";
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
@@ -127,18 +128,6 @@ export function providerErrorLabelFromInstanceHint(input: {
   return providerErrorLabel(
     input.instanceId ?? input.modelSelectionInstanceId ?? input.sessionProvider,
   );
-}
-
-function sanitizeUltraModelSelection(selection: ModelSelection): ModelSelection {
-  const options = selection.options?.filter(
-    (option) =>
-      !((option.id === "effort" || option.id === "reasoningEffort") && option.value === "ultra"),
-  );
-  if (options === undefined || options.length === 0) {
-    const { options: _options, ...withoutOptions } = selection;
-    return withoutOptions;
-  }
-  return { ...selection, options };
 }
 
 function canReplaceThreadTitle(currentTitle: string, titleSeed?: string): boolean {
@@ -291,42 +280,6 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const runUltraForThread = Effect.fn("runUltraForThread")(function* (input: {
-    readonly thread: OrchestrationThread;
-    readonly messageText: string;
-    readonly modelSelection: ModelSelection;
-    readonly createdAt: string;
-  }) {
-    if (!isUltraModelSelection(input.modelSelection.options)) {
-      return input.modelSelection;
-    }
-    const snapshot = yield* Effect.tryPromise(() =>
-      runUltraWorkflow({
-        threadId: String(input.thread.id),
-        prompt: input.messageText,
-      }),
-    );
-    const { commandId, eventId } = yield* Effect.all({
-      commandId: serverCommandId("ultra-workflow-activity"),
-      eventId: serverEventId(),
-    });
-    yield* orchestrationEngine.dispatch({
-      type: "thread.activity.append",
-      commandId,
-      threadId: input.thread.id,
-      activity: {
-        id: eventId,
-        tone: snapshot.status === "Failed" ? "error" : "tool",
-        kind: "ultra.workflow.updated",
-        summary: `Ultra workflow ${snapshot.status.toLowerCase()}`,
-        payload: snapshot,
-        turnId: null,
-        createdAt: input.createdAt,
-      },
-      createdAt: input.createdAt,
-    });
-    return sanitizeUltraModelSelection(input.modelSelection);
-  });
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
     const providerError = isProviderAdapterRequestError(failReason?.error)
@@ -716,11 +669,17 @@ const make = Effect.gen(function* () {
         });
       }
     }
-    const project = yield* resolveProject(thread.projectId);
-    const effectiveCwd = resolveThreadWorkspaceCwd({
-      thread,
-      projects: project ? [project] : [],
-    });
+    const workspaceContext: ProviderWorkspaceContext =
+      thread.projectId === UNSCOPED_CHAT_PROJECT_ID ? "none" : "project";
+    const project =
+      workspaceContext === "none" ? undefined : yield* resolveProject(thread.projectId);
+    const effectiveCwd =
+      workspaceContext === "none"
+        ? undefined
+        : resolveThreadWorkspaceCwd({
+            thread,
+            projects: project ? [project] : [],
+          });
 
     const startProviderSession = (input?: {
       readonly resumeCursor?: unknown;
@@ -730,6 +689,7 @@ const make = Effect.gen(function* () {
         threadId,
         ...(preferredProvider ? { provider: preferredProvider } : {}),
         providerInstanceId: desiredInstanceId,
+        workspaceContext,
         ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
         modelSelection: desiredModelSelection,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
@@ -764,9 +724,15 @@ const make = Effect.gen(function* () {
 
     const existingSessionThreadId =
       thread.session && thread.session.status !== "stopped" && activeSession ? thread.id : null;
-    if (existingSessionThreadId) {
+    if (existingSessionThreadId && activeSession) {
       const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
-      const cwdChanged = effectiveCwd !== activeSession?.cwd;
+      const activeWorkspaceContext: ProviderWorkspaceContext =
+        activeSession.workspaceContext ??
+        (workspaceContext === "none" && activeSession.cwd !== undefined
+          ? "project"
+          : workspaceContext);
+      const workspaceContextChanged = activeWorkspaceContext !== workspaceContext;
+      const cwdChanged = effectiveCwd !== activeSession.cwd;
       const sessionModelSwitch = (yield* providerService.getCapabilities(desiredInstanceId))
         .sessionModelSwitch;
       const modelChanged =
@@ -791,6 +757,7 @@ const make = Effect.gen(function* () {
       if (
         !runtimeModeChanged &&
         !cwdChanged &&
+        !workspaceContextChanged &&
         !instanceChanged &&
         !shouldRestartForModelChange &&
         !shouldRestartForModelSelectionChange &&
@@ -799,9 +766,11 @@ const make = Effect.gen(function* () {
         return existingSessionThreadId;
       }
 
-      const resumeCursor = shouldRestartForModelChange
-        ? undefined
-        : (activeSession?.resumeCursor ?? undefined);
+      const canResumeCursor = workspaceContext !== "none" || activeWorkspaceContext === "none";
+      const resumeCursor =
+        shouldRestartForModelChange || !canResumeCursor
+          ? undefined
+          : (activeSession.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
         threadId,
         existingSessionThreadId,
@@ -812,8 +781,8 @@ const make = Effect.gen(function* () {
         currentRuntimeMode: thread.session?.runtimeMode,
         desiredRuntimeMode: thread.runtimeMode,
         runtimeModeChanged,
-        previousCwd: activeSession?.cwd,
-        desiredCwd: effectiveCwd,
+        ...(workspaceContext === "none" ? {} : { previousCwd: activeSession.cwd }),
+        ...(workspaceContext === "none" ? {} : { desiredCwd: effectiveCwd }),
         cwdChanged,
         modelChanged,
         instanceChanged,
@@ -831,7 +800,7 @@ const make = Effect.gen(function* () {
         restartedSessionThreadId: restartedSession.threadId,
         provider: restartedSession.provider,
         runtimeMode: restartedSession.runtimeMode,
-        cwd: restartedSession.cwd,
+        ...(workspaceContext === "none" ? {} : { cwd: restartedSession.cwd }),
       });
       yield* bindSessionToThread(restartedSession);
       return restartedSession.threadId;
@@ -869,25 +838,15 @@ const make = Effect.gen(function* () {
       effectiveInputModelSelection ??
       threadModelSelections.get(input.threadId) ??
       thread.modelSelection;
-    const ultraModelSelection = yield* runUltraForThread({
-      thread,
-      messageText: normalizedInput ?? "",
-      modelSelection: requestedModelSelection,
-      createdAt: input.createdAt,
-    });
     yield* ensureSessionForThread(
       input.threadId,
       input.createdAt,
-      effectiveInputModelSelection !== undefined ||
-        isUltraModelSelection(requestedModelSelection.options)
-        ? { modelSelection: ultraModelSelection }
+      effectiveInputModelSelection !== undefined
+        ? { modelSelection: effectiveInputModelSelection }
         : {},
     );
-    if (
-      effectiveInputModelSelection !== undefined ||
-      isUltraModelSelection(requestedModelSelection.options)
-    ) {
-      threadModelSelections.set(input.threadId, ultraModelSelection);
+    if (effectiveInputModelSelection !== undefined) {
+      threadModelSelections.set(input.threadId, effectiveInputModelSelection);
     }
     const activeSession = yield* providerService
       .listSessions()
@@ -909,14 +868,11 @@ const make = Effect.gen(function* () {
       sessionModelSwitch === "unsupported" && input.modelSelection === undefined
         ? activeSession?.model !== undefined
           ? {
-              ...ultraModelSelection,
+              ...requestedModelSelection,
               model: activeSession.model,
             }
-          : ultraModelSelection
-        : effectiveInputModelSelection !== undefined ||
-            isUltraModelSelection(requestedModelSelection.options)
-          ? ultraModelSelection
-          : undefined;
+          : requestedModelSelection
+        : effectiveInputModelSelection;
 
     return {
       threadId: input.threadId,
@@ -1096,25 +1052,33 @@ const make = Effect.gen(function* () {
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     let generationInput: ThreadTitleGenerationInput | undefined;
-    if (isFirstUserMessageTurn) {
+    if (isFirstUserMessageTurn && thread.projectId !== UNSCOPED_CHAT_PROJECT_ID) {
       const project = yield* resolveProject(thread.projectId);
-      const generationCwd =
-        resolveThreadWorkspaceCwd({ thread, projects: project ? [project] : [] }) ?? process.cwd();
-      generationInput = {
-        threadId: event.payload.threadId,
-        cwd: generationCwd,
-        messageText: message.text,
-        ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
-        ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
-        modelSelection: event.payload.modelSelection ?? thread.modelSelection,
-      };
-      const firstTurnGenerationInput = generationInput;
+      const generationCwd = resolveThreadWorkspaceCwd({
+        thread,
+        projects: project ? [project] : [],
+      });
+      if (generationCwd === undefined) {
+        yield* Effect.logWarning("skipping project title generation without a workspace", {
+          threadId: event.payload.threadId,
+        });
+      } else {
+        generationInput = {
+          threadId: event.payload.threadId,
+          cwd: generationCwd,
+          messageText: message.text,
+          ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+          ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
+          modelSelection: event.payload.modelSelection ?? thread.modelSelection,
+        };
+        const firstTurnGenerationInput = generationInput;
 
-      yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-        branch: thread.branch,
-        worktreePath: thread.worktreePath,
-        ...firstTurnGenerationInput,
-      }).pipe(Effect.forkScoped);
+        yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
+          branch: thread.branch,
+          worktreePath: thread.worktreePath,
+          ...firstTurnGenerationInput,
+        }).pipe(Effect.forkScoped);
+      }
     }
 
     const handleTurnStartFailure = (cause: Cause.Cause<unknown>) => {

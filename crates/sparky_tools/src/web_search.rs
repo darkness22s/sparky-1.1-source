@@ -201,30 +201,73 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
         if resp.status().is_success() {
             if let Ok(body) = resp.text().await {
                 if let Ok(ddg_response) = serde_json::from_str::<serde_json::Value>(&body) {
-                // Extract abstract
-                if let Some(abstract_text) = ddg_response["AbstractText"].as_str() {
-                    if !abstract_text.is_empty() {
-                        let url = ddg_response["AbstractURL"].as_str().unwrap_or("");
-                        let source = ddg_response["AbstractSource"].as_str().unwrap_or("");
-                        push_result(
-                            &mut all_results,
-                            &mut seen_urls,
-                            format!("{} - {}", source, truncate(abstract_text, 80)),
-                            abstract_text.to_string(),
-                            url,
-                            max_results,
-                        );
-                    }
-                }
-
-                // Extract related topics
-                if let Some(topics) = ddg_response["RelatedTopics"].as_array() {
-                    for topic in topics {
-                        if all_results.len() >= max_results {
-                            break;
+                    // Extract abstract
+                    if let Some(abstract_text) = ddg_response["AbstractText"].as_str() {
+                        if !abstract_text.is_empty() {
+                            let url = ddg_response["AbstractURL"].as_str().unwrap_or("");
+                            let source = ddg_response["AbstractSource"].as_str().unwrap_or("");
+                            push_result(
+                                &mut all_results,
+                                &mut seen_urls,
+                                format!("{} - {}", source, truncate(abstract_text, 80)),
+                                abstract_text.to_string(),
+                                url,
+                                max_results,
+                            );
                         }
-                        if let Some(text) = topic["Text"].as_str() {
-                            let url = topic["FirstURL"].as_str().unwrap_or("");
+                    }
+
+                    // Extract related topics
+                    if let Some(topics) = ddg_response["RelatedTopics"].as_array() {
+                        for topic in topics {
+                            if all_results.len() >= max_results {
+                                break;
+                            }
+                            if let Some(text) = topic["Text"].as_str() {
+                                let url = topic["FirstURL"].as_str().unwrap_or("");
+                                if !text.is_empty() {
+                                    push_result(
+                                        &mut all_results,
+                                        &mut seen_urls,
+                                        truncate(text, 80).to_string(),
+                                        text.to_string(),
+                                        url,
+                                        max_results,
+                                    );
+                                }
+                            }
+                            // Check nested topics
+                            if let Some(topics) = topic["Topics"].as_array() {
+                                for sub in topics {
+                                    if all_results.len() >= max_results {
+                                        break;
+                                    }
+                                    if let Some(text) = sub["Text"].as_str() {
+                                        let url = sub["FirstURL"].as_str().unwrap_or("");
+                                        if !text.is_empty() {
+                                            push_result(
+                                                &mut all_results,
+                                                &mut seen_urls,
+                                                truncate(text, 80).to_string(),
+                                                text.to_string(),
+                                                url,
+                                                max_results,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Extract external results
+                    if let Some(results) = ddg_response["Results"].as_array() {
+                        for result in results {
+                            if all_results.len() >= max_results {
+                                break;
+                            }
+                            let text = result["Text"].as_str().unwrap_or("");
+                            let url = result["FirstURL"].as_str().unwrap_or("");
                             if !text.is_empty() {
                                 push_result(
                                     &mut all_results,
@@ -236,50 +279,7 @@ async fn search_duckduckgo(query: &str, max_results: usize) -> anyhow::Result<Ve
                                 );
                             }
                         }
-                        // Check nested topics
-                        if let Some(topics) = topic["Topics"].as_array() {
-                            for sub in topics {
-                                if all_results.len() >= max_results {
-                                    break;
-                                }
-                                if let Some(text) = sub["Text"].as_str() {
-                                    let url = sub["FirstURL"].as_str().unwrap_or("");
-                                    if !text.is_empty() {
-                                        push_result(
-                                            &mut all_results,
-                                            &mut seen_urls,
-                                            truncate(text, 80).to_string(),
-                                            text.to_string(),
-                                            url,
-                                            max_results,
-                                        );
-                                    }
-                                }
-                            }
-                        }
                     }
-                }
-
-                // Extract external results
-                if let Some(results) = ddg_response["Results"].as_array() {
-                    for result in results {
-                        if all_results.len() >= max_results {
-                            break;
-                        }
-                        let text = result["Text"].as_str().unwrap_or("");
-                        let url = result["FirstURL"].as_str().unwrap_or("");
-                        if !text.is_empty() {
-                            push_result(
-                                &mut all_results,
-                                &mut seen_urls,
-                                truncate(text, 80).to_string(),
-                                text.to_string(),
-                                url,
-                                max_results,
-                            );
-                        }
-                    }
-                }
                 }
             }
         }
