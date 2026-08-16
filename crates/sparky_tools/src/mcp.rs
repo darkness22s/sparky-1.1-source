@@ -294,7 +294,7 @@ pub async fn register_http_mcp_tools(
 }
 
 /// Discover and register HTTP MCP tools using an arbitrary authentication
-/// header, such as Composio Connect's `x-consumer-api-key`.
+/// header, such as a provider-specific API-key header.
 pub async fn register_http_mcp_tools_with_header(
     registry: &mut ToolRegistry,
     endpoint: &str,

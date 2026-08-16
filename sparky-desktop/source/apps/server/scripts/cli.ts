@@ -30,7 +30,7 @@ import {
 
 interface PackageJson {
   name: string;
-  repository: {
+  repository?: {
     type: string;
     url: string;
     directory: string;
@@ -40,9 +40,12 @@ interface PackageJson {
   version: string;
   engines: Record<string, string>;
   files: string[];
+  scripts?: Record<string, string>;
   dependencies: Record<string, string>;
   overrides: Record<string, string>;
 }
+
+const PUBLISHED_PACKAGE_NAME = "sparky-desktop";
 
 const PackageJsonPrettyJson = fromJsonStringPretty(Schema.Unknown);
 const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
@@ -187,8 +190,60 @@ const buildCmd = Command.make(
       } else {
         yield* Effect.logWarning("[cli] Web dist not found — skipping client bundle.");
       }
+
+      for (const [sourceRelativePath, targetRelativePath] of [
+        ["apps/desktop/resources/icon.ico", "apps/server/dist/sparky.ico"],
+        ["apps/desktop/resources/icon.png", "apps/server/dist/sparky.png"],
+      ] as const) {
+        const sourcePath = path.join(repoRoot, sourceRelativePath);
+        const targetPath = path.join(repoRoot, targetRelativePath);
+        if (yield* fs.exists(sourcePath)) {
+          yield* fs.copyFile(sourcePath, targetPath);
+          yield* Effect.log(`[cli] Copied launcher icon to ${targetRelativePath}`);
+        }
+      }
     }),
 ).pipe(Command.withDescription("Build the server package (tsdown + bundle web client)."));
+
+// ---------------------------------------------------------------------------
+// stage desktop runtime subcommand
+// ---------------------------------------------------------------------------
+
+const stageDesktopRuntimeCmd = Command.make(
+  "stage-desktop-runtime",
+  {},
+  () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const repoRoot = yield* RepoRoot;
+      const desktopDir = path.join(repoRoot, "apps/desktop");
+      const serverDir = path.join(repoRoot, "apps/server");
+      const desktopDist = path.join(desktopDir, "dist-electron");
+      const desktopResources = path.join(desktopDir, "resources");
+      const stagedDesktopDir = path.join(serverDir, "dist/desktop");
+      const sparkyExecutable = process.platform === "win32" ? "sparky.exe" : "sparky";
+      const sparkyBinary = path.resolve(repoRoot, "..", "..", "target", "release", sparkyExecutable);
+
+      for (const sourcePath of [desktopDist, desktopResources]) {
+        if (!(yield* fs.exists(sourcePath))) {
+          return yield* new ServerCliBuildAssetMissingError({ assetPath: sourcePath });
+        }
+      }
+
+      yield* fs.remove(stagedDesktopDir, { recursive: true, force: true });
+      yield* fs.makeDirectory(stagedDesktopDir, { recursive: true });
+      yield* fs.copy(desktopDist, path.join(stagedDesktopDir, "dist-electron"));
+      yield* fs.copy(desktopResources, path.join(stagedDesktopDir, "resources"));
+      if (!(yield* fs.exists(sparkyBinary))) {
+        return yield* new ServerCliBuildAssetMissingError({ assetPath: sparkyBinary });
+      }
+      const stagedSparkyDir = path.join(stagedDesktopDir, "resources", "sparky");
+      yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
+      yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, sparkyExecutable));
+      yield* Effect.log("[cli] Staged native Electron runtime into the npm package.");
+    }),
+).pipe(Command.withDescription("Stage the native Electron desktop runtime into the npm package."));
 
 // ---------------------------------------------------------------------------
 // publish subcommand
@@ -205,7 +260,7 @@ const createVpPmPublishArgs = (config: PublishCommandConfig): ReadonlyArray<stri
   const args = [
     "publish",
     "--filter",
-    "t3",
+    "./apps/server",
     "--access",
     config.access,
     "--tag",
@@ -239,7 +294,16 @@ const publishCmd = Command.make(
       const backupPath = `${packageJsonPath}.bak`;
 
       // Assert build assets exist
-      for (const relPath of ["dist/bin.mjs", "dist/client/index.html"]) {
+      for (const relPath of [
+        "dist/bin.mjs",
+        "dist/launcher.mjs",
+        "dist/client/index.html",
+        "dist/sparky.ico",
+        "dist/desktop/dist-electron/main.cjs",
+        "dist/desktop/dist-electron/preload.cjs",
+        "dist/desktop/resources/icon.ico",
+        `dist/desktop/resources/sparky/${process.platform === "win32" ? "sparky.exe" : "sparky"}`,
+      ]) {
         const abs = path.join(serverDir, relPath);
         if (!(yield* fs.exists(abs))) {
           return yield* new ServerCliBuildAssetMissingError({ assetPath: abs });
@@ -254,13 +318,18 @@ const publishCmd = Command.make(
           const workspaceCatalog = workspaceConfig.catalog ?? {};
           const workspaceOverrides = workspaceConfig.overrides ?? {};
           const pkg: PackageJson = {
-            name: serverPackageJson.name,
-            repository: serverPackageJson.repository,
+            name: PUBLISHED_PACKAGE_NAME,
             bin: serverPackageJson.bin,
             type: serverPackageJson.type,
             version,
             engines: serverPackageJson.engines,
             files: serverPackageJson.files,
+            scripts: {
+              // A global npm install is the product's installation flow. The
+              // package creates the same shortcut as `sparky install` so the
+              // user never has to manage a second setup step.
+              postinstall: "node dist/launcher.mjs install",
+            },
             dependencies: resolveCatalogDependencies(
               serverPackageJson.dependencies,
               workspaceCatalog,
@@ -287,9 +356,15 @@ const publishCmd = Command.make(
         () =>
           Effect.gen(function* () {
             const args = createVpPmPublishArgs(config);
-            const spawnCommand = yield* resolveSpawnCommand("vp", ["pm", ...args]);
+            const vpBinary = path.join(
+              repoRoot,
+              "node_modules",
+              ".bin",
+              process.platform === "win32" ? "vp.cmd" : "vp",
+            );
+            const spawnCommand = yield* resolveSpawnCommand(vpBinary, ["pm", ...args]);
 
-            yield* Effect.log(`[cli] Running: vp pm ${args.join(" ")}`);
+            yield* Effect.log(`[cli] Running: ${vpBinary} pm ${args.join(" ")}`);
             yield* runCommand(
               ChildProcess.make(spawnCommand.command, spawnCommand.args, {
                 cwd: repoRoot,
@@ -320,7 +395,7 @@ const publishCmd = Command.make(
 
 const cli = Command.make("cli").pipe(
   Command.withDescription("T3 server build & publish CLI."),
-  Command.withSubcommands([buildCmd, publishCmd]),
+  Command.withSubcommands([buildCmd, stageDesktopRuntimeCmd, publishCmd]),
 );
 
 Command.run(cli, { version: "0.0.0" }).pipe(

@@ -5,8 +5,10 @@ import {
   ProviderDriverKind,
   TextGenerationError,
   type ProviderInstanceId,
+  type ModelSelection,
   type ServerProvider,
 } from "@sparky/contracts";
+import { getModelSelectionStringOptionValue } from "@sparky/shared/model";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
@@ -14,6 +16,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import type * as TextGeneration from "../../textGeneration/TextGeneration.ts";
+import { sanitizeThreadTitle } from "../../textGeneration/TextGenerationUtils.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
@@ -21,7 +24,11 @@ import {
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver.ts";
-import { makeSparkyAdapter, runSparkyTextGeneration } from "../Layers/SparkyAdapter.ts";
+import {
+  makeSparkyAdapter,
+  resolveSparkyRuntimeContextWindow,
+  runSparkyTextGeneration,
+} from "../Layers/SparkyAdapter.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { discoverSparkyModels, type SparkyModelDiscovery } from "./SparkyModelCatalog.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -107,16 +114,52 @@ function parseJsonObject(value: string): Record<string, unknown> | null {
   }
 }
 
+export function resolveSparkyTextGenerationRuntimeOptions(input: {
+  readonly modelSelection: ModelSelection;
+  readonly environment: NodeJS.ProcessEnv;
+}): {
+  readonly reasoningEffort?: string | undefined;
+  readonly contextWindow?: string | undefined;
+} {
+  const { modelSelection, environment } = input;
+  const reasoningEffort = getModelSelectionStringOptionValue(modelSelection, "reasoningEffort");
+  const contextWindow = resolveSparkyRuntimeContextWindow(
+    modelSelection.model,
+    modelSelection,
+    environment,
+  );
+  return {
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
+  };
+}
+
+export function makeSparkyThreadTitlePrompt(message: string): string {
+  return [
+    "You are a dedicated conversation-title generator running in a separate metadata request.",
+    "Do not answer the user's request and do not continue the conversation.",
+    "Create a concise, specific title that captures the topic or requested outcome.",
+    "Do not copy the user's wording verbatim, do not return a question, and do not use markdown.",
+    'Return JSON only in this exact shape: {"title":"..."}',
+    "Use at most 4 short words or 3 long words, with no trailing period.",
+    `User's first message:\n${message.trim()}`,
+  ].join("\n");
+}
+
 function makeTextGeneration(input: {
   readonly binaryPath: string;
   readonly environment: NodeJS.ProcessEnv;
 }): TextGeneration.TextGeneration["Service"] {
-  const run = (operation: string, cwd: string, model: string, prompt: string) =>
+  const run = (operation: string, cwd: string, modelSelection: ModelSelection, prompt: string) =>
     runSparkyTextGeneration({
       binaryPath: input.binaryPath,
       cwd,
       prompt,
-      model,
+      model: modelSelection.model,
+      ...resolveSparkyTextGenerationRuntimeOptions({
+        modelSelection,
+        environment: input.environment,
+      }),
       environment: input.environment,
     }).pipe(
       Effect.mapError(
@@ -134,7 +177,7 @@ function makeTextGeneration(input: {
       run(
         "generateCommitMessage",
         request.cwd,
-        request.modelSelection.model,
+        request.modelSelection,
         `Return JSON only with subject, body${request.includeBranch ? ", and branch" : ""}.\nBranch: ${request.branch ?? "none"}\nSummary:\n${request.stagedSummary}\nPatch:\n${request.stagedPatch}`,
       ).pipe(
         Effect.map((result) => {
@@ -150,7 +193,7 @@ function makeTextGeneration(input: {
       run(
         "generatePrContent",
         request.cwd,
-        request.modelSelection.model,
+        request.modelSelection,
         `Return JSON only with title and body for this pull request.\nBase: ${request.baseBranch}\nHead: ${request.headBranch}\nCommits:\n${request.commitSummary}\nDiff:\n${request.diffSummary}\n${request.diffPatch}`,
       ).pipe(
         Effect.map((result) => {
@@ -165,7 +208,7 @@ function makeTextGeneration(input: {
       run(
         "generateBranchName",
         request.cwd,
-        request.modelSelection.model,
+        request.modelSelection,
         `Return only a short kebab-case git branch name for: ${request.message}`,
       ).pipe(
         Effect.map((result) => ({
@@ -176,10 +219,14 @@ function makeTextGeneration(input: {
       run(
         "generateThreadTitle",
         request.cwd,
-        request.modelSelection.model,
-        `Return at most 4 short words or 3 long ones for: ${request.message}. Output only the title, nothing else.`,
+        request.modelSelection,
+        makeSparkyThreadTitlePrompt(request.message),
       ).pipe(
-        Effect.map((result) => ({ title: result.response.trim().split("\n")[0] || "Sparky task" })),
+        Effect.map((result) => {
+          const parsed = parseJsonObject(result.response);
+          const rawTitle = typeof parsed?.title === "string" ? parsed.title : result.response;
+          return { title: sanitizeThreadTitle(rawTitle) };
+        }),
       ),
   };
 }
@@ -259,6 +306,11 @@ export const SparkyDriver: ProviderDriver<
               return personalityPrompt + custom;
             }),
             Effect.orElseSucceed(() => ""),
+          ),
+        getImageViewEnabled: () =>
+          serverSettings.getSettings.pipe(
+            Effect.map((settings) => settings.enableImageView),
+            Effect.orElseSucceed(() => false),
           ),
       });
       const maintenanceCapabilities = makeManualOnlyProviderMaintenanceCapabilities({

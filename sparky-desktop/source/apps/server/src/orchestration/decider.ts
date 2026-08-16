@@ -3,6 +3,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
+  UNSCOPED_CHAT_PROJECT_ID,
 } from "@sparky/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
@@ -227,11 +228,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.create": {
-      yield* requireProject({
-        readModel,
-        command,
-        projectId: command.projectId,
-      });
+      if (command.projectId !== UNSCOPED_CHAT_PROJECT_ID) {
+        yield* requireProject({
+          readModel,
+          command,
+          projectId: command.projectId,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,

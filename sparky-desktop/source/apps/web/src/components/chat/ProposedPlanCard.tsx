@@ -41,7 +41,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   workspaceRoot,
 }: {
   planMarkdown: string;
-  environmentId: EnvironmentId;
+  environmentId: EnvironmentId | null;
   threadRef?: ScopedThreadRef | undefined;
   cwd: string | undefined;
   workspaceRoot: string | undefined;
@@ -85,7 +85,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   };
 
   const openSaveDialog = () => {
-    if (!workspaceRoot) {
+    if (!workspaceRoot || !environmentId) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -101,7 +101,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
 
   const handleSaveToWorkspace = () => {
     const relativePath = savePath.trim();
-    if (!workspaceRoot) {
+    if (!workspaceRoot || !environmentId) {
       return;
     }
     if (!relativePath) {
@@ -163,9 +163,11 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
               {isCopied ? "Copied!" : "Copy to clipboard"}
             </MenuItem>
             <MenuItem onClick={handleDownload}>Download as markdown</MenuItem>
-            <MenuItem onClick={openSaveDialog} disabled={!workspaceRoot || isSavingToWorkspace}>
-              Save to workspace
-            </MenuItem>
+            {workspaceRoot && environmentId ? (
+              <MenuItem onClick={openSaveDialog} disabled={isSavingToWorkspace}>
+                Save to workspace
+              </MenuItem>
+            ) : null}
           </MenuPopup>
         </Menu>
       </div>

@@ -29,7 +29,7 @@ import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings"
 import { cn } from "~/lib/utils";
 import { TooltipProvider } from "../ui/tooltip";
 import {
-  isProviderInstancePickerReady,
+  isProviderInstanceModelListAvailable,
   isProviderInstancePickerVisible,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
@@ -186,8 +186,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   /**
    * Lookup table keyed by `instanceId`. Used for display name + driver
-   * kind enrichment and for `ready`/enabled filtering before flattening
-   * models into the search list.
+   * kind enrichment before flattening models into the search list.
    */
   const entryByInstanceId = useMemo(
     () => new Map(instanceEntries.map((entry) => [entry.instanceId, entry])),
@@ -203,16 +202,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     [props.lockedContinuationGroupKey, props.lockedProvider],
   );
 
-  const readyInstanceSet = useMemo(() => {
-    const ready = new Set<ProviderInstanceId>();
-    for (const entry of instanceEntries) {
-      if (isProviderInstancePickerReady(entry)) {
-        ready.add(entry.instanceId);
-      }
-    }
-    return ready;
-  }, [instanceEntries]);
-
   // Flatten models into a searchable array. One pass over the
   // instance-keyed map; each model carries its instance id + driver kind
   // so the list row can render the right icon and display name without
@@ -226,7 +215,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         // its models — stale options shouldn't appear in the picker.
         continue;
       }
-      if (!readyInstanceSet.has(instanceId)) {
+      if (!isProviderInstanceModelListAvailable(entry)) {
         continue;
       }
       for (const model of models) {
@@ -246,7 +235,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       }
     }
     return out;
-  }, [modelOptionsByInstance, entryByInstanceId, readyInstanceSet]);
+  }, [modelOptionsByInstance, entryByInstanceId]);
 
   const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;

@@ -51,6 +51,15 @@ impl ToolRegistry {
         reg
     }
 
+    pub fn with_project_free(_limits: ToolOutputLimits) -> Self {
+        let mut reg = Self::default();
+        reg.register_builtin(Arc::new(WebSearchTool));
+        reg.register_builtin(Arc::new(AskUserTool));
+        reg.register_builtin(Arc::new(UpdatePlanTool));
+        reg.register_builtin(Arc::new(EndTaskTool));
+        reg
+    }
+
     pub fn with_output_limits(limits: ToolOutputLimits) -> Self {
         let mut reg = Self::default();
         reg.register_builtin(Arc::new(ReadTool::new(limits.read_bytes)));
@@ -143,6 +152,24 @@ impl ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_free_registry_excludes_workspace_tools() {
+        let registry = ToolRegistry::with_project_free(ToolOutputLimits::default());
+
+        for name in ["read", "write", "edit", "bash", "ls", "grep", "find"] {
+            assert!(
+                registry.get(name).is_none(),
+                "unexpected project tool: {name}"
+            );
+        }
+        for name in ["web_search", "ask_user", "update_plan", END_TASK_TOOL_NAME] {
+            assert!(
+                registry.get(name).is_some(),
+                "missing project-free tool: {name}"
+            );
+        }
+    }
 
     #[test]
     fn plan_mode_exposes_only_read_context_and_planning_tools() {

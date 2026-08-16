@@ -20,7 +20,10 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas.ts";
+import { ProviderWorkspaceContext } from "./providerWorkspaceContext.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+
+export const UNSCOPED_CHAT_PROJECT_ID = ProjectId.make("__sparky_unscoped_chat__");
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -631,6 +634,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     attachments: Schema.Array(ChatAttachment),
   }),
   modelSelection: Schema.optional(ModelSelection),
+  workspaceContext: Schema.optional(ProviderWorkspaceContext),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   interactionMode: ProviderInteractionMode.pipe(
@@ -652,6 +656,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     attachments: Schema.Array(UploadChatAttachment),
   }),
   modelSelection: Schema.optional(ModelSelection),
+  workspaceContext: Schema.optional(ProviderWorkspaceContext),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,

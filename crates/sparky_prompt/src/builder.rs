@@ -26,10 +26,8 @@ Plan mode is read-only. Understand the user's request and the repository, then p
 ## Plan-mode behavior
 
 * Inspect relevant project files, instructions, configuration, tests, and existing implementation details before proposing changes.
-* Use only read/context tools: read, ls, grep, find, web_search, and memory_search. Use web_search only when local evidence is insufficient; use memory_search only when a remembered preference or decision could affect the plan.
-* Inspect user-provided images as task evidence when present, and call out any detail that cannot be verified confidently.
+* Use only read/context tools: read, ls, grep, find, and web_search. Use web_search only when local evidence is insufficient.
 * Use ask_user when a missing decision materially changes the plan or makes a safe plan impossible.
-* `ask_user` pauses the current turn after showing its question. Wait for the user's next message instead of continuing with an assumption.
 * Use update_plan to maintain the working plan as you learn more.
 * Before ending a completed task, give the user a concise summary of what you did and then call `end_task` with the same summary. `end_task` is a hidden control signal and is not a user-facing tool call.
 * Never call write, edit, bash, or any other tool that can modify files, execute commands, change dependencies, publish data, or alter external state.
@@ -46,6 +44,7 @@ pub struct PromptBuilder {
     custom_prompt: Option<String>,
     append_prompt: Option<String>,
     plan_mode: bool,
+    workspace_context: bool,
 }
 
 impl PromptBuilder {
@@ -55,6 +54,7 @@ impl PromptBuilder {
             custom_prompt: None,
             append_prompt: None,
             plan_mode: false,
+            workspace_context: true,
         }
     }
 
@@ -73,7 +73,15 @@ impl PromptBuilder {
         self
     }
 
+    pub fn with_workspace_context(mut self, enabled: bool) -> Self {
+        self.workspace_context = enabled;
+        self
+    }
+
     pub async fn load_context_files(&self) -> Vec<ContextFile> {
+        if !self.workspace_context {
+            return Vec::new();
+        }
         let project_files = self.project_files();
         self.load_context_files_from(&project_files).await
     }
@@ -105,6 +113,9 @@ impl PromptBuilder {
     }
 
     pub async fn load_skills(&self) -> Vec<Skill> {
+        if !self.workspace_context {
+            return Vec::new();
+        }
         let project_files = self.project_files();
         self.load_skills_from(&project_files).await
     }
@@ -146,10 +157,23 @@ impl PromptBuilder {
             .git_exclude(true)
             .require_git(false)
             .filter_entry(|entry| {
-                !matches!(
-                    entry.file_name().to_str(),
-                    Some(".git" | "target" | "node_modules")
-                )
+                let Some(name) = entry.file_name().to_str() else {
+                    return true;
+                };
+                let lower_name = name.to_ascii_lowercase();
+                if matches!(lower_name.as_str(), ".git" | "target" | "node_modules") {
+                    return false;
+                }
+
+                // These are nested checkouts or local runtime homes, not
+                // project context. Walking them on every one-shot turn can
+                // multiply prompt discovery work across the same repository.
+                lower_name != ".worktrees"
+                    && lower_name != ".c"
+                    && lower_name != ".t3"
+                    && lower_name != ".sparky-desktop"
+                    && !lower_name.starts_with(".t3-")
+                    && !lower_name.starts_with(".sparky-")
             })
             .build()
             .filter_map(Result::ok)
@@ -180,7 +204,9 @@ impl PromptBuilder {
                     p.push_str("\n\n");
                     p.push_str(app);
                 }
-                p.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+                if self.workspace_context {
+                    p.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+                }
                 return p;
             }
         }
@@ -195,13 +221,14 @@ Your job is to complete coding tasks accurately, efficiently, and autonomously w
             \n\
 ## Core behavior\n\
             \n\
-* Continue working until the task is complete or genuinely blocked. Do not leave requested implementation, verification, commit, or push steps unfinished when they are within scope.\n\
-* Act on the request with the available tools instead of stopping at an explanation of what should be done.\n\
-* Make safe routine decisions independently and keep momentum. Ask only when missing information materially changes the implementation or creates meaningful risk.\n\
+* Continue working until the task is complete or genuinely blocked. Do not leave requested implementation, verification, commit, or push steps unfinished when they are within the task scope.\n\
+* Work through the full request in one continuous pass. Do not stop to ask the user to approve routine implementation decisions or next steps; make reasonable safe decisions and proceed. Ask only when missing information materially changes the implementation or creates meaningful risk.\n\
+* Do not stop after merely explaining what should be done - perform the work using the available tools.\n\
+* Make reasonable decisions independently when requirements are clear.\n\
+* Ask a question only when missing information would materially change the implementation or create meaningful risk.\n\
 * Prefer the smallest correct change over unnecessary rewrites or refactors.\n\
 * Do not modify unrelated code.\n\
 * Follow existing project conventions unless the user explicitly requests a new approach.\n\
-* Treat user-provided screenshots and images as first-class task evidence. Inspect relevant details, correlate them with the repository, and state when something in an image cannot be verified confidently.\n\
 * Never claim a change works unless it has been verified or clearly state why verification was not possible.\n\
             \n\
 ## Tools
@@ -222,20 +249,11 @@ Your job is to complete coding tasks accurately, efficiently, and autonomously w
 
 **web_search**  -  Search official documentation, API references, current package behavior, unfamiliar errors, or other information that cannot be reliably determined from the repository. Prefer primary and official sources. Do not search unnecessarily when the answer is already available locally.
 
-**ask_user**  -  Ask one focused decision question, with mutually exclusive options when helpful, only when the answer materially changes the implementation or risk. Do not use it for routine approval.
-
-**update_plan**  -  Keep a concise working plan for complex or long-running tasks. Update it when discoveries materially change the approach; skip it for straightforward work.
-
-**memory_search**, **memory_add**, **memory_update**, **memory_delete**  -  Reuse only relevant user-approved context. Search when a prior preference or project decision may matter. Save or change memory only with explicit user approval, delete it when asked, and never store secrets or inferred sensitive data.
-
-Additional tools, including MCP integrations, may be supplied dynamically. Treat each available tool's name, description, and schema as authoritative, and use it when it is safer or more direct than a workaround.
-
 ## Tool-call reliability
 
 * Follow each tool's JSON schema exactly. Use the documented parameter names and value types; do not invent aliases or include explanatory text inside arguments.
-* Batch independent read-only inspections when they can run in parallel, but keep edits, commands, and other stateful or dependent actions sequential.
 * Before a mutating tool call, inspect the current target. For `edit`, copy `old_text` from the latest `read`, omit read-output line-number prefixes, and include enough unchanged context for exactly one match.
-* Treat tool results as authoritative. Do not claim success until the result reports success and verification confirms the intended state. If output is truncated, narrow the query or read a focused range instead of guessing.
+* Treat tool results as authoritative. Do not claim success until the result reports success and verification confirms the intended state.
 * Keep dependent mutations sequential. Do not issue multiple edits to the same file from one stale snapshot; after each edit, base the next target on the updated file.
 * If a tool fails, read its full error and change the next call accordingly. Never repeat identical failed arguments. For an edit mismatch or ambiguity, reread the affected range and retry once with a newly copied, more specific block.
 * Prefer several small tool calls over one very large call that risks truncated JSON or stale context.
@@ -247,7 +265,9 @@ Additional tools, including MCP integrations, may be supplied dynamically. Treat
 * Then call **end_task** exactly once with a `summary` argument containing the same concise summary. Do not call it while work, verification, approval, or user input remains.
 * **end_task** is a hidden control signal. Never describe it as a tool call to the user and never use it instead of the final summary.
 
-**In-app browser**  -  The desktop app includes a collaborative browser that you can control programmatically. For browser work, call **preview_status** first. If no automation-capable tab is attached, call **preview_open**; otherwise reuse the current tab unless isolation is useful. Inspect with **preview_snapshot** before interacting, prefer snapshot-provided locators over coordinates, and do not launch a replacement browser automation stack.
+## In-app browser
+
+The desktop app includes a browser that you can control programmatically. Use these tools when you need to inspect or interact with web pages, verify frontend behavior, or test UI changes.
 
 **preview_status**  -  Check whether a browser tab is ready for automation. Returns the current URL, page title, loading state, viewport mode, and measured size.
 
@@ -325,7 +345,7 @@ Explore the repository using ls, find, grep, and read. Trace relevant code paths
             \n\
 ### 2. Plan\n\
             \n\
-Form a concise implementation plan before modifying files. Keep straightforward plans internal; for complex, risky, or long-running work, communicate the plan and use `update_plan` to keep it current when discoveries change.\n\
+Form a concise implementation plan before modifying files. Keep straightforward plans internal; communicate the plan when the task is complex, risky, or long-running.\n\
             \n\
 ### 3. Implement\n\
             \n\
@@ -392,8 +412,8 @@ Do not provide a long play-by-play of tool calls.\n\
             \n\
 ## Communication\n\
             \n\
-* Be concise, direct, warm, and collaborative. Match the user's tone; light personality is welcome when natural, but never trade clarity for jokes or fluff.\n\
-* Share meaningful, outcome-oriented progress during long tasks, especially discoveries that affect the implementation. Skip canned acknowledgements and routine narration.\n\
+* Be concise and direct.\n\
+* Share meaningful progress during long tasks, especially discoveries that affect the implementation.\n\
 * Do not overwhelm the user with routine operational details.\n\
 * Clearly distinguish confirmed facts from assumptions.\n\
 * When presenting commands for the user to run, ensure they match the user's operating system and shell.\n\
@@ -410,7 +430,7 @@ Do not provide a long play-by-play of tool calls.\n\
         }
 
         if let Some(app) = &self.append_prompt {
-            prompt.push('\n');
+            prompt.push_str("\n");
             prompt.push_str(app);
         }
 
@@ -418,7 +438,11 @@ Do not provide a long play-by-play of tool calls.\n\
         // single walk per prompt build; repeated compaction/retry turns can
         // otherwise pay for two full recursive scans before the provider sees
         // any input.
-        let project_files = self.project_files();
+        let project_files = if self.workspace_context {
+            self.project_files()
+        } else {
+            Vec::new()
+        };
         let ctx_files = self.load_context_files_from(&project_files).await;
         if !ctx_files.is_empty() {
             prompt.push_str("\n\n<project_context>\n");
@@ -443,7 +467,9 @@ Do not provide a long play-by-play of tool calls.\n\
             prompt.push_str("</skills>\n");
         }
 
-        prompt.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+        if self.workspace_context {
+            prompt.push_str(&format!("\nCurrent working directory: {}", self.cwd));
+        }
         prompt
     }
 }
@@ -491,5 +517,24 @@ mod tests {
         assert!(prompt.contains("Do not issue multiple edits to the same file"));
         assert!(prompt.contains("Never repeat identical failed arguments"));
         assert!(!prompt.contains("Keep `oldText`"));
+    }
+
+    #[tokio::test]
+    async fn project_free_prompt_omits_workspace_inventory_and_cwd() {
+        let directory = tempfile::tempdir().expect("temporary workspace");
+        std::fs::write(
+            directory.path().join("AGENTS.md"),
+            "Do not expose this context.",
+        )
+        .expect("context file");
+
+        let prompt = PromptBuilder::new(directory.path().to_string_lossy())
+            .with_workspace_context(false)
+            .build()
+            .await;
+
+        assert!(!prompt.contains("Do not expose this context."));
+        assert!(!prompt.contains("<project_context>"));
+        assert!(!prompt.contains("Current working directory:"));
     }
 }

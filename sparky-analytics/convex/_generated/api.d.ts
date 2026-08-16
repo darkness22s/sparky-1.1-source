@@ -11,7 +11,6 @@
 import type * as analytics from "../analytics.js";
 import type * as awsReleases from "../awsReleases.js";
 import type * as http from "../http.js";
-import type * as pluginCatalog from "../pluginCatalog.js";
 import type * as releases from "../releases.js";
 
 import type {
@@ -24,7 +23,6 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   awsReleases: typeof awsReleases;
   http: typeof http;
-  pluginCatalog: typeof pluginCatalog;
   releases: typeof releases;
 }>;
 

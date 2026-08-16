@@ -9,7 +9,7 @@ import * as Effect from "effect/Effect";
 
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 
-it.effect("reports the scoped credential context when preview capability is unavailable", () => {
+it.effect("reports the scoped credential context when a capability is unavailable", () => {
   const invocation: McpInvocationContext.McpInvocationScope = {
     environmentId: EnvironmentId.make("environment-1"),
     threadId: ThreadId.make("thread-1"),
@@ -21,19 +21,19 @@ it.effect("reports the scoped credential context when preview capability is unav
   };
 
   return Effect.gen(function* () {
-    const error = yield* McpInvocationContext.requireMcpCapability("preview").pipe(
+    const error = yield* McpInvocationContext.requireMcpCapability("image_view").pipe(
       Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
       Effect.flip,
     );
 
     expect(error).toBeInstanceOf(PreviewAutomationUnavailableError);
     expect(error).toMatchObject({
-      capability: "preview",
+      capability: "image_view",
       environmentId: invocation.environmentId,
       threadId: invocation.threadId,
       providerSessionId: invocation.providerSessionId,
       providerInstanceId: invocation.providerInstanceId,
     });
-    expect(error.message).toBe("MCP credential does not grant the preview capability.");
+    expect(error.message).toBe("MCP credential does not grant the image_view capability.");
   });
 });

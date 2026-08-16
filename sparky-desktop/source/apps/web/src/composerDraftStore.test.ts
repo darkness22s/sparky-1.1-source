@@ -1151,6 +1151,7 @@ describe("composerDraftStore project draft thread mapping", () => {
 describe("composerDraftStore modelSelection", () => {
   const threadId = ThreadId.make("thread-model-options");
   const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+  const draftId = DraftId.make("draft-model-options");
 
   beforeEach(() => {
     resetComposerDraftStore();
@@ -1176,6 +1177,16 @@ describe("composerDraftStore modelSelection", () => {
     );
   });
 
+  it("stores a model selection against a stateless draft id", () => {
+    const store = useComposerDraftStore.getState();
+    const selection = modelSelection(CODEX_DRIVER, "gpt-5.4");
+
+    store.setModelSelection(draftId, selection);
+
+    expect(store.getComposerDraft(draftId)?.modelSelectionByProvider[CODEX_INSTANCE]).toEqual(
+      selection,
+    );
+  });
   it("keeps default-only model selections on the draft", () => {
     const store = useComposerDraftStore.getState();
     store.setModelSelection(threadRef, modelSelection(CODEX_DRIVER, "gpt-5.4"));
