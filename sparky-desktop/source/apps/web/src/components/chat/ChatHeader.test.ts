@@ -45,4 +45,14 @@ describe("shouldShowOpenInPicker", () => {
       }),
     ).toBe(false);
   });
+
+  it("hides the picker when the thread has no workspace environment", () => {
+    expect(
+      shouldShowOpenInPicker({
+        activeProjectName: "codething-mvp",
+        activeThreadEnvironmentId: undefined,
+        primaryEnvironmentId,
+      }),
+    ).toBe(false);
+  });
 });

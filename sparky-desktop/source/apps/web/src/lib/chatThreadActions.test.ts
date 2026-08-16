@@ -1,9 +1,10 @@
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
-import { EnvironmentId, ProjectId } from "@sparky/contracts";
+import { EnvironmentId, ProjectId, UNSCOPED_CHAT_PROJECT_ID } from "@sparky/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   resolveThreadActionProjectRef,
   resolveNewDraftStartFromOrigin,
+  shouldApplyStickyModelSelection,
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
   type ChatThreadActionContext,
@@ -39,6 +40,10 @@ describe("chatThreadActions", () => {
     ).toBe(false);
   });
 
+  it("does not apply project sticky model state to project-free chats", () => {
+    expect(shouldApplyStickyModelSelection(UNSCOPED_CHAT_PROJECT_ID)).toBe(false);
+    expect(shouldApplyStickyModelSelection(PROJECT_ID)).toBe(true);
+  });
   it("prefers the active draft thread project when resolving thread actions", () => {
     const projectRef = resolveThreadActionProjectRef(
       createContext({

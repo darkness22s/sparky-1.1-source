@@ -26,13 +26,6 @@ const releaseChunk = v.object({
   storageId: v.id("_storage"),
   size: v.number(),
 });
-const pluginCategory = v.union(
-  v.literal("Featured"),
-  v.literal("Productivity"),
-  v.literal("Creativity"),
-  v.literal("Developer Tools"),
-  v.literal("Automation & Data"),
-);
 const releaseFile = v.object({
   name: v.string(),
   size: v.number(),
@@ -137,23 +130,4 @@ export default defineSchema({
     releaseId: v.id("releases"),
     updatedAt: v.number(),
   }).index("by_channel", ["channel"]),
-  pluginCatalog: defineTable({
-    slug: v.string(),
-    name: v.string(),
-    description: v.string(),
-    category: pluginCategory,
-    tags: v.array(v.string()),
-    logoUrl: v.union(v.string(), v.null()),
-    appUrl: v.union(v.string(), v.null()),
-    authSchemes: v.array(v.string()),
-    managedAuthSchemes: v.array(v.string()),
-    toolsCount: v.number(),
-    enabled: v.boolean(),
-    sourceCreatedAt: v.union(v.string(), v.null()),
-    sourceUpdatedAt: v.union(v.string(), v.null()),
-    syncedAt: v.number(),
-  })
-    .index("by_slug", ["slug"])
-    .index("by_enabled", ["enabled"])
-    .index("by_enabled_and_category", ["enabled", "category"]),
 });

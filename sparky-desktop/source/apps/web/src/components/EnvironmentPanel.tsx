@@ -1,63 +1,28 @@
 import type { PreviewSessionSnapshot, ScopedThreadRef, VcsStatusResult } from "@sparky/contracts";
 import {
   Activity,
-  Bot,
-  CheckCircle2,
-  CircleDot,
   ExternalLink,
   FileDiff,
   GitBranch,
   Globe2,
-  LoaderCircle,
   Network,
   Play,
   Server,
   TerminalSquare,
   Workflow,
-  XCircle,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { useEnvironmentQuery } from "../state/query";
 import { useKnownTerminalSessions } from "../state/terminalSessions";
-import { useThreadActivities } from "../state/entities";
 import { vcsEnvironment } from "../state/vcs";
 import { useThreadPreviewState } from "../previewStateStore";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
 import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "./ui/dialog";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "~/lib/utils";
 
 const MAX_VISIBLE_ITEMS = 3;
-
-type UltraAgentStatus = "created" | "running" | "waiting" | "completed" | "failed" | "stopped";
-
-interface UltraAgentView {
-  readonly id: string;
-  readonly name: string;
-  readonly task: string;
-  readonly status: UltraAgentStatus;
-  readonly activity: string;
-  readonly recentMessages: readonly string[];
-  readonly dependsOn: readonly string[];
-}
-
-interface UltraWorkflowView {
-  readonly workflowId: string;
-  readonly status: string;
-  readonly summary: string;
-  readonly agents: readonly UltraAgentView[];
-}
 
 export interface EnvironmentPanelProps {
   readonly threadRef: ScopedThreadRef;
@@ -65,79 +30,6 @@ export interface EnvironmentPanelProps {
   readonly onOpenDiff: () => void;
   readonly onOpenTerminal: (terminalId: string) => void;
   readonly onOpenBrowser: (tabId: string) => void;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function stringArray(value: unknown): readonly string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    : [];
-}
-
-function parseUltraAgent(value: unknown): UltraAgentView | null {
-  if (!isRecord(value)) return null;
-  const id = stringValue(value.id);
-  const name = stringValue(value.name);
-  const task = stringValue(value.task);
-  const status = stringValue(value.status);
-  const activity = stringValue(value.activity);
-  if (
-    id === null ||
-    name === null ||
-    task === null ||
-    activity === null ||
-    status === null ||
-    !["created", "running", "waiting", "completed", "failed", "stopped"].includes(status)
-  ) {
-    return null;
-  }
-  return {
-    id,
-    name,
-    task,
-    status: status as UltraAgentStatus,
-    activity,
-    recentMessages: stringArray(value.recentMessages),
-    dependsOn: stringArray(value.dependsOn),
-  };
-}
-
-function parseUltraWorkflow(payload: unknown): UltraWorkflowView | null {
-  if (!isRecord(payload) || !Array.isArray(payload.agents)) return null;
-  const workflowId = stringValue(payload.workflowId);
-  const status = stringValue(payload.status);
-  if (workflowId === null || status === null) return null;
-  const agents = payload.agents.flatMap((agent) => {
-    const parsed = parseUltraAgent(agent);
-    return parsed ? [parsed] : [];
-  });
-  return {
-    workflowId,
-    status,
-    summary: stringValue(payload.summary) ?? "",
-    agents,
-  };
-}
-
-function latestUltraWorkflow(
-  activities: ReadonlyArray<{
-    readonly kind: string;
-    readonly payload: unknown;
-  }>,
-): UltraWorkflowView | null {
-  for (const activity of [...activities].reverse()) {
-    if (activity.kind !== "ultra.workflow.updated") continue;
-    const workflow = parseUltraWorkflow(activity.payload);
-    if (workflow !== null) return workflow;
-  }
-  return null;
 }
 
 function previewTitle(snapshot: PreviewSessionSnapshot): string {
@@ -319,7 +211,6 @@ function GitSection(props: {
 
 export function EnvironmentPanel(props: EnvironmentPanelProps) {
   const [expandedSections, setExpandedSections] = useState<ReadonlySet<string>>(new Set());
-  const [selectedAgent, setSelectedAgent] = useState<UltraAgentView | null>(null);
   const gitStatusQuery = useEnvironmentQuery(
     props.cwd
       ? vcsEnvironment.status({
@@ -337,8 +228,6 @@ export function EnvironmentPanel(props: EnvironmentPanelProps) {
     environmentId: props.threadRef.environmentId,
     threadId: props.threadRef.threadId,
   });
-  const activities = useThreadActivities(props.threadRef);
-  const ultraWorkflow = useMemo(() => latestUltraWorkflow(activities), [activities]);
   const previewSessions = useMemo(
     () =>
       Object.values(previewState.sessions).filter(
@@ -470,112 +359,8 @@ export function EnvironmentPanel(props: EnvironmentPanelProps) {
                 ))}
             </div>
           </Section>
-
-          <Section
-            title="Ultra agents"
-            icon={<Bot className="size-3" />}
-            count={ultraWorkflow?.agents.length ?? 0}
-            expanded={isExpanded("agents")}
-            onToggle={() => toggleSection("agents")}
-            empty={
-              <EmptySection>
-                {ultraWorkflow
-                  ? `Workflow ${ultraWorkflow.status.toLowerCase()}; no agents yet.`
-                  : "No Ultra workflow activity yet."}
-              </EmptySection>
-            }
-          >
-            <div className="space-y-1">
-              {ultraWorkflow?.agents
-                .slice(0, isExpanded("agents") ? undefined : MAX_VISIBLE_ITEMS)
-                .map((agent) => (
-                  <EnvironmentRow
-                    key={agent.id}
-                    icon={
-                      agent.status === "running" ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
-                      ) : agent.status === "completed" ? (
-                        <CheckCircle2 className="size-3.5" />
-                      ) : agent.status === "failed" ? (
-                        <XCircle className="size-3.5" />
-                      ) : (
-                        <CircleDot className="size-3.5" />
-                      )
-                    }
-                    label={agent.name}
-                    detail={agent.activity}
-                    status={agent.status}
-                    onClick={() => setSelectedAgent(agent)}
-                  />
-                ))}
-            </div>
-          </Section>
         </div>
       </ScrollArea>
-
-      <Dialog
-        open={selectedAgent !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedAgent(null);
-        }}
-      >
-        <DialogPopup className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{selectedAgent?.name ?? "Agent details"}</DialogTitle>
-            <DialogDescription>
-              {selectedAgent
-                ? `${selectedAgent.status} · ${selectedAgent.id}`
-                : "Ultra agent details"}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel className="space-y-4">
-            <div>
-              <p className="mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-                Task
-              </p>
-              <p className="text-sm leading-relaxed text-foreground/90">{selectedAgent?.task}</p>
-            </div>
-            <div>
-              <p className="mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-                Activity
-              </p>
-              <p className="text-sm text-muted-foreground">{selectedAgent?.activity}</p>
-            </div>
-            {selectedAgent && selectedAgent.dependsOn.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-                  Dependencies
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedAgent.dependsOn.join(", ")}
-                </p>
-              </div>
-            ) : null}
-            {selectedAgent && selectedAgent.recentMessages.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-                  Recent messages
-                </p>
-                <div className="space-y-1">
-                  {selectedAgent.recentMessages.map((message, index) => (
-                    <p
-                      key={`${index}:${message}`}
-                      className="rounded-md bg-muted/40 px-2.5 py-2 text-xs leading-relaxed text-muted-foreground"
-                    >
-                      {message}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </DialogPanel>
-          <DialogFooter variant="bare">
-            <Button variant="outline" size="sm" onClick={() => setSelectedAgent(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
     </div>
   );
 }

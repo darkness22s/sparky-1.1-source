@@ -13,6 +13,7 @@ import * as Duration from "effect/Duration";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";
+import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfig from "./config.ts";
@@ -532,6 +533,26 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("publishes materialized provider secrets to internal settings subscribers", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const changes = yield* serverSettings.subscribeChanges!;
+      const instanceId = ProviderInstanceId.make("opencode_web");
+
+      yield* serverSettings.updateSettings({
+        providerInstances: {
+          [instanceId]: {
+            driver: ProviderDriverKind.make("opencode"),
+            environment: [{ name: "OPENCODE_API_KEY", value: "zen-secret", sensitive: true }],
+            config: {},
+          },
+        },
+      });
+
+      const published = yield* PubSub.take(changes);
+      assert.equal(published.providerInstances[instanceId]?.environment?.[0]?.value, "zen-secret");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
   it.effect("stores sensitive provider instance environment values outside settings.json", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;

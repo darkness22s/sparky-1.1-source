@@ -20,15 +20,11 @@ Sparky combines a persistent project-aware agent workspace with explicit access 
 
 ## Operating Context
 
-Users work across multiple projects and threads. They can extend an agent with provider skills, MCP servers, curated third-party plugins, and Mods that package an MCP server with instructions for using it well.
+Users work across multiple projects and threads. They can extend an agent with provider skills and MCP servers while keeping access and consequential actions under their control.
 
 ## Capabilities and Constraints
 
-- Plugins are curated, built-in catalog entries for third-party tools or MCP servers.
-- Mods are a separate pack type that combines one MCP server with one guiding skill.
-- Plugins and Mods can be referenced from chat.
-- Creation starts as an editable Sparky chat prompt so the agent can scaffold the result in the user's project.
-- Installing a catalog entry must not imply that credentials or third-party authorization already exist.
+- Provider skills and MCP servers can be invoked from chat.
 - User approval remains explicit for consequential agent actions.
 - The app supports light and dark themes, desktop window chrome, and responsive web layouts.
 
@@ -42,8 +38,7 @@ The repository contains the production app shell, chat composer, provider skill 
 
 ## Product Principles
 
-- Make powerful extensions understandable before they are enabled.
+- Make powerful tools and skills understandable before they are enabled.
 - Keep the user in control of access, credentials, and agent actions.
 - Turn setup into an editable conversation instead of a dead-end form.
-- Distinguish curated integrations from user-created Mods without fragmenting discovery.
 - Prefer honest operational state over implied connectivity.

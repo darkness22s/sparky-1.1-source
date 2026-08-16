@@ -277,6 +277,32 @@ const WORKSPACE_GIT_HARDENED_CONFIG_ARGS = [
   "core.untrackedCache=false",
 ] as const;
 
+// Sparky runtime state is not workspace state. Checkpoints use an isolated
+// Git index, so exclude these homes explicitly instead of relying on the
+// repository's ignore rules. The `**/` prefix is important: the desktop's
+// development home can live below the repository root (for example under
+// `sparky-desktop/source/.t3-ultra-dev`).
+const CHECKPOINT_RUNTIME_EXCLUDES = [
+  ":(top,glob,exclude)**/.t3",
+  ":(top,glob,exclude)**/.t3/**",
+  ":(top,glob,exclude)**/.t3-*",
+  ":(top,glob,exclude)**/.t3-*/**",
+  ":(top,glob,exclude)**/.sparky",
+  ":(top,glob,exclude)**/.sparky/**",
+  ":(top,glob,exclude)**/.sparky-*",
+  ":(top,glob,exclude)**/.sparky-*/**",
+  ":(top,glob,exclude)**/.Sparky",
+  ":(top,glob,exclude)**/.Sparky/**",
+  ":(top,glob,exclude)**/.Sparky-*",
+  ":(top,glob,exclude)**/.Sparky-*/**",
+  ":(top,glob,exclude)**/.sparky-desktop",
+  ":(top,glob,exclude)**/.sparky-desktop/**",
+  ":(top,glob,exclude)**/.Sparky-desktop",
+  ":(top,glob,exclude)**/.Sparky-desktop/**",
+] as const;
+
+const checkpointPathspec = [".", ...CHECKPOINT_RUNTIME_EXCLUDES] as const;
+
 const nowFreshness = Effect.fn("GitVcsDriver.nowFreshness")(function* () {
   const now = yield* DateTime.now;
   return {
@@ -683,7 +709,17 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         yield* execute({
           operation,
           cwd: input.cwd,
-          args: ["add", "-A", "--", "."],
+          // The isolated index must still honor normal ignore rules. The
+          // explicit advice setting prevents an ignored runtime directory
+          // from turning an otherwise valid snapshot into exit code 1.
+          args: [
+            "-c",
+            "advice.addIgnoredFile=false",
+            "add",
+            "-A",
+            "--",
+            ...checkpointPathspec,
+          ],
           env: commitEnv,
           timeoutMs: 300_000,
         });
@@ -755,12 +791,20 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       yield* execute({
         operation,
         cwd: input.cwd,
-        args: ["restore", "--source", commitOid, "--worktree", "--staged", "--", "."],
+        args: [
+          "restore",
+          "--source",
+          commitOid,
+          "--worktree",
+          "--staged",
+          "--",
+          ...checkpointPathspec,
+        ],
       });
       yield* execute({
         operation,
         cwd: input.cwd,
-        args: ["clean", "-fd", "--", "."],
+        args: ["clean", "-fd", "--", ...checkpointPathspec],
       });
 
       const headExists = yield* hasHeadCommit(input.cwd);
@@ -768,7 +812,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         yield* execute({
           operation,
           cwd: input.cwd,
-          args: ["reset", "--quiet", "--", "."],
+          args: ["reset", "--quiet", "--", ...checkpointPathspec],
         });
       }
 

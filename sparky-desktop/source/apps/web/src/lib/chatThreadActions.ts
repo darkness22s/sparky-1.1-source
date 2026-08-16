@@ -1,5 +1,10 @@
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
-import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@sparky/contracts";
+import {
+  UNSCOPED_CHAT_PROJECT_ID,
+  type EnvironmentId,
+  type ProjectId,
+  type ScopedProjectRef,
+} from "@sparky/contracts";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 
 interface ThreadContextLike {
@@ -40,6 +45,11 @@ export function resolveNewDraftStartFromOrigin(input: {
   newWorktreesStartFromOrigin: boolean;
 }): boolean {
   return input.envMode === "worktree" && input.newWorktreesStartFromOrigin;
+}
+
+/** Project-free chats use the configured environment model, not project sticky state. */
+export function shouldApplyStickyModelSelection(projectId: ProjectId): boolean {
+  return projectId !== UNSCOPED_CHAT_PROJECT_ID;
 }
 
 export function resolveThreadActionProjectRef(

@@ -52,7 +52,11 @@ function mergeRuntimePayload(
     return existing ?? null;
   }
   if (isRecord(existing) && isRecord(next)) {
-    return { ...existing, ...next };
+    const merged = { ...existing, ...next };
+    if (merged.workspaceContext === "none") {
+      delete merged.cwd;
+    }
+    return merged;
   }
   return next;
 }

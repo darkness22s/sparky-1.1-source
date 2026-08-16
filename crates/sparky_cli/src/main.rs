@@ -1,9 +1,11 @@
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use clap::Parser;
+use futures::StreamExt;
 use sparky_agent::{AgentLoop, AgentLoopOptions, InteractionMode};
 use sparky_ai::{
     codex_auth_status, login_codex, logout_codex, AnthropicProvider, AssistantMessageEvent,
-    CodexProvider, ContentPart, GeminiProvider, LlmProvider, OpenAiProvider,
+    CodexProvider, CompletionOptions, ContentPart, GeminiProvider, LlmProvider, Message,
+    OpenAiProvider,
 };
 use sparky_config::DEFAULT_CONTEXT_WINDOW_TOKENS;
 use sparky_extensions::{EventBus, JsExtensionRunner, SparkyEvent};
@@ -42,6 +44,13 @@ struct Cli {
     #[arg(long = "image-mime-type", value_name = "MIME")]
     image_mime_types: Vec<String>,
 
+    #[arg(
+        long,
+        hide = true,
+        help = "Run one provider-native text generation without agent tools or session state"
+    )]
+    text_only: bool,
+
     #[arg(long, help = "Reasoning effort for models that support it")]
     effort: Option<String>,
 
@@ -78,7 +87,17 @@ struct Cli {
     #[arg(short, long, default_value = ".", help = "Working directory path")]
     cwd: String,
 
-    #[arg(long, help = "Custom Base URL for OpenAI/Ollama compatible provider")]
+    #[arg(
+        long,
+        hide = true,
+        help = "Disable project/workspace context for a project-free chat"
+    )]
+    no_workspace_context: bool,
+
+    #[arg(
+        long,
+        help = "Custom Base URL for OpenAI/OpenCode/Ollama-compatible provider"
+    )]
     base_url: Option<String>,
 
     #[arg(short, long, help = "Optional JS/TS extension file path to load")]
@@ -188,6 +207,91 @@ fn write_stream_event(event: &AssistantMessageEvent) {
         }
         _ => {}
     }
+}
+
+async fn run_text_only(provider: Arc<dyn LlmProvider>, cli: &Cli) -> anyhow::Result<()> {
+    let prompt = if cli.prompt_stdin {
+        let mut prompt = String::new();
+        tokio::io::stdin().read_to_string(&mut prompt).await?;
+        anyhow::ensure!(!prompt.trim().is_empty(), "Prompt stdin was empty");
+        prompt
+    } else {
+        cli.prompt.clone().unwrap_or_default()
+    };
+    anyhow::ensure!(!prompt.trim().is_empty(), "Prompt was empty");
+
+    let mut user_content = vec![ContentPart::Text { text: prompt }];
+    user_content.extend(load_image_parts(&cli.image_paths, &cli.image_mime_types).await?);
+    let messages = vec![
+        Message::system(
+            "You are Sparky's concise text-generation helper. Follow the requested output format exactly. Do not use tools or explain your work.",
+        ),
+        Message::user_with_content(user_content),
+    ];
+    let options = CompletionOptions {
+        model: cli.model.clone(),
+        temperature: Some(0.2),
+        max_tokens: Some(64),
+        reasoning_effort: cli.effort.clone(),
+        tools: Vec::new(),
+        ..Default::default()
+    };
+    let mut stream = provider.stream(&messages, &options).await?;
+    let mut response = String::new();
+
+    while let Some(event) = stream.next().await {
+        match event {
+            AssistantMessageEvent::TextDelta(delta) => {
+                if cli.json_stream {
+                    write_json_line(serde_json::json!({
+                        "type": "delta",
+                        "delta": delta,
+                    }));
+                }
+                response.push_str(&delta);
+            }
+            AssistantMessageEvent::ThinkingDelta(delta) => {
+                if cli.json_stream {
+                    write_json_line(serde_json::json!({
+                        "type": "thinking_delta",
+                        "delta": delta,
+                    }));
+                }
+            }
+            AssistantMessageEvent::Done { usage } => {
+                if cli.json_stream {
+                    if let Some(usage) = usage {
+                        write_json_line(serde_json::json!({
+                            "type": "usage",
+                            "promptTokens": usage.prompt_tokens,
+                            "completionTokens": usage.completion_tokens,
+                            "totalTokens": usage.total_tokens,
+                            "cumulativeTotalTokens": usage.total_tokens,
+                        }));
+                    }
+                }
+            }
+            AssistantMessageEvent::Error(error) => anyhow::bail!(error),
+            AssistantMessageEvent::ToolCallDelta { .. }
+            | AssistantMessageEvent::ProviderState(_) => {}
+        }
+    }
+
+    anyhow::ensure!(
+        !response.trim().is_empty(),
+        "Provider returned an empty text-generation response"
+    );
+    if cli.json_stream {
+        write_json_line(serde_json::json!({
+            "type": "result",
+            "response": response,
+        }));
+    } else if cli.json {
+        println!("{}", serde_json::json!({ "response": response }));
+    } else {
+        println!("{}", response);
+    }
+    Ok(())
 }
 
 struct ProgressIndicator {
@@ -366,10 +470,12 @@ async fn main() -> anyhow::Result<()> {
                 .clone()
                 .or_else(|| env::var("OPENCODE_BASE_URL").ok())
                 .unwrap_or_else(|| "https://opencode.ai/zen/v1".to_string());
-            Arc::new(OpenAiProvider::new_with_api_key_env(
+            Arc::new(OpenAiProvider::new_with_api_key_env_and_provider(
                 key,
                 Some(base_url),
                 "OPENCODE_API_KEY",
+                "opencode",
+                "OpenCode",
             ))
         }
         "openai" | _ => {
@@ -378,56 +484,76 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let memory_store = std::sync::Arc::new(tokio::sync::Mutex::new(
-        MemoryStore::load(&cli.cwd, None).await?,
-    ));
-    let mut tool_registry = ToolRegistry::with_memory_store(
-        sparky_config::ToolOutputLimits::default(),
-        memory_store.clone(),
-    );
-    if let Some(mcp_url) = cli.mcp_url.as_deref() {
-        let (header_name, token_variable) = if let Some(header_name) =
-            cli.mcp_header_name.as_deref()
-        {
-            let token_variable = cli
-                .mcp_header_env_var
-                .as_deref()
-                .expect("clap validates custom MCP header requirements");
-            (header_name, token_variable)
-        } else {
-            let token_variable = cli
-                .mcp_bearer_token_env_var
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("--mcp-url requires --mcp-bearer-token-env-var or --mcp-header-name with --mcp-header-env-var"))?;
-            ("Authorization", token_variable)
-        };
-        let token = required_api_key(token_variable)?;
-        let header_value = if header_name == "Authorization" {
-            format!("Bearer {}", token)
-        } else {
-            token
-        };
-        let tool_count = register_http_mcp_tools_with_header(
-            &mut tool_registry,
-            mcp_url,
-            header_name,
-            &header_value,
-        )
-        .await?;
-        tracing::info!(mcp_url, tool_count, "Loaded HTTP MCP tools");
+    if cli.text_only {
+        run_text_only(provider, &cli).await?;
+        return Ok(());
     }
-    let extension_runner = if let Some(extension_path) = cli.extension.as_deref() {
-        let runner = JsExtensionRunner::new();
-        runner
-            .load_extension_file(Path::new(extension_path))
+
+    let project_free_memory_dir = cli.no_workspace_context.then(|| {
+        Path::new(&cli.cwd)
+            .join(".sparky")
+            .join("project-free-memory")
+    });
+    let memory_store = std::sync::Arc::new(tokio::sync::Mutex::new(
+        MemoryStore::load(&cli.cwd, project_free_memory_dir.as_deref()).await?,
+    ));
+    let mut tool_registry = if cli.no_workspace_context {
+        ToolRegistry::with_project_free(sparky_config::ToolOutputLimits::default())
+    } else {
+        ToolRegistry::with_memory_store(
+            sparky_config::ToolOutputLimits::default(),
+            memory_store.clone(),
+        )
+    };
+    if !cli.no_workspace_context {
+        if let Some(mcp_url) = cli.mcp_url.as_deref() {
+            let (header_name, token_variable) = if let Some(header_name) =
+                cli.mcp_header_name.as_deref()
+            {
+                let token_variable = cli
+                    .mcp_header_env_var
+                    .as_deref()
+                    .expect("clap validates custom MCP header requirements");
+                (header_name, token_variable)
+            } else {
+                let token_variable = cli
+                    .mcp_bearer_token_env_var
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("--mcp-url requires --mcp-bearer-token-env-var or --mcp-header-name with --mcp-header-env-var"))?;
+                ("Authorization", token_variable)
+            };
+            let token = required_api_key(token_variable)?;
+            let header_value = if header_name == "Authorization" {
+                format!("Bearer {}", token)
+            } else {
+                token
+            };
+            let tool_count = register_http_mcp_tools_with_header(
+                &mut tool_registry,
+                mcp_url,
+                header_name,
+                &header_value,
+            )
             .await?;
-        let tool_count = runner.register_tools(&mut tool_registry).await?;
-        tracing::info!(
-            extension_path,
-            tool_count,
-            "Loaded JavaScript extension API"
-        );
-        Some(runner)
+            tracing::info!(mcp_url, tool_count, "Loaded HTTP MCP tools");
+        }
+    }
+    let extension_runner = if !cli.no_workspace_context {
+        if let Some(extension_path) = cli.extension.as_deref() {
+            let runner = JsExtensionRunner::new();
+            runner
+                .load_extension_file(Path::new(extension_path))
+                .await?;
+            let tool_count = runner.register_tools(&mut tool_registry).await?;
+            tracing::info!(
+                extension_path,
+                tool_count,
+                "Loaded JavaScript extension API"
+            );
+            Some(runner)
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -554,16 +680,22 @@ async fn main() -> anyhow::Result<()> {
         .as_deref()
         .or(cli.prompt.as_deref())
         .unwrap_or(DEFAULT_PROMPT);
-    let memory_context = memory_store.lock().await.render_context(prompt);
+    let memory_context = if cli.no_workspace_context {
+        None
+    } else {
+        let context = memory_store.lock().await.render_context(prompt);
+        (!context.is_empty()).then_some(context)
+    };
 
     let loop_options = AgentLoopOptions {
         cwd: cli.cwd.clone(),
+        workspace_context: !cli.no_workspace_context,
         model_name: cli.model.clone(),
         temperature: Some(0.7),
         reasoning_effort: cli.effort.clone(),
         append_system_prompt: cli.append_system_prompt.clone(),
         context_window_tokens,
-        memory_context: (!memory_context.is_empty()).then_some(memory_context),
+        memory_context,
         interaction_mode,
     };
 

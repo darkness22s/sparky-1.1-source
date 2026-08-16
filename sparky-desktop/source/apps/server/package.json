@@ -8,7 +8,7 @@
     "directory": "apps/server"
   },
   "bin": {
-    "t3": "./dist/bin.mjs"
+    "sparky": "./dist/launcher.mjs"
   },
   "files": [
     "dist"
@@ -29,7 +29,13 @@
     "@ff-labs/fff-node": "0.9.4",
     "@pierre/diffs": "catalog:",
     "effect": "catalog:",
-    "node-pty": "^1.1.0"
+    "electron": "41.5.0",
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.6.2",
+    "node-pty": "^1.1.0",
+    "playwright-core": "1.60.0",
+    "rcedit": "5.0.2",
+    "react-grab": "^0.1.32"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

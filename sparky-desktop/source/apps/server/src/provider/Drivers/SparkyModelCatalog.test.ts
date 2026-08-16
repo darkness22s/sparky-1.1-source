@@ -129,6 +129,25 @@ describe("discoverSparkyModels", () => {
     }
   });
 
+  it("sends the OpenCode Zen request with the configured bearer key", async () => {
+    const requests: Array<{ readonly url: string; readonly headers: Headers }> = [];
+    const fetchImplementation = (async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(input), headers: new Headers(init?.headers) });
+      if (String(input) === "https://models.dev/api.json") return jsonResponse({});
+      return jsonResponse({ data: [{ id: "zen-test" }] });
+    }) as typeof fetch;
+
+    const result = await discoverSparkyModels(
+      { OPENCODE_API_KEY: "zen-secret" },
+      fetchImplementation,
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.models.map((model) => model.slug)).toEqual(["opencode/zen-test"]);
+    const request = requests.find(({ url }) => url === "https://opencode.ai/zen/v1/models");
+    expect(request?.headers.get("authorization")).toBe("Bearer zen-secret");
+  });
+
   it("fetches and namespaces every configured provider catalog", async () => {
     const requests: Array<{ readonly url: string; readonly headers: Headers }> = [];
     const fetchImplementation = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -225,6 +244,11 @@ describe("discoverSparkyModels", () => {
         .find((request) => request.url.includes("googleapis.com"))
         ?.headers.get("x-goog-api-key"),
     ).toBe("google-secret");
+    expect(
+      requests
+        .find((request) => request.url === "https://opencode.ai/zen/v1/models")
+        ?.headers.get("authorization"),
+    ).toBe("Bearer zen-secret");
 
     const openAi = result.models.find((model) => model.slug === "openai/gpt-test");
     expect(

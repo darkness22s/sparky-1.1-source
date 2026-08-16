@@ -1,9 +1,9 @@
+import { EnvironmentId, UNSCOPED_CHAT_PROJECT_ID } from "@sparky/contracts";
 import { scopeProjectRef } from "@sparky/client-runtime/environment";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { LinkIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { RotateCcwIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
@@ -14,31 +14,21 @@ import {
   useProjects,
   useThreadShells,
 } from "../state/entities";
-import { useEnvironments } from "../state/environments";
-import { APP_DISPLAY_NAME } from "~/branding";
-import { cn } from "~/lib/utils";
-import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
+import { usePrimaryEnvironmentId } from "../state/environments";
 
 function ChatIndexRouteView() {
-  const { authGateState } = Route.useRouteContext();
-  const { environments } = useEnvironments();
-
-  if (authGateState.status === "hosted-static" && environments.length === 0) {
-    return <HostedStaticOnboardingState />;
-  }
-
   return <IndexDraftLanding />;
 }
 
 /**
- * Landing on the index route drops straight into a draft thread for the most
- * recently active project, so the first screen is a prompt instead of a dead
- * end. Falls back to an add-project hero when no project exists yet.
+ * Landing on the index route drops straight into a normal draft thread for the
+ * most recently active project, or an unscoped draft when no project exists.
  */
 function IndexDraftLanding() {
   const projects = useProjects();
   const threads = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const handleNewThread = useNewThreadHandler();
   const startingRef = useRef(false);
   const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
@@ -50,25 +40,40 @@ function IndexDraftLanding() {
         : null,
     [bootstrapped, projects, threads],
   );
+  const unscopedProjectRef = useMemo(
+    () =>
+      scopeProjectRef(
+        primaryEnvironmentId ?? EnvironmentId.make("local"),
+        UNSCOPED_CHAT_PROJECT_ID,
+      ),
+    [primaryEnvironmentId],
+  );
+  const startProjectRef = useMemo(
+    () =>
+      mostRecentProject === null
+        ? unscopedProjectRef
+        : scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id),
+    [mostRecentProject, unscopedProjectRef],
+  );
 
   useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
+    if (!bootstrapped || startingRef.current) {
       return;
     }
     startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
+    void handleNewThread(startProjectRef, {
       replace: true,
     }).catch(() => {
       startingRef.current = false;
       setStartState((state) => ({ ...state, failed: true }));
     });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+  }, [bootstrapped, handleNewThread, startProjectRef, startState.retryRequest]);
 
   if (!bootstrapped) {
     return null;
   }
-  if (mostRecentProject !== null) {
-    return startState.failed ? (
+  if (startState.failed) {
+    return (
       <DraftStartError
         onRetry={() => {
           setStartState((state) => ({
@@ -77,9 +82,9 @@ function IndexDraftLanding() {
           }));
         }}
       />
-    ) : null;
+    );
   }
-  return <NoProjectsHero />;
+  return null;
 }
 
 function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
@@ -89,7 +94,7 @@ function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
         <EmptyHeader className="max-w-md">
           <EmptyTitle className="text-foreground text-xl">Couldn’t start a new thread</EmptyTitle>
           <EmptyDescription className="mt-2 text-sm text-muted-foreground/78">
-            The project is still available. Try opening the draft again.
+            The chat is still available. Try opening a new draft again.
           </EmptyDescription>
           <div className="mt-5 flex justify-center">
             <Button size="sm" onClick={onRetry}>
@@ -103,79 +108,6 @@ function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
   );
 }
 
-function NoProjectsHero() {
-  const openAddProject = useOpenAddProjectCommandPalette();
-
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <Empty className="flex-1">
-          <div className="w-full max-w-lg px-8 py-12">
-            <EmptyHeader className="max-w-none">
-              <EmptyTitle className="text-foreground text-2xl sm:text-3xl">
-                What should we work on?
-              </EmptyTitle>
-              <EmptyDescription className="mt-2 text-sm text-muted-foreground/78">
-                Add a project to start your first thread.
-              </EmptyDescription>
-              <div className="mt-6 flex justify-center">
-                <Button size="sm" onClick={openAddProject}>
-                  <PlusIcon className="size-4" />
-                  Add project
-                </Button>
-              </div>
-            </EmptyHeader>
-          </div>
-        </Empty>
-      </div>
-    </SidebarInset>
-  );
-}
-
 export const Route = createFileRoute("/_chat/")({
   component: ChatIndexRouteView,
 });
-
-function HostedStaticOnboardingState() {
-
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <header
-          className={cn(
-            "border-b border-border px-3 py-2 transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:px-5 sm:py-3",
-            COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground md:text-muted-foreground/60">
-              {APP_DISPLAY_NAME}
-            </span>
-          </div>
-        </header>
-
-        <Empty className="flex-1">
-          <div className="w-full max-w-xl rounded-3xl border border-border/55 bg-card/20 px-8 py-12 shadow-sm/5">
-            <EmptyHeader className="max-w-none">
-              <div className="mx-auto mb-5 flex size-11 items-center justify-center rounded-xl border border-border/70 bg-background/70 text-muted-foreground">
-                <LinkIcon className="size-5" />
-              </div>
-              <EmptyTitle className="text-foreground text-xl">
-                Connect an environment to get started
-              </EmptyTitle>
-              <EmptyDescription className="mt-2 text-sm leading-relaxed text-muted-foreground/78">
-                Open Sparky Desktop to use the bundled local coding runtime.
-              </EmptyDescription>
-              <div className="mt-6 flex justify-center">
-                <Button render={<Link to="/settings/general" />} size="sm">
-                  <PlusIcon className="size-4" />
-                  Open settings
-                </Button>
-              </div>
-            </EmptyHeader>
-          </div>
-        </Empty>
-      </div>
-    </SidebarInset>
-  );
-}

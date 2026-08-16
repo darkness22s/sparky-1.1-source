@@ -670,6 +670,8 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   const diffStats = extractToolDiffStats(payload);
   const title = extractToolTitle(payload);
   const isTaskActivity = activity.kind === "task.progress" || activity.kind === "task.completed";
+  const runtimeErrorDetail =
+    activity.kind === "runtime.error" ? asTrimmedString(payload?.message) : null;
   const taskSummary =
     isTaskActivity && typeof payload?.summary === "string" && payload.summary.length > 0
       ? payload.summary
@@ -682,14 +684,16 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       ? payload.detail
       : null;
   const taskLabel = taskSummary || taskDetailAsLabel;
-  const detail = isTaskActivity
-    ? !taskDetailAsLabel &&
-      payload &&
-      typeof payload.detail === "string" &&
-      payload.detail.length > 0
-      ? stripTrailingExitCode(payload.detail).output
-      : null
-    : extractToolDetail(payload, title ?? activity.summary);
+  const detail =
+    runtimeErrorDetail ??
+    (isTaskActivity
+      ? !taskDetailAsLabel &&
+        payload &&
+        typeof payload.detail === "string" &&
+        payload.detail.length > 0
+        ? stripTrailingExitCode(payload.detail).output
+        : null
+      : extractToolDetail(payload, title ?? activity.summary));
   const toolCallId = isTaskActivity ? null : extractToolCallId(payload);
   const data = asRecord(payload?.data);
   const toolName = isTaskActivity ? null : asTrimmedString(data?.toolName);
@@ -730,10 +734,13 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     entry.toolName = toolName;
   }
   if (itemType === "mcp_tool_call") {
-    const data = asRecord(payload?.data);
     if (data?.item !== undefined) {
       entry.toolData = data.item;
     }
+  } else if (itemType === "dynamic_tool_call" && data !== null) {
+    // Dynamic lifecycle items can carry provider-specific diagnostics (for
+    // example Sparky reconnect reasons) without duplicating them in detail.
+    entry.toolData = data;
   }
   if (itemType) {
     entry.itemType = itemType;

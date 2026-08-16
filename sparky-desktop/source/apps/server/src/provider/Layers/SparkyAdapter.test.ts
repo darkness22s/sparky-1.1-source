@@ -17,6 +17,8 @@ import {
   makeSparkyStreamDecoder,
   normalizeSparkyContextWindow,
   parseSparkyContextWindowTokens,
+  parseSparkyModelSelection,
+  formatSparkyProcessError,
   resolveSparkyRuntimeContextWindow,
   captureSparkySessionIdentity,
   isRetryableSparkyProcessError,
@@ -65,6 +67,16 @@ describe("Sparky reconnect classification", () => {
       isRetryableSparkyProcessError(processError("Unsupported parameter: max_output_tokens")),
     ).toBe(false);
     expect(isRetryableSparkyProcessError(processError("401 Unauthorized"))).toBe(false);
+  });
+
+  it("does not retry an exhausted provider free-tier quota", () => {
+    expect(
+      isRetryableSparkyProcessError(
+        processError(
+          'OpenCode API error (HTTP 429 Too Many Requests): {"type":"FreeUsageLimitError","message":"Rate limit exceeded."}',
+        ),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -358,6 +370,73 @@ describe("makeSparkyAssistantSegmenter", () => {
 });
 
 describe("Sparky session continuity", () => {
+  it("routes the OpenCode Zen model slug to its provider and base URL", () => {
+    expect(parseSparkyModelSelection("opencode/deepseek-v4-flash-free")).toEqual({
+      provider: "opencode",
+      model: "deepseek-v4-flash-free",
+      baseUrl: "https://opencode.ai/zen/v1",
+    });
+  });
+
+  it("passes OpenCode through the OpenCode provider path", () => {
+    const args = makeSparkyProcessArgs({
+      cwd: "C:\\workspace",
+      prompt: "Use OpenCode",
+      model: "opencode/deepseek-v4-flash-free",
+    });
+
+    expect(args.at(args.indexOf("--provider") + 1)).toBe("opencode");
+    expect(args.at(args.indexOf("--base-url") + 1)).toBe("https://opencode.ai/zen/v1");
+  });
+
+  it("explains when a project-free turn is using an outdated Sparky binary", () => {
+    expect(
+      formatSparkyProcessError("error: unexpected argument '--no-workspace-context' found", "none"),
+    ).toBe(
+      "The configured Sparky runtime is outdated and does not support project-free chats. Rebuild or update the Sparky binary, then retry.",
+    );
+    expect(
+      formatSparkyProcessError(
+        "error: unexpected argument '--no-workspace-context' found",
+        "project",
+      ),
+    ).toContain("unexpected argument");
+  });
+
+  it("explains when a provider free-tier quota is exhausted", () => {
+    expect(
+      formatSparkyProcessError(
+        'OpenCode API error (HTTP 429): {"type":"FreeUsageLimitError","message":"Rate limit exceeded."}',
+        "none",
+      ),
+    ).toBe(
+      "OpenCode Zen reported that this model's free usage limit was reached. Select another model or try again later.",
+    );
+  });
+
+  it("uses the provider-native text-only path for metadata generation", () => {
+    const args = makeSparkyProcessArgs({
+      cwd: "C:\\workspace",
+      prompt: "Name this thread",
+      model: "openai-codex/gpt-5.6-sol",
+      textOnly: true,
+    });
+
+    expect(args).toContain("--text-only");
+    expect(args).not.toContain("--session");
+  });
+
+  it("disables workspace context for project-free runtime turns", () => {
+    const args = makeSparkyProcessArgs({
+      cwd: "C:\\project-free-runtime",
+      prompt: "Answer without project context",
+      model: "openai/gpt-4o",
+      workspaceContext: "none",
+    });
+
+    expect(args).toContain("--no-workspace-context");
+  });
+
   it("passes saved custom instructions into the Sparky runtime", () => {
     const args = makeSparkyProcessArgs({
       cwd: "C:\\workspace",
@@ -384,22 +463,6 @@ describe("Sparky session continuity", () => {
     expect(args.at(args.indexOf("--mcp-url") + 1)).toBe("http://127.0.0.1:43123/mcp");
     expect(args.at(args.indexOf("--mcp-bearer-token-env-var") + 1)).toBe("T3_MCP_BEARER_TOKEN");
     expect(args.join(" ")).not.toContain("Bearer ");
-  });
-
-  it("passes Composio Connect's custom consumer header without exposing its key", () => {
-    const args = makeSparkyProcessArgs({
-      cwd: "C:\\workspace",
-      prompt: "Use Gmail",
-      model: "openai/gpt-4o",
-      mcpUrl: "https://connect.composio.dev/mcp?user_id=sparky",
-      mcpHeaderName: "x-consumer-api-key",
-      mcpHeaderEnvVar: "T3_MCP_HEADER_VALUE",
-    });
-
-    expect(args).toContain("--mcp-header-name");
-    expect(args.at(args.indexOf("--mcp-header-name") + 1)).toBe("x-consumer-api-key");
-    expect(args.at(args.indexOf("--mcp-header-env-var") + 1)).toBe("T3_MCP_HEADER_VALUE");
-    expect(args.join(" ")).not.toContain("ck_");
   });
 
   it("sends only the new follow-up while resuming the exact existing session", () => {

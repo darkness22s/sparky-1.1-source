@@ -107,7 +107,7 @@ export function DraftHeroHeadline({
       ) : canChooseProject ? (
         <>{projectSelector} to start</>
       ) : (
-        <>Add a project to start</>
+        <>What should we work on?</>
       )}
     </h1>
   );

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { UNSCOPED_CHAT_PROJECT_ID } from "@sparky/contracts";
 import type { ContextMenuItem } from "@sparky/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@sparky/contracts/settings";
 import {
@@ -36,6 +37,22 @@ type ScopedSidebarThread = ThreadSortInput & {
 };
 
 export type ThreadTraversalDirection = "previous" | "next";
+
+export function isProjectFreeChatThread(thread: Pick<SidebarThreadSummary, "projectId">): boolean {
+  return thread.projectId === UNSCOPED_CHAT_PROJECT_ID;
+}
+
+export function partitionSidebarThreadsByScope(threads: readonly SidebarThreadSummary[]): {
+  readonly chatThreads: SidebarThreadSummary[];
+  readonly projectThreads: SidebarThreadSummary[];
+} {
+  const chatThreads: SidebarThreadSummary[] = [];
+  const projectThreads: SidebarThreadSummary[] = [];
+  for (const thread of threads) {
+    (isProjectFreeChatThread(thread) ? chatThreads : projectThreads).push(thread);
+  }
+  return { chatThreads, projectThreads };
+}
 
 export async function archiveSelectedThreadEntries<
   TEntry extends { readonly threadKey: string },

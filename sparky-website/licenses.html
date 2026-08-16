@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f8ff" />
+    <meta name="description" content="Sparky's third-party software licenses and notices." />
+    <title>Legal &amp; licenses - Sparky</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css?v=14" />
+  </head>
+  <body class="legal-page">
+    <header class="site-header scrolled">
+      <a class="wordmark" href="index.html" aria-label="Sparky home"><img src="logo.svg" alt="" /><span>Sparky</span></a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="index.html#product">Product</a>
+        <a href="index.html#workflows">Workflows</a>
+        <a href="docs/overview.html">Docs</a>
+        <a href="changelog.html">Changelog</a>
+      </nav>
+      <a class="pill pill-dark nav-cta" href="download.html">Download Sparky</a>
+    </header>
+
+    <main>
+      <section class="legal-hero art-panel">
+        <div class="legal-hero-copy">
+          <p class="eyebrow">Transparency</p>
+          <h1>Legal &amp; licenses</h1>
+          <p>Sparky uses open-source software alongside vendor-distributed components. This page identifies the production dependencies used by the desktop and server bundles and links you to the complete notices.</p>
+        </div>
+      </section>
+
+      <section class="legal-content">
+        <div class="legal-alert" role="status">
+          <strong>Downloads are temporarily paused.</strong>
+          <span>We are finalizing the release notice bundle before making the next download available.</span>
+          <a href="download.html">View download status</a>
+        </div>
+
+        <div class="legal-section-heading">
+          <p class="eyebrow">Upstream foundation</p>
+          <h2>Sparky is derived from T3 Code.</h2>
+          <p>The inherited T3 Code portions are provided under the MIT License. The upstream copyright and permission notice must remain with distributed copies.</p>
+        </div>
+        <article class="legal-card legal-upstream-card">
+          <div>
+            <span class="license-kicker">MIT</span>
+            <h3>T3 Code</h3>
+            <p>Copyright © 2026 T3 Tools Inc. Sparky preserves the upstream MIT notice and adds its own product work around that foundation.</p>
+          </div>
+          <div class="legal-card-links">
+            <a href="https://github.com/pingdotgg/t3code" target="_blank" rel="noopener noreferrer">Source repository</a>
+            <a href="third-party-notices.txt">Included notice text</a>
+          </div>
+        </article>
+
+        <article class="legal-card legal-correction-card">
+          <div>
+            <span class="license-kicker">Important clarification</span>
+            <h3>UI foundation and runtime dependencies are separate.</h3>
+            <p>Sparky's project position is that T3 Code was used as a UI foundation, not as a hosted AI service or a substitute for Sparky's product work. The current desktop/server source is separate from that UI relationship.</p>
+            <p>However, the current source still includes <code>@anthropic-ai/claude-agent-sdk</code> and a Claude provider adapter. It is therefore not accurate to say that the current build uses no Claude Agent SDK or no AI SDK. The dependency is listed below with its vendor terms.</p>
+            <p>That statement can only be changed after the Claude provider implementation and dependency are removed, the application is rebuilt, and this inventory is regenerated from the resulting release.</p>
+          </div>
+          <div class="legal-card-links">
+            <a href="#production-inventory">View runtime inventory</a>
+            <a href="third-party-notices.txt">Read included notices</a>
+          </div>
+        </article>
+
+        <div id="production-inventory" class="legal-section-heading legal-inventory-heading">
+          <p class="eyebrow">Production inventory</p>
+          <h2>316 runtime packages, identified.</h2>
+            <p>The inventory below is generated from the installed production dependency graph for Sparky's desktop and server bundles. Vendor terms are labeled separately from open-source licenses. Use the search box to find a package or license family.</p>
+        </div>
+        <div class="legal-tools">
+          <label for="license-search">Search licenses</label>
+          <input id="license-search" type="search" placeholder="Search package, author, or license" autocomplete="off" />
+          <span id="license-count" aria-live="polite">Loading inventory…</span>
+        </div>
+        <div id="license-list" class="license-list" aria-live="polite">
+          <p class="license-loading">Loading the production dependency inventory…</p>
+        </div>
+
+        <div class="legal-downloads">
+          <div>
+            <p class="eyebrow">Complete notices</p>
+            <h2>Read or download the generated notice bundle.</h2>
+            <p>The text file includes the upstream MIT notice and package-level license text where it is present in the dependency package.</p>
+          </div>
+          <a class="pill pill-dark" href="third-party-notices.txt">Open third-party notices</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-brand"><img src="logo.svg" alt="" /><strong>Sparky</strong></div>
+      <p>Local. Fast. Yours.</p>
+      <div><a href="docs/overview.html">Docs</a><a href="changelog.html">Changelog</a><a href="download.html">Download</a><a href="licenses.html" aria-current="page">Legal &amp; licenses</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+      <small>&copy; 2026 Sparky</small>
+    </footer>
+
+    <script>
+      (() => {
+        const search = document.getElementById("license-search");
+        const count = document.getElementById("license-count");
+        const list = document.getElementById("license-list");
+        let entries = [];
+
+        const render = () => {
+          const query = search.value.trim().toLowerCase();
+          const filtered = entries.filter((entry) => [entry.name, entry.license, entry.author, entry.homepage].filter(Boolean).join(" ").toLowerCase().includes(query));
+          count.textContent = `${filtered.length} of ${entries.length} packages`;
+          list.replaceChildren();
+          if (filtered.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "license-loading";
+            empty.textContent = "No packages match that search.";
+            list.append(empty);
+            return;
+          }
+          for (const entry of filtered) {
+            const item = document.createElement("article");
+            item.className = "license-item";
+            const title = document.createElement("div");
+            title.className = "license-item-title";
+            const name = document.createElement("strong");
+            name.textContent = entry.name;
+            const version = document.createElement("span");
+            version.textContent = entry.versions.join(", ");
+            title.append(name, version);
+            const meta = document.createElement("div");
+            meta.className = "license-item-meta";
+            const license = document.createElement("span");
+            license.textContent = entry.license || "License metadata unavailable";
+            meta.append(license);
+            if (entry.author) {
+              const author = document.createElement("span");
+              author.textContent = entry.author;
+              meta.append(author);
+            }
+            if (entry.homepage) {
+              const link = document.createElement("a");
+              link.href = entry.homepage;
+              link.target = "_blank";
+              link.rel = "noopener noreferrer";
+              link.textContent = "Upstream";
+              meta.append(link);
+            }
+            item.append(title, meta);
+            list.append(item);
+          }
+        };
+
+        fetch("third-party-licenses.json", { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) throw new Error("License inventory unavailable");
+            return response.json();
+          })
+          .then((payload) => {
+            entries = Array.isArray(payload.entries) ? payload.entries : [];
+            render();
+          })
+          .catch(() => {
+            count.textContent = "Inventory unavailable";
+            list.replaceChildren();
+            const error = document.createElement("p");
+            error.className = "license-loading";
+            error.textContent = "The inventory could not be loaded. Use the complete notices file below.";
+            list.append(error);
+          });
+        search.addEventListener("input", render);
+      })();
+    </script>
+  </body>
+</html>

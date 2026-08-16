@@ -504,7 +504,8 @@ const make = Effect.gen(function* () {
   const revalidateAndEmit = writeSemaphore.withPermits(1)(
     Effect.gen(function* () {
       yield* Cache.invalidate(settingsCache, cacheKey);
-      const settings = yield* getSettingsFromCache;
+      const persistedSettings = yield* getSettingsFromCache;
+      const settings = yield* materializeProviderEnvironmentSecrets(persistedSettings);
       yield* emitChange(settings);
     }),
   );
@@ -587,8 +588,8 @@ const make = Effect.gen(function* () {
           const next = yield* normalizeServerSettings(nextPersisted);
           yield* writeSettingsAtomically(next);
           yield* Cache.set(settingsCache, cacheKey, next);
-          yield* emitChange(next);
           const materialized = yield* materializeProviderEnvironmentSecrets(next);
+          yield* emitChange(materialized);
           return resolveTextGenerationProvider(materialized);
         }),
       ),

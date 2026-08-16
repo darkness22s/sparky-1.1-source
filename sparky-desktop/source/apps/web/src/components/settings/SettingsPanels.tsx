@@ -1,4 +1,4 @@
-import { ArchiveIcon, ArchiveX, LoaderIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
+import { ArchiveIcon, ArchiveX, EyeIcon, LoaderIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
@@ -406,6 +406,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
+      ...(settings.enableImageView !== DEFAULT_UNIFIED_SETTINGS.enableImageView
+        ? ["ImageView vision fallback"]
+        : []),
       ...(settings.streamingTextAnimation !== DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation
         ? ["Streaming text animation"]
         : []),
@@ -425,6 +428,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.enableImageView,
       settings.streamingTextAnimation,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
@@ -450,6 +454,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+      enableImageView: DEFAULT_UNIFIED_SETTINGS.enableImageView,
       streamingTextAnimation: DEFAULT_UNIFIED_SETTINGS.streamingTextAnimation,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -534,6 +539,35 @@ export function GeneralSettingsPanel() {
                 ))}
               </SelectPopup>
             </Select>
+          }
+        />
+
+        <SettingsRow
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              <EyeIcon className="size-3.5 text-muted-foreground" aria-hidden />
+              ImageView
+            </span>
+          }
+          description="Let models without image input inspect screenshots and local images through Sparky’s configured vision provider."
+          resetAction={
+            settings.enableImageView !== DEFAULT_UNIFIED_SETTINGS.enableImageView ? (
+              <SettingResetButton
+                label="ImageView vision fallback"
+                onClick={() =>
+                  updateSettings({
+                    enableImageView: DEFAULT_UNIFIED_SETTINGS.enableImageView,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.enableImageView}
+              onCheckedChange={(checked) => updateSettings({ enableImageView: Boolean(checked) })}
+              aria-label="Enable ImageView vision fallback"
+            />
           }
         />
 

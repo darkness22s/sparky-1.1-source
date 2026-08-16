@@ -39,6 +39,15 @@
         <p>Sparky is a desktop AI coding assistant that reads your code, makes changes, runs commands, and searches your project — using the AI model you already have.</p>
       </div>
 
+<h2 id="latest">What's new in 1.1.2</h2>
+<ul>
+<li><strong>Project-free chats</strong> keep general conversations separate from project files and workspace tools.</li>
+<li><strong>Provider-native metadata and titles</strong> use the exact model selected for the thread.</li>
+<li><strong>Durable session continuity</strong> preserves provider context across follow-ups and restarts.</li>
+<li><strong>OpenCode Zen routing</strong> uses its own key and identity, with clearer upstream quota errors.</li>
+<li><strong>ImageView fallback</strong> lets supported models inspect workspace images or browser previews when the active model lacks vision.</li>
+</ul>
+
 <section class="docs-start-grid" aria-label="Choose a documentation path">
   <a href="getting-started.html"><span>01</span><strong>Install and connect</strong><small>Download Sparky, add a provider, and open your first project.</small></a>
   <a href="prompts.html"><span>02</span><strong>Give a useful task</strong><small>Write prompts that include intent, constraints, and a clear verification step.</small></a>
@@ -65,6 +74,9 @@
   <div><strong>Diff</strong><span>Review working-tree or thread changes before you commit.</span></div>
 </div>
 
+<h2 id="project-free">Project-free chats</h2>
+<p>Use a project-free chat when you want an answer without sending a project workspace as context. Sparky keeps the conversation and provider session durable, but does not read files, memory, extensions, or MCP tools from a project until you open one.</p>
+
 <h2 id="providers">Supported AI providers</h2>
 <table class="docs-table"><tr><th>Provider</th><th>Models</th><th>Get your API key</th></tr>
 <tr><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic</a></td><td>Latest Claude models</td><td><a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a></td></tr>
@@ -80,9 +92,11 @@
     </main>
     <aside class="docs-toc">
       <div class="docs-toc-title">On this page</div>
-      <ul class="docs-toc-list"><li><a href="#what-is-sparky">What is Sparky?</a></li>
+      <ul class="docs-toc-list"><li><a href="#latest">What's new in 1.1.2</a></li>
+<li><a href="#what-is-sparky">What is Sparky?</a></li>
 <li><a href="#how-it-works">How it works</a></li>
 <li><a href="#sidebar-surfaces">Sidebar Panel</a></li>
+<li><a href="#project-free">Project-free chats</a></li>
 <li><a href="#providers">Supported AI providers</a></li>
 </ul>
     </aside>
@@ -90,7 +104,7 @@
 <footer class="footer"><div class="container"><div class="footer-inner">
     <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
     <span class="footer-tagline">local · private · your call</span>
-    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="../licenses.html">Legal &amp; licenses</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
   </div></div></footer>
 </body>
 </html>

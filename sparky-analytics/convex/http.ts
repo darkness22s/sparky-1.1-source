@@ -15,12 +15,6 @@ const updateCors = {
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Cache-Control": "no-store, max-age=0",
 };
-const pluginCors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Cache-Control": "no-store, max-age=0",
-};
 
 const updatePlatforms = new Set(["windows-x64", "macos-arm64", "macos-x64", "linux-x64"]);
 
@@ -93,21 +87,6 @@ http.route({
   path: "/updates/macos/x64/nightly-mac.yml",
   method: "GET",
   handler: httpAction((ctx, request) => redirectToUpdateFeed(ctx, request, "macos-x64", "beta")),
-});
-
-http.route({
-  path: "/plugins/catalog",
-  method: "OPTIONS",
-  handler: httpAction(async () => new Response(null, { status: 204, headers: pluginCors })),
-});
-
-http.route({
-  path: "/plugins/catalog",
-  method: "GET",
-  handler: httpAction(async (ctx) => {
-    const catalog = await ctx.runQuery(internal.pluginCatalog.publicCatalog, {});
-    return Response.json(catalog, { headers: pluginCors });
-  }),
 });
 
 http.route({

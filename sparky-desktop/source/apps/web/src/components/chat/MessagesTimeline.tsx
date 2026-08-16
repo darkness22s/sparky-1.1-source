@@ -42,6 +42,7 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   BrainIcon,
+  CalendarClockIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -60,12 +61,15 @@ import {
   ListChecksIcon,
   Maximize2Icon,
   MessageCircleIcon,
+  MinusIcon,
   MousePointerClickIcon,
   PaintbrushIcon,
-  MinusIcon,
+  PauseCircleIcon,
+  PlayCircleIcon,
   SearchIcon,
   SquarePenIcon,
   TerminalIcon,
+  Trash2Icon,
   Undo2Icon,
   WrenchIcon,
   XIcon,
@@ -139,12 +143,13 @@ interface TimelineRowSharedState {
   timestampFormat: TimestampFormat;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;
+  workspaceContextEnabled: boolean;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   streamingTextAnimation: StreamingTextAnimation;
-  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadEnvironmentId: EnvironmentId | null;
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
@@ -183,7 +188,8 @@ interface MessagesTimelineProps {
   onRevertUserMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
-  activeThreadEnvironmentId: EnvironmentId;
+  activeThreadEnvironmentId: EnvironmentId | null;
+  workspaceContextEnabled?: boolean;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -219,6 +225,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
+  workspaceContextEnabled = true,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -336,7 +343,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       revertTurnCountByUserMessageId,
     ],
   );
-  const rows = useStableRows(rawRows);
+  const rowsForDisplay = useMemo(
+    () =>
+      workspaceContextEnabled
+        ? rawRows
+        : rawRows.filter((row) => row.kind !== "work" && row.kind !== "work-toggle"),
+    [rawRows, workspaceContextEnabled],
+  );
+  const rows = useStableRows(rowsForDisplay);
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
   const [timelineViewportElement, setTimelineViewportElement] = useState<HTMLDivElement | null>(
     null,
@@ -432,13 +446,14 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () => ({
       timestampFormat,
       routeThreadKey,
-      threadRef: parseScopedThreadKey(routeThreadKey),
-      markdownCwd,
+      threadRef: workspaceContextEnabled ? parseScopedThreadKey(routeThreadKey) : null,
+      workspaceContextEnabled,
+      markdownCwd: workspaceContextEnabled ? markdownCwd : undefined,
       resolvedTheme,
-      workspaceRoot,
+      workspaceRoot: workspaceContextEnabled ? workspaceRoot : undefined,
       skills,
       streamingTextAnimation,
-      activeThreadEnvironmentId,
+      activeThreadEnvironmentId: workspaceContextEnabled ? activeThreadEnvironmentId : null,
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
@@ -448,6 +463,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [
       timestampFormat,
       routeThreadKey,
+      workspaceContextEnabled,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -881,23 +897,28 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
   const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
-  const terminalContexts = displayedUserMessage.contexts;
+  const terminalContexts = ctx.workspaceContextEnabled ? displayedUserMessage.contexts : [];
   const previewAnnotations: ParsedPreviewAnnotation[] = [];
   let visibleText = displayedUserMessage.visibleText;
-  while (true) {
-    const extracted = extractTrailingPreviewAnnotation(visibleText);
-    if (!extracted.annotation) break;
-    previewAnnotations.unshift(extracted.annotation);
-    visibleText = extracted.promptText;
+  if (ctx.workspaceContextEnabled) {
+    while (true) {
+      const extracted = extractTrailingPreviewAnnotation(visibleText);
+      if (!extracted.annotation) break;
+      previewAnnotations.unshift(extracted.annotation);
+      visibleText = extracted.promptText;
+    }
   }
-  const elementContextState = extractTrailingElementContexts(visibleText);
-  const elementContexts = [
-    ...displayedUserMessage.elementContexts,
-    ...elementContextState.contexts,
-  ];
-  const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
+  const elementContextState = ctx.workspaceContextEnabled
+    ? extractTrailingElementContexts(visibleText)
+    : { contexts: [], promptText: visibleText };
+  const elementContexts = ctx.workspaceContextEnabled
+    ? [...displayedUserMessage.elementContexts, ...elementContextState.contexts]
+    : [];
+  const previewImages = ctx.workspaceContextEnabled
+    ? userImages.filter((image) => image.name.startsWith("preview-annotation-"))
+    : [];
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
-  const canRevertAgentWork = typeof row.revertTurnCount === "number";
+  const canRevertAgentWork = ctx.workspaceContextEnabled && typeof row.revertTurnCount === "number";
 
   return (
     <div className="group flex flex-col items-end gap-1">
@@ -1045,7 +1066,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           skills={ctx.skills}
         />
         <AssistantChangedFilesSection
-          turnSummary={row.assistantTurnDiffSummary}
+          turnSummary={ctx.workspaceContextEnabled ? row.assistantTurnDiffSummary : undefined}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
@@ -1837,10 +1858,14 @@ type WorkEntryIconName =
   | "keyboard"
   | "list-checks"
   | "brain"
+  | "calendar-clock"
   | "message-circle"
   | "mouse-pointer-click"
+  | "pause-circle"
+  | "play-circle"
   | "square-pen"
   | "terminal"
+  | "trash-2"
   | "wrench"
   | "x"
   | "zap";
@@ -1901,14 +1926,22 @@ function WorkEntryIconSvg({ name, className }: { name: WorkEntryIconName; classN
       return <ListChecksIcon className={className} aria-hidden />;
     case "brain":
       return <BrainIcon className={className} aria-hidden />;
+    case "calendar-clock":
+      return <CalendarClockIcon className={className} aria-hidden />;
     case "message-circle":
       return <MessageCircleIcon className={className} aria-hidden />;
     case "mouse-pointer-click":
       return <MousePointerClickIcon className={className} aria-hidden />;
+    case "pause-circle":
+      return <PauseCircleIcon className={className} aria-hidden />;
+    case "play-circle":
+      return <PlayCircleIcon className={className} aria-hidden />;
     case "square-pen":
       return <SquarePenIcon className={className} aria-hidden />;
     case "terminal":
       return <TerminalIcon className={className} aria-hidden />;
+    case "trash-2":
+      return <Trash2Icon className={className} aria-hidden />;
     case "wrench":
       return <WrenchIcon className={className} aria-hidden />;
     case "x":
@@ -1971,6 +2004,30 @@ function workEntryRawCommand(
   return rawCommand === workEntry.command.trim() ? null : rawCommand;
 }
 
+function dynamicToolCallExpandedBody(data: unknown): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+
+  const record = data as Record<string, unknown>;
+  const metadata: string[] = [];
+  if (typeof record.provider === "string" && record.provider.trim()) {
+    metadata.push(`Provider: ${record.provider.trim()}`);
+  }
+  if (typeof record.errorTag === "string" && record.errorTag.trim()) {
+    metadata.push(`Error type: ${record.errorTag.trim()}`);
+  }
+  if (typeof record.retryCount === "number" && typeof record.maxRetries === "number") {
+    metadata.push(`Retry: ${record.retryCount}/${record.maxRetries}`);
+  }
+
+  const reason = typeof record.reason === "string" ? record.reason.trim() : "";
+  if (reason) {
+    return [metadata.join("\n"), `Error\n${reason}`].filter(Boolean).join("\n\n");
+  }
+  return metadata.length > 0 ? metadata.join("\n") : null;
+}
+
 function buildToolCallExpandedBody(
   workEntry: TimelineWorkEntry,
   workspaceRoot: string | undefined,
@@ -1978,6 +2035,12 @@ function buildToolCallExpandedBody(
   const blocks: string[] = [];
   if (workEntry.itemType === "mcp_tool_call" && workEntry.toolData !== undefined) {
     blocks.push(`MCP call\n${JSON.stringify(workEntry.toolData, null, 2)}`);
+  }
+  if (workEntry.itemType === "dynamic_tool_call" && workEntry.toolData !== undefined) {
+    const dynamicDetails = dynamicToolCallExpandedBody(workEntry.toolData);
+    if (dynamicDetails) {
+      blocks.push(dynamicDetails);
+    }
   }
   const raw = workEntryRawCommand(workEntry);
   if (raw?.trim()) {
@@ -2016,6 +2079,19 @@ export function resolveWorkEntryToolIconName(
       return "file-plus-2";
     case "edit":
       return "file-pen-line";
+    case "image_view":
+    case "t3-code_image_view":
+      return "eye";
+    case "automation_list":
+      return "calendar-clock";
+    case "automation_create":
+      return "calendar-clock";
+    case "automation_run_now":
+      return "play-circle";
+    case "automation_toggle":
+      return "pause-circle";
+    case "automation_delete":
+      return "trash-2";
     default:
       return undefined;
   }
@@ -2154,6 +2230,7 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
         role: "button" as const,
         tabIndex: 0 as const,
         "aria-label": displayText,
+        "aria-expanded": expanded,
         onClick: () => setExpanded((v) => !v),
         onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
           if (e.key === "Enter" || e.key === " ") {

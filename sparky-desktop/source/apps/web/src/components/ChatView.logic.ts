@@ -8,6 +8,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   type TurnId,
+  UNSCOPED_CHAT_PROJECT_ID,
 } from "@sparky/contracts";
 import { type ChatMessage, type SessionPhase, type Thread } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
@@ -53,6 +54,40 @@ export function buildLocalDraftThread(
     activities: [],
     proposedPlans: [],
   };
+}
+
+/**
+ * Resolve the server snapshot used by the composer. Unscoped chats do not
+ * select an environment in the workspace UI, but they still use the primary
+ * environment's provider catalog. Once a scoped thread exists, keep its
+ * environment isolated while it is loading instead of falling back to primary.
+ */
+export function resolveChatServerConfig<T>(input: {
+  activeThread: Pick<Thread, "projectId"> | null | undefined;
+  activeEnvironmentConfig: T | null | undefined;
+  primaryEnvironmentConfig: T | null | undefined;
+}): T | null {
+  if (!input.activeThread || input.activeThread.projectId === UNSCOPED_CHAT_PROJECT_ID) {
+    return input.primaryEnvironmentConfig ?? null;
+  }
+  return input.activeEnvironmentConfig ?? null;
+}
+
+/**
+ * Project-free drafts use the environment's configured text-generation model;
+ * project drafts retain their project default. The final fallback is only for
+ * the short window before settings have loaded.
+ */
+export function resolveLocalDraftModelSelection(input: {
+  draftProjectId: ProjectId;
+  projectModelSelection: ModelSelection | null | undefined;
+  environmentModelSelection: ModelSelection | null | undefined;
+  fallbackModelSelection: ModelSelection;
+}): ModelSelection {
+  if (input.draftProjectId === UNSCOPED_CHAT_PROJECT_ID) {
+    return input.environmentModelSelection ?? input.fallbackModelSelection;
+  }
+  return input.projectModelSelection ?? input.fallbackModelSelection;
 }
 
 export function shouldWriteThreadErrorToCurrentServerThread(input: {

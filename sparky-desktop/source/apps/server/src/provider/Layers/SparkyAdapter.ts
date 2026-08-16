@@ -3,6 +3,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+import * as NodeOs from "node:os";
 
 import {
   EventId,
@@ -17,6 +18,7 @@ import {
   type ProviderInteractionMode,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type ProviderWorkspaceContext,
 } from "@sparky/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -33,6 +35,7 @@ import {
 } from "../codexContextWindow.ts";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import { SAFE_IMAGE_FILE_EXTENSIONS } from "../../imageMime.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -41,17 +44,18 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import * as ComposioMcp from "../../mcp/ComposioMcp.ts";
+import * as ImageViewRegistry from "../../mcp/ImageViewRegistry.ts";
 import type { ProviderAdapterShape, ProviderThreadSnapshot } from "../Services/ProviderAdapter.ts";
 import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = ProviderDriverKind.make("sparky");
 const T3_MCP_BEARER_TOKEN_ENV_VAR = "T3_MCP_BEARER_TOKEN";
-const T3_MCP_HEADER_VALUE_ENV_VAR = "T3_MCP_HEADER_VALUE";
 const HIDDEN_SPARKY_CONTROL_TOOLS = new Set(["end_task"]);
 const SPARKY_BROWSER_INSTRUCTIONS = `You are running inside Sparky Desktop. The t3-code MCP tools named preview_* control the collaborative browser shared with the user.
 For browser work, first call preview_status. If no automation-capable preview is attached, call preview_open. Then use preview_navigate, preview_snapshot, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 Do not open the user's external browser or start a replacement browser automation stack when the preview_* tools are available.`;
+const SPARKY_IMAGE_VIEW_INSTRUCTIONS = `ImageView is available as a visual-inspection helper. When you cannot directly inspect an image or browser screenshot, call image_view instead of guessing. Use path for a known local image; omit path to inspect the current collaborative browser tab. Give it the exact visual question you need answered. Treat its response as evidence, keep ownership of the task, and continue with your current model. Verify uncertain or changed page state with another ImageView call before clicking.`;
+const IMAGE_VIEW_PROMPT = `Analyze this image as a read-only visual specialist for another coding agent. Be exhaustive and factual. Include exact OCR text; page or application identity; visible state; every relevant control and icon; approximate positions using top/center/bottom and left/center/right plus relative relationships; enabled, disabled, selected, loading, error, modal, focus, and scroll state; safe click or cursor targets; what to wait for; and ambiguities or confidence limits. Do not perform the task, make choices for the agent, or claim hidden state.`;
 
 // Stream callbacks are synchronous by contract, so publish their events with
 // a small module-level runner rather than nesting Effect.runSync in the turn
@@ -67,6 +71,7 @@ export interface SparkyAdapterOptions {
   readonly environment: NodeJS.ProcessEnv;
   readonly nativeEventLogger?: EventNdjsonLogger | undefined;
   readonly getCustomInstructions?: (() => Effect.Effect<string>) | undefined;
+  readonly getImageViewEnabled?: (() => Effect.Effect<boolean>) | undefined;
 }
 
 export interface SparkyProcessResult {
@@ -146,6 +151,8 @@ const NON_RETRYABLE_SPARKY_ERROR_MARKERS = [
   "invalid api key",
   "unauthorized",
   "forbidden",
+  "freeusagelimit",
+  "free usage limit",
   "context_length_exceeded",
   "context window",
 ] as const;
@@ -171,12 +178,34 @@ function sanitizeSparkyLogDetail(value: string): string {
     .slice(0, 1_000);
 }
 
+export function formatSparkyProcessError(
+  cause: unknown,
+  workspaceContext: ProviderWorkspaceContext | undefined,
+): string {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  if (/freeusagelimit|free usage limit/iu.test(detail)) {
+    if (/opencode api error/iu.test(detail)) {
+      return "OpenCode Zen reported that this model's free usage limit was reached. Select another model or try again later.";
+    }
+    return "The selected provider model has reached its free usage limit. Select another model or try again later.";
+  }
+  if (
+    workspaceContext === "none" &&
+    /unexpected argument[\s\S]*--no-workspace-context/iu.test(detail)
+  ) {
+    return "The configured Sparky runtime is outdated and does not support project-free chats. Rebuild or update the Sparky binary, then retry.";
+  }
+  return detail;
+}
+
 export function isHiddenSparkyControlTool(toolName: string): boolean {
   return HIDDEN_SPARKY_CONTROL_TOOLS.has(toolName);
 }
 
 interface SessionState {
   session: ProviderSession;
+  /** Internal process/session home; never exposed as ProviderSession.cwd. */
+  runtimeCwd: string;
   snapshot: ProviderThreadSnapshot;
   nextTurn: number;
 }
@@ -436,9 +465,11 @@ export function sparkyToolPresentation(
         ? "file_change"
         : normalizedName === "web_search"
           ? "web_search"
-          : isBrowserTool
-            ? "mcp_tool_call"
-            : "dynamic_tool_call";
+          : normalizedName === "image_view" || normalizedName === "t3-code_image_view"
+            ? "image_view"
+            : isBrowserTool
+              ? "mcp_tool_call"
+              : "dynamic_tool_call";
   const kind =
     normalizedName === "bash"
       ? "execute"
@@ -473,6 +504,8 @@ export function sparkyToolPresentation(
     preview_wait_for: "Wait for browser",
     preview_recording_start: "Start browser recording",
     preview_recording_stop: "Stop browser recording",
+    image_view: "Inspect image",
+    "t3-code_image_view": "Inspect image",
   };
   return {
     itemType,
@@ -486,7 +519,69 @@ export function sparkyToolPresentation(
   };
 }
 
-function parseModelSelection(model: string | undefined): {
+function imageMimeTypeFromPath(filePath: string): string {
+  const extension = NodePath.extname(filePath).toLowerCase();
+  switch (extension) {
+    case ".avif":
+      return "image/avif";
+    case ".gif":
+      return "image/gif";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".svg":
+      return "image/svg+xml";
+    case ".webp":
+      return "image/webp";
+    default:
+      return "image/png";
+  }
+}
+
+function imageDataUrl(image: ImageViewRegistry.ImageViewRequest["image"]): {
+  readonly path: string;
+  readonly mimeType: string;
+} {
+  if (image.type === "data") {
+    const extension = image.mimeType === "image/jpeg" ? ".jpg" : ".png";
+    const path = NodePath.join(
+      NodeFS.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "sparky-image-view-")),
+      `image${extension}`,
+    );
+    NodeFS.writeFileSync(path, Buffer.from(image.data, "base64"));
+    return { path, mimeType: image.mimeType };
+  }
+  return { path: image.path, mimeType: imageMimeTypeFromPath(image.path) };
+}
+
+function resolveImageViewPath(input: {
+  readonly path: string;
+  readonly cwd: string;
+  readonly attachmentsDir: string;
+}): string {
+  const resolved = NodePath.resolve(input.path);
+  const roots = [input.cwd, input.attachmentsDir].map((root) => NodePath.resolve(root));
+  if (!roots.some((root) => resolved === root || resolved.startsWith(`${root}${NodePath.sep}`))) {
+    throw new Error(
+      "ImageView can only inspect images inside the current workspace or Sparky attachment storage.",
+    );
+  }
+  if (!SAFE_IMAGE_FILE_EXTENSIONS.has(NodePath.extname(resolved).toLowerCase())) {
+    throw new Error("ImageView only accepts supported image files.");
+  }
+  if (!NodeFS.existsSync(resolved) || !NodeFS.statSync(resolved).isFile()) {
+    throw new Error("ImageView could not read the requested image.");
+  }
+  return resolved;
+}
+
+function textFromSparkyResult(response: string): string {
+  const trimmed = response.trim();
+  if (trimmed.length === 0) throw new Error("The vision model returned an empty analysis.");
+  return trimmed;
+}
+
+export function parseSparkyModelSelection(model: string | undefined): {
   readonly provider: string;
   readonly model: string;
   readonly baseUrl?: string | undefined;
@@ -571,6 +666,18 @@ export function resolveSparkyRuntimeContextWindow(
 
 const SPARKY_SESSION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Project-free chats still need a stable process/session home for Sparky's
+ * durable transcript, but that home must never be the user's project or the
+ * server process CWD.
+ */
+function projectFreeRuntimeCwd(attachmentsDir: string, threadId: string): string {
+  const threadKey = NodeCrypto.createHash("sha256").update(threadId).digest("hex").slice(0, 32);
+  const cwd = NodePath.join(attachmentsDir, "project-free", threadKey);
+  NodeFS.mkdirSync(cwd, { recursive: true });
+  return cwd;
+}
 
 function sparkySessionFile(cwd: string, sessionId: string): string {
   return NodePath.join(cwd, ".sparky", "sessions", `${sessionId}.jsonl`);
@@ -657,7 +764,7 @@ export function captureSparkySessionIdentity(
     resumeCursor: {
       threadId: String(threadId),
       sparkySessionId: sessionId,
-      cwd,
+      ...(state.session.workspaceContext === "none" ? {} : { cwd }),
     },
     updatedAt: new Date().toISOString(),
   };
@@ -693,11 +800,14 @@ export function resolveSparkySessionId(
   cwd: string,
   threadId: string,
   resumeCursor: unknown,
+  workspaceContext: ProviderWorkspaceContext = "project",
 ): string | undefined {
   const requestedSessionId = sparkySessionIdFromResumeCursor(resumeCursor, threadId);
   if (requestedSessionId && !usableSparkySessionId(cwd, requestedSessionId)) {
     throw new Error(
-      `Cannot continue Sparky conversation '${threadId}': persisted session '${requestedSessionId}' is missing from '${cwd}'. Refusing to start a new conversation.`,
+      workspaceContext === "none"
+        ? `Cannot continue Sparky conversation '${threadId}': the persisted session is missing.`
+        : `Cannot continue Sparky conversation '${threadId}': persisted session '${requestedSessionId}' is missing from '${cwd}'. Refusing to start a new conversation.`,
     );
   }
   return requestedSessionId ?? readSparkySessionBinding(cwd, threadId);
@@ -707,18 +817,18 @@ export function makeSparkyProcessArgs(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
+  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
   readonly interactionMode?: ProviderInteractionMode | undefined;
   readonly sessionId?: string | undefined;
+  readonly workspaceContext?: ProviderWorkspaceContext | undefined;
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
-  readonly mcpHeaderName?: string | undefined;
-  readonly mcpHeaderEnvVar?: string | undefined;
 }): string[] {
-  const selection = parseModelSelection(input.model);
+  const selection = parseSparkyModelSelection(input.model);
   const args = [
     "--json-stream",
     "--provider",
@@ -732,8 +842,14 @@ export function makeSparkyProcessArgs(input: {
   if (selection.baseUrl) {
     args.push("--base-url", selection.baseUrl);
   }
+  if (input.textOnly) {
+    args.push("--text-only");
+  }
   if (input.sessionId) {
     args.push("--session", input.sessionId);
+  }
+  if (input.workspaceContext === "none") {
+    args.push("--no-workspace-context");
   }
   if (input.reasoningEffort?.trim()) {
     args.push("--effort", input.reasoningEffort.trim());
@@ -755,14 +871,6 @@ export function makeSparkyProcessArgs(input: {
   if (input.mcpUrl?.trim() && input.mcpBearerTokenEnvVar?.trim()) {
     args.push("--mcp-url", input.mcpUrl.trim());
     args.push("--mcp-bearer-token-env-var", input.mcpBearerTokenEnvVar.trim());
-  } else if (
-    input.mcpUrl?.trim() &&
-    input.mcpHeaderName?.trim() &&
-    input.mcpHeaderEnvVar?.trim()
-  ) {
-    args.push("--mcp-url", input.mcpUrl.trim());
-    args.push("--mcp-header-name", input.mcpHeaderName.trim());
-    args.push("--mcp-header-env-var", input.mcpHeaderEnvVar.trim());
   }
   return args;
 }
@@ -772,6 +880,7 @@ function runSparky(input: {
   readonly cwd: string;
   readonly prompt: string;
   readonly model: string;
+  readonly textOnly?: boolean | undefined;
   readonly images?: ReadonlyArray<{ readonly path: string; readonly mimeType: string }>;
   readonly reasoningEffort?: string | undefined;
   readonly contextWindow?: string | undefined;
@@ -782,11 +891,10 @@ function runSparky(input: {
   readonly isCancelled?: (() => boolean) | undefined;
   readonly callbacks?: SparkyStreamCallbacks | undefined;
   readonly sessionId?: string | undefined;
+  readonly workspaceContext?: ProviderWorkspaceContext | undefined;
   readonly customInstructions?: string | undefined;
   readonly mcpUrl?: string | undefined;
   readonly mcpBearerTokenEnvVar?: string | undefined;
-  readonly mcpHeaderName?: string | undefined;
-  readonly mcpHeaderEnvVar?: string | undefined;
 }) {
   return Effect.tryPromise({
     try: () =>
@@ -922,7 +1030,7 @@ function runSparky(input: {
       new ProviderAdapterProcessError({
         provider: PROVIDER,
         threadId: "standalone",
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: formatSparkyProcessError(cause, input.workspaceContext),
         cause,
       }),
   });
@@ -964,6 +1072,103 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             threadId,
           )
         : Effect.void;
+    const cleanupImageViewAnalyzer = (threadId: ThreadId) =>
+      ImageViewRegistry.unregisterImageViewAnalyzer(threadId, options.instanceId);
+
+    const registerImageViewAnalyzer = (
+      threadId: ThreadId,
+      cwd: string,
+      workspaceContext: ProviderWorkspaceContext,
+    ) => {
+      if (!options.getImageViewEnabled || workspaceContext === "none") return;
+      const analyzer: ImageViewRegistry.ImageViewAnalyzer = (request) =>
+        Effect.gen(function* () {
+          const enabled = yield* options.getImageViewEnabled!().pipe(
+            Effect.mapError(
+              (cause) =>
+                new ImageViewRegistry.ImageViewError({
+                  issue: "Unable to read ImageView settings.",
+                  cause,
+                }),
+            ),
+          );
+          if (!enabled) {
+            return yield* new ImageViewRegistry.ImageViewError({
+              issue: "ImageView is disabled in General settings.",
+            });
+          }
+
+          let temporaryDirectory: string | undefined;
+          const image = yield* Effect.try({
+            try: () => {
+              if (request.image.type === "path") {
+                const path = resolveImageViewPath({
+                  path: request.image.path,
+                  cwd,
+                  attachmentsDir: options.attachmentsDir,
+                });
+                return { path, mimeType: imageMimeTypeFromPath(path) };
+              }
+              const resolved = imageDataUrl(request.image);
+              temporaryDirectory = NodePath.dirname(resolved.path);
+              return resolved;
+            },
+            catch: (cause) =>
+              new ImageViewRegistry.ImageViewError({
+                issue: "The requested image could not be prepared.",
+                cause,
+              }),
+          });
+          const result = yield* runSparky({
+            binaryPath: options.binaryPath,
+            cwd,
+            prompt: [
+              IMAGE_VIEW_PROMPT,
+              request.question?.trim() ? `Specific question: ${request.question.trim()}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
+            model:
+              options.environment.SPARKY_IMAGE_VIEW_MODEL?.trim() ||
+              options.environment.SPARKY_VISION_MODEL?.trim() ||
+              "openai/gpt-4.1-mini",
+            images: [image],
+            textOnly: true,
+            workspaceContext,
+            environment: options.environment,
+          }).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ImageViewRegistry.ImageViewError({
+                  issue: "The vision provider could not analyze the image.",
+                  cause,
+                }),
+            ),
+          );
+          return yield* Effect.try({
+            try: () => textFromSparkyResult(result.response),
+            catch: (cause) =>
+              new ImageViewRegistry.ImageViewError({
+                issue: "The vision provider returned no usable analysis.",
+                cause,
+              }),
+          }).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                if (temporaryDirectory) {
+                  try {
+                    NodeFS.rmSync(temporaryDirectory, { recursive: true, force: true });
+                  } catch {
+                    // Best-effort cleanup of the browser screenshot staging directory.
+                  }
+                }
+              }),
+            ),
+          );
+        });
+      ImageViewRegistry.registerImageViewAnalyzer(threadId, options.instanceId, analyzer);
+    };
+
     const missingSession = (threadId: ThreadId) =>
       Effect.fail(
         new ProviderAdapterSessionNotFoundError({
@@ -985,7 +1190,8 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
     ) => {
       const threadId = state.session.threadId;
       const childKey = `${threadId}:${turnId}`;
-      const cwd = state.session.cwd ?? process.cwd();
+      const cwd = state.runtimeCwd;
+      const workspaceContext = state.session.workspaceContext ?? "project";
       const isTurnCancelled = () =>
         cancelledTurnKeys.has(childKey) ||
         sessions.get(threadId) !== state ||
@@ -1038,28 +1244,28 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
         const customInstructions = options.getCustomInstructions
           ? yield* options.getCustomInstructions()
           : "";
-        const mcpSession = McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
-        const composioMcp = ComposioMcp.readComposioMcpConfig();
-        const activeMcp: {
-          readonly endpoint: string;
-          readonly authorizationHeader: string;
-          readonly headerName?: string;
-          readonly headerValue?: string;
-        } | undefined = composioMcp
-          ? {
-              endpoint: composioMcp.endpoint,
-              authorizationHeader: ComposioMcp.composioAuthorizationHeader(composioMcp),
-              headerName: composioMcp.apiKeyHeader,
-              headerValue: composioMcp.apiKey,
-            }
-          : mcpSession;
+        const mcpSession =
+          workspaceContext === "none"
+            ? undefined
+            : McpProviderSession.readMcpProviderSession(threadId, options.instanceId);
+        const activeMcp = mcpSession;
+        const imageViewEnabled =
+          workspaceContext !== "none" &&
+          options.getImageViewEnabled &&
+          (yield* options.getImageViewEnabled());
         const effectiveInstructions = [
           customInstructions.trim(),
-          ...(mcpSession && !composioMcp ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
+          ...(mcpSession ? [SPARKY_BROWSER_INSTRUCTIONS] : []),
+          ...(imageViewEnabled ? [SPARKY_IMAGE_VIEW_INSTRUCTIONS] : []),
         ]
           .filter((instructions) => instructions.length > 0)
           .join("\n\n");
-        let sessionId = resolveSparkySessionId(cwd, String(threadId), state.session.resumeCursor);
+        let sessionId = resolveSparkySessionId(
+          cwd,
+          String(threadId),
+          state.session.resumeCursor,
+          workspaceContext,
+        );
         const captureSessionIdentity = (nextSessionId: string) => {
           sessionId = nextSessionId;
           try {
@@ -1084,6 +1290,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           maxRetries: SPARKY_RECONNECT_RETRY_COUNT,
           ...(error
             ? {
+                errorTag: errorTag(error),
                 reason: sanitizeSparkyLogDetail(
                   error instanceof Error ? error.message : String(error),
                 ),
@@ -1140,7 +1347,8 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               attempt: attempt + 1,
               maxAttempts: SPARKY_RECONNECT_RETRY_COUNT + 1,
               model,
-              cwd,
+              ...(workspaceContext === "none" ? {} : { cwd }),
+              workspaceContext,
               hasSession: sessionId !== undefined,
               hasMcpSession: activeMcp !== undefined,
             });
@@ -1153,17 +1361,14 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               reasoningEffort,
               contextWindow,
               interactionMode,
+              workspaceContext,
               environment: activeMcp
                 ? {
                     ...options.environment,
-                    ...(activeMcp.headerName && activeMcp.headerValue
-                      ? { [T3_MCP_HEADER_VALUE_ENV_VAR]: activeMcp.headerValue }
-                      : {
-                          [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
-                            /^Bearer\s+/u,
-                            "",
-                          ),
-                        }),
+                    [T3_MCP_BEARER_TOKEN_ENV_VAR]: activeMcp.authorizationHeader.replace(
+                      /^Bearer\s+/u,
+                      "",
+                    ),
                   }
                 : options.environment,
               activeChildren,
@@ -1172,16 +1377,10 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
               customInstructions: effectiveInstructions,
               isCancelled: isTurnCancelled,
               ...(activeMcp
-                ? activeMcp.headerName && activeMcp.headerValue
-                  ? {
-                      mcpUrl: activeMcp.endpoint,
-                      mcpHeaderName: activeMcp.headerName,
-                      mcpHeaderEnvVar: T3_MCP_HEADER_VALUE_ENV_VAR,
-                    }
-                  : {
-                      mcpUrl: activeMcp.endpoint,
-                      mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
-                    }
+                ? {
+                    mcpUrl: activeMcp.endpoint,
+                    mcpBearerTokenEnvVar: T3_MCP_BEARER_TOKEN_ENV_VAR,
+                  }
                 : {}),
               callbacks: {
                 onDelta: (delta) => {
@@ -1363,7 +1562,11 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           lastError: undefined,
           updatedAt: new Date().toISOString(),
           resumeCursor: result.sessionId
-            ? { threadId: String(threadId), sparkySessionId: result.sessionId, cwd }
+            ? {
+                threadId: String(threadId),
+                sparkySessionId: result.sessionId,
+                ...(workspaceContext === "none" ? {} : { cwd }),
+              }
             : state.session.resumeCursor,
         };
 
@@ -1377,7 +1580,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                   resumeCursor: {
                     threadId: String(threadId),
                     sparkySessionId: result.sessionId,
-                    cwd,
+                    ...(workspaceContext === "none" ? {} : { cwd }),
                   },
                 }
               : {}),
@@ -1451,23 +1654,38 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
           const now = new Date().toISOString();
           const threadId = String(input.threadId);
           const requestedSessionId = sparkySessionIdFromResumeCursor(input.resumeCursor, threadId);
-          const cwd =
-            input.cwd ?? cwdFromResumeCursor(input.resumeCursor, threadId) ?? process.cwd();
-          const sparkySessionId =
-            sessionIdFromResumeCursor(cwd, threadId, input.resumeCursor) ??
-            readSparkySessionBinding(cwd, threadId);
-          if (requestedSessionId && !sparkySessionId) {
+          const workspaceContext: ProviderWorkspaceContext = input.workspaceContext ?? "project";
+          const runtimeCwd =
+            workspaceContext === "none"
+              ? projectFreeRuntimeCwd(options.attachmentsDir, threadId)
+              : (input.cwd ?? cwdFromResumeCursor(input.resumeCursor, threadId));
+          if (runtimeCwd === undefined) {
             throw new Error(
-              `Cannot resume Sparky conversation '${threadId}': session '${requestedSessionId}' is not available in '${cwd}'. Refusing to start a new conversation.`,
+              `Cannot start Sparky conversation '${threadId}': a project workspace CWD is required.`,
             );
           }
+          const sparkySessionId =
+            sessionIdFromResumeCursor(runtimeCwd, threadId, input.resumeCursor) ??
+            readSparkySessionBinding(runtimeCwd, threadId);
+          if (requestedSessionId && !sparkySessionId) {
+            throw new Error(
+              workspaceContext === "none"
+                ? `Cannot resume Sparky conversation '${threadId}': the persisted session is not available. Refusing to start a new conversation.`
+                : `Cannot resume Sparky conversation '${threadId}': session '${requestedSessionId}' is not available in '${runtimeCwd}'. Refusing to start a new conversation.`,
+            );
+          }
+          const resumeCursorWithoutProjectCwd =
+            workspaceContext === "none" && cwdFromResumeCursor(input.resumeCursor, threadId)
+              ? undefined
+              : input.resumeCursor;
           const session: ProviderSession = {
             provider: PROVIDER,
             providerInstanceId: options.instanceId,
             status: "ready",
             runtimeMode: input.runtimeMode,
+            workspaceContext,
             threadId: input.threadId,
-            cwd,
+            ...(workspaceContext === "none" ? {} : { cwd: runtimeCwd }),
             ...(input.modelSelection?.model ? { model: input.modelSelection.model } : {}),
             ...(input.modelSelection?.contextWindowSource !== "models.dev" ||
             isCodexOAuthModel(input.modelSelection?.model)
@@ -1490,18 +1708,26 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
                 })()
               : {}),
             ...(sparkySessionId
-              ? { resumeCursor: { threadId, sparkySessionId, cwd } }
-              : input.resumeCursor !== undefined
-                ? { resumeCursor: input.resumeCursor }
+              ? {
+                  resumeCursor: {
+                    threadId,
+                    sparkySessionId,
+                    ...(workspaceContext === "none" ? {} : { cwd: runtimeCwd }),
+                  },
+                }
+              : resumeCursorWithoutProjectCwd !== undefined
+                ? { resumeCursor: resumeCursorWithoutProjectCwd }
                 : {}),
             createdAt: now,
             updatedAt: now,
           };
           sessions.set(input.threadId, {
             session,
+            runtimeCwd,
             snapshot: { threadId: input.threadId, turns: [] },
             nextTurn: 0,
           });
+          registerImageViewAnalyzer(input.threadId, runtimeCwd, workspaceContext);
           return session;
         }),
       sendTurn: (input) =>
@@ -1664,6 +1890,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
             if (fiber) yield* Fiber.interrupt(fiber);
           }
           sessions.delete(threadId);
+          cleanupImageViewAnalyzer(threadId);
         }),
       listSessions: () => Effect.sync(() => [...sessions.values()].map((state) => state.session)),
       hasSession: (threadId) => Effect.succeed(sessions.has(threadId)),
@@ -1696,6 +1923,7 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
         Effect.sync(() => {
           for (const child of activeChildren.values()) child.kill();
           activeChildren.clear();
+          for (const threadId of sessions.keys()) cleanupImageViewAnalyzer(threadId);
           sessions.clear();
         }),
       subscribeEvents: PubSub.subscribe(runtimeEvents),
@@ -1705,4 +1933,5 @@ export const makeSparkyAdapter = (options: SparkyAdapterOptions) =>
     return adapter;
   });
 
-export const runSparkyTextGeneration = runSparky;
+export const runSparkyTextGeneration = (input: Parameters<typeof runSparky>[0]) =>
+  runSparky({ ...input, textOnly: true });
