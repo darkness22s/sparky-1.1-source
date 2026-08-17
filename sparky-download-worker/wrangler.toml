@@ -14,6 +14,9 @@ RELEASE_PUBLISHED_AT = "2026-08-17T06:25:04Z"
 RELEASE_CHANGELOG = """
 Sparky 1.1.7
 
+- Added persistent Memory for user-approved preferences, conventions, decisions, and project context.
+- Memory supports global and project scopes with search, add, update, and delete operations.
+- Added separate stateless project-free chats that remain resumable without workspace context.
 - Added reliable Windows, macOS, and Linux installers.
 - Added a signed Linux AppImage with a downloadable GPG signature.
 - Improved desktop updater feeds and release support.
