@@ -486,9 +486,19 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
-  it("does not pass project workspace context to provider sessions for unscoped chats", async () => {
+  it("does not pass project workspace context to provider sessions and generates titles for unscoped chats", async () => {
     const harness = await createHarness({ threadProjectId: UNSCOPED_CHAT_PROJECT_ID });
     const now = "2026-01-01T00:00:00.000Z";
+    harness.generateThreadTitle.mockReturnValue(Effect.succeed({ title: "Generated chat title" }));
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-title-unscoped"),
+        threadId: ThreadId.make("thread-1"),
+        title: "New thread",
+      }),
+    );
 
     await Effect.runPromise(
       harness.engine.dispatch({
@@ -513,7 +523,21 @@ describe("ProviderCommandReactor", () => {
       workspaceContext: "none",
     });
     expect(harness.startSession.mock.calls[0]?.[1]).not.toHaveProperty("cwd");
-    expect(harness.generateThreadTitle).not.toHaveBeenCalled();
+
+    await waitFor(() => harness.generateThreadTitle.mock.calls.length === 1);
+    expect(harness.generateThreadTitle.mock.calls[0]?.[0]).toMatchObject({
+      workspaceContext: "none",
+      cwd: expect.stringContaining("attachments"),
+      message: "hello without a project",
+    });
+    expect(harness.generateThreadTitle.mock.calls[0]?.[0]?.cwd).not.toBe("/tmp/provider-project");
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      return (
+        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.title ===
+        "Generated chat title"
+      );
+    });
   });
 
   it("generates a thread title on the first turn", async () => {

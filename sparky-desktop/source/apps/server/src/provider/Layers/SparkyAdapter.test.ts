@@ -431,9 +431,11 @@ describe("Sparky session continuity", () => {
       cwd: "C:\\project-free-runtime",
       prompt: "Answer without project context",
       model: "openai/gpt-4o",
+      textOnly: true,
       workspaceContext: "none",
     });
 
+    expect(args).toContain("--text-only");
     expect(args).toContain("--no-workspace-context");
   });
 
