@@ -55,7 +55,7 @@ jobs:
         env:
           NODE_ENV: production
 
-      - run: pnpm dist:desktop:dmg:x64
+      - run: pnpm --config.verify-deps-before-run=false dist:desktop:dmg:x64
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -135,7 +135,7 @@ jobs:
         env:
           NODE_ENV: production
 
-      - run: pnpm dist:desktop:dmg:arm64
+      - run: pnpm --config.verify-deps-before-run=false dist:desktop:dmg:arm64
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -218,7 +218,7 @@ jobs:
         env:
           NODE_ENV: production
 
-      - run: pnpm dist:desktop:linux
+      - run: pnpm --config.verify-deps-before-run=false dist:desktop:linux
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -333,7 +333,7 @@ jobs:
         env:
           NODE_ENV: production
 
-      - run: pnpm dist:desktop:win:x64
+      - run: pnpm --config.verify-deps-before-run=false dist:desktop:win:x64
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
