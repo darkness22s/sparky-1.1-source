@@ -31,6 +31,9 @@
       <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
         <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
       </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Chats &amp; Memory</div>
+        <ul class="docs-nav-items"><li><a href="stateless-chats.html">Stateless Chats</a></li><li><a href="memory.html">Memory</a></li></ul>
+      </div>
     </aside>
     <main class="docs-content">
       <div class="docs-page-header">
@@ -44,7 +47,8 @@
 <li><strong>Windows, macOS, and Linux installers</strong> are available from the download page.</li>
 <li><strong>Signed Linux AppImage</strong> downloads include a GPG signature for verification.</li>
 <li><strong>Reliable desktop updates</strong> now use platform-specific updater feeds for Windows, macOS Intel, macOS Apple Silicon, and Linux.</li>
-<li><strong>Project-free chats</strong> keep general conversations separate from project files and workspace tools.</li>
+<li><strong>Persistent Memory</strong> is introduced in 1.1.7, with global and project scopes for user-approved preferences, conventions, and decisions.</li>
+<li><strong>Stateless chats</strong> keep general conversations separate from project files and workspace tools while remaining resumable.</li>
 <li><strong>More reliable sessions</strong> preserve provider context across follow-ups and restarts.</li>
 </ul>
 <p>Sparky checks for updates in the background. When a new version is ready, the app will show a notification so you can choose when to install it.</p>
@@ -75,8 +79,11 @@
   <div><strong>Diff</strong><span>Review working-tree or thread changes before you commit.</span></div>
 </div>
 
-<h2 id="project-free">Project-free chats</h2>
-<p>Use a project-free chat when you want an answer without sending a project workspace as context. Sparky keeps the conversation and provider session durable, but does not read files, memory, extensions, or MCP tools from a project until you open one.</p>
+<h2 id="project-free">Stateless (project-free) chats</h2>
+<p>Use a <a href="stateless-chats.html">stateless chat</a> when you want an answer without sending a project workspace as context. Sparky keeps the conversation and provider session durable, but does not read files, extensions, or MCP tools from a project until you open one.</p>
+
+<h2 id="memory">Memory</h2>
+<p><a href="memory.html">Memory</a> is introduced in Sparky 1.1.7. Save user-approved preferences, conventions, decisions, and project context globally or within a project. Never save secrets or credentials.</p>
 
 <h2 id="providers">Supported AI providers</h2>
 <table class="docs-table"><tr><th>Provider</th><th>Models</th><th>Get your API key</th></tr>
@@ -97,7 +104,8 @@
 <li><a href="#what-is-sparky">What is Sparky?</a></li>
 <li><a href="#how-it-works">How it works</a></li>
 <li><a href="#sidebar-surfaces">Sidebar Panel</a></li>
-<li><a href="#project-free">Project-free chats</a></li>
+<li><a href="#project-free">Stateless chats</a></li>
+<li><a href="#memory">Memory</a></li>
 <li><a href="#providers">Supported AI providers</a></li>
 </ul>
     </aside>
