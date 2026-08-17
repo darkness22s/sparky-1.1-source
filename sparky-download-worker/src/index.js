@@ -83,12 +83,11 @@ function githubReleaseConfig(env, baseUrl) {
     file("Sparky-x64.exe.blockmap", "windows-x64", Number(env.RELEASE_WINDOWS_BLOCKMAP_SIZE), "application/octet-stream", env.RELEASE_WINDOWS_BLOCKMAP_SHA256),
     file("latest.yml", "windows-x64", Number(env.RELEASE_WINDOWS_YML_SIZE), "text/yaml", env.RELEASE_WINDOWS_YML_SHA256),
   ];
-  if (env.RELEASE_LINUX_SIZE?.trim()) {
-    files.push(
-      file("Sparky-x64.AppImage", "linux-x64", Number(env.RELEASE_LINUX_SIZE), "application/octet-stream", env.RELEASE_LINUX_SHA256),
-      file("Sparky-x64.AppImage.asc", "linux-x64", Number(env.RELEASE_LINUX_ASC_SIZE), "application/pgp-signature", env.RELEASE_LINUX_ASC_SHA256),
-    );
-  }
+  if (env.RELEASE_LINUX_SIZE?.trim()) files.push(
+    file("Sparky-x64.AppImage", "linux-x64", Number(env.RELEASE_LINUX_SIZE), "application/octet-stream", env.RELEASE_LINUX_SHA256),
+    file("Sparky-x64.AppImage.asc", "linux-x64", Number(env.RELEASE_LINUX_ASC_SIZE), "application/pgp-signature", env.RELEASE_LINUX_ASC_SHA256),
+    file("latest-linux.yml", "linux-x64", Number(env.RELEASE_LINUX_YML_SIZE), "text/yaml", env.RELEASE_LINUX_YML_SHA256),
+  );
   if (env.RELEASE_MAC_ARM64_SIZE?.trim()) {
     const manifestName = env.RELEASE_MAC_ARM64_YML_NAME?.trim() || "latest-mac.yml";
     files.push(
@@ -173,7 +172,9 @@ function updateRequest(path) {
   const decoded = suffix.split("/").map(decodeURIComponent);
   if (decoded.some((part) => !part || part === "." || part === ".." || part.includes("\\"))) return null;
   if (decoded.length === 1) {
-    return { platform: decoded[0] === "latest-mac.yml" ? "macos-arm64" : "windows-x64", name: decoded[0] };
+    if (decoded[0] === "latest-mac.yml") return { platform: "macos-arm64", name: decoded[0] };
+    if (decoded[0] === "latest-linux.yml") return { platform: "linux-x64", name: decoded[0] };
+    return { platform: "windows-x64", name: decoded[0] };
   }
   if (decoded[0] === "windows" && decoded.length === 2) return { platform: "windows-x64", name: decoded[1] };
   // Keep the legacy architecture-qualified Windows feed working. Some
@@ -182,9 +183,10 @@ function updateRequest(path) {
   if (decoded[0] === "windows" && decoded[1] === "x64" && decoded.length === 3) {
     return { platform: "windows-x64", name: decoded[2] };
   }
-  if (decoded[0] === "linux" && decoded.length === 2 && (decoded[1].endsWith(".AppImage") || decoded[1].endsWith(".asc"))) return { platform: "linux-x64", name: decoded[1] };
+  if (decoded[0] === "linux" && decoded.length === 2 && (decoded[1] === "latest-linux.yml" || decoded[1].endsWith(".AppImage") || decoded[1].endsWith(".asc"))) return { platform: "linux-x64", name: decoded[1] };
   if (decoded[0] === "macos" && decoded.length === 3 && (decoded[1] === "arm64" || decoded[1] === "x64")) {
-    return { platform: `macos-${decoded[1]}`, name: decoded[2] };
+    const name = decoded[2] === "latest-mac.yml" ? `latest-mac-${decoded[1]}.yml` : decoded[2];
+    return { platform: `macos-${decoded[1]}`, name };
   }
   return null;
 }
