@@ -50,7 +50,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: node scripts/update-release-package-versions.ts "${GITHUB_REF_NAME#v}"
 
-      - run: pnpm build
+      - run: pnpm exec vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -130,7 +130,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: node scripts/update-release-package-versions.ts "${GITHUB_REF_NAME#v}"
 
-      - run: pnpm build
+      - run: pnpm exec vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -213,7 +213,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: node scripts/update-release-package-versions.ts "${GITHUB_REF_NAME#v}"
 
-      - run: pnpm build
+      - run: pnpm exec vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
@@ -328,7 +328,7 @@ jobs:
         shell: pwsh
         run: node scripts/update-release-package-versions.ts ($env:GITHUB_REF_NAME -replace '^v', '')
 
-      - run: pnpm build
+      - run: pnpm exec vp run --filter './apps/*' --filter './packages/*' --filter './oxlint-plugin-t3code' --filter './scripts' build
         working-directory: sparky-desktop/source
         env:
           NODE_ENV: production
