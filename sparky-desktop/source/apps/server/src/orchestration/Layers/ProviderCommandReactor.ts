@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
+import { ServerConfig } from "../../config.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
 import type { ProviderServiceError } from "../../provider/Errors.ts";
@@ -79,6 +80,7 @@ type ThreadTitleGenerationInput = {
   readonly messageText: string;
   readonly attachments?: ReadonlyArray<ChatAttachment>;
   readonly titleSeed?: string;
+  readonly workspaceContext: ProviderWorkspaceContext;
   readonly modelSelection: ModelSelection;
 };
 
@@ -221,6 +223,7 @@ const make = Effect.gen(function* () {
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
+  const serverConfig = yield* ServerConfig;
   const textGeneration = yield* TextGeneration;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
@@ -971,6 +974,9 @@ const make = Effect.gen(function* () {
             cwd: input.cwd,
             message: input.messageText,
             ...(attachments.length > 0 ? { attachments } : {}),
+            ...(input.workspaceContext === "none"
+              ? { workspaceContext: input.workspaceContext }
+              : {}),
             modelSelection: input.modelSelection,
           })
           .pipe(Effect.timeout(Duration.seconds(30)));
@@ -1052,14 +1058,20 @@ const make = Effect.gen(function* () {
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     let generationInput: ThreadTitleGenerationInput | undefined;
-    if (isFirstUserMessageTurn && thread.projectId !== UNSCOPED_CHAT_PROJECT_ID) {
-      const project = yield* resolveProject(thread.projectId);
-      const generationCwd = resolveThreadWorkspaceCwd({
-        thread,
-        projects: project ? [project] : [],
-      });
+    const workspaceContext: ProviderWorkspaceContext =
+      thread.projectId === UNSCOPED_CHAT_PROJECT_ID ? "none" : "project";
+    if (isFirstUserMessageTurn) {
+      const project =
+        workspaceContext === "none" ? undefined : yield* resolveProject(thread.projectId);
+      const generationCwd =
+        workspaceContext === "none"
+          ? serverConfig.attachmentsDir
+          : resolveThreadWorkspaceCwd({
+              thread,
+              projects: project ? [project] : [],
+            });
       if (generationCwd === undefined) {
-        yield* Effect.logWarning("skipping project title generation without a workspace", {
+        yield* Effect.logWarning("skipping thread title generation without a workspace", {
           threadId: event.payload.threadId,
         });
       } else {
@@ -1069,15 +1081,18 @@ const make = Effect.gen(function* () {
           messageText: message.text,
           ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
           ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
+          workspaceContext,
           modelSelection: event.payload.modelSelection ?? thread.modelSelection,
         };
-        const firstTurnGenerationInput = generationInput;
+        if (workspaceContext === "project") {
+          const firstTurnGenerationInput = generationInput;
 
-        yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-          branch: thread.branch,
-          worktreePath: thread.worktreePath,
-          ...firstTurnGenerationInput,
-        }).pipe(Effect.forkScoped);
+          yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
+            branch: thread.branch,
+            worktreePath: thread.worktreePath,
+            ...firstTurnGenerationInput,
+          }).pipe(Effect.forkScoped);
+        }
       }
     }
 
