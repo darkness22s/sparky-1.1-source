@@ -448,8 +448,6 @@ body:has(> .nav) > .hero h1 em { color: #265fb8; font-style: normal; }
 .license-loading { padding: 30px; color: #737b88; text-align: center; }
 .legal-downloads { display: flex; align-items: center; justify-content: space-between; gap: 30px; margin-top: 86px; padding: 30px; border: 1px solid #dfe4eb; border-radius: 20px; background: #f6f8ff; }
 .legal-downloads .pill { flex: 0 0 auto; }
-.download-status { max-width: 620px; margin: 24px auto 0; padding: 12px 16px; border: 1px solid rgba(222, 65, 96, .2); border-radius: 12px; color: #a62c4a; background: #fff5f7; font-size: 13px; line-height: 1.5; }
-.download-link-disabled { pointer-events: none; opacity: .48; filter: grayscale(1); }
 @media (max-width: 1050px) { .docs-layout { grid-template-columns: 205px minmax(0, 720px); gap: 36px; } .docs-toc { display: none; } }
 @media (max-width: 760px) {
   .nav-inner { grid-template-columns: 1fr auto; } .nav-links { display: none; } .nav-download { min-height: 40px; padding: 0 15px; }

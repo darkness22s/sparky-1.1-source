@@ -36,7 +36,7 @@
               <span id="primary-download-label">Download for Windows</span>
               <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
             </a>
-            <div id="download-status" class="download-status" role="status">Downloads are ready.</div>
+
             <a class="text-link" href="#all-platforms">View all platforms</a>
           </div>
         </div>
@@ -105,8 +105,8 @@
         document.getElementById("nav-system-download").href = detected.url;
         document.getElementById(detected.card)?.classList.add("recommended");
 
-        const status = document.getElementById("download-status");
-        status.textContent = "Downloads are ready.";
+
+
 
 
         // Update the displayed release version when available; direct installer links never depend on this request.
