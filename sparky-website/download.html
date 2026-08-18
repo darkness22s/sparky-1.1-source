@@ -36,7 +36,7 @@
               <span id="primary-download-label">Download for Windows</span>
               <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
             </a>
-            <div id="download-status" class="download-status" role="status">Checking download availability…</div>
+            <div id="download-status" class="download-status" role="status">Downloads are ready.</div>
             <a class="text-link" href="#all-platforms">View all platforms</a>
           </div>
         </div>
@@ -68,16 +68,16 @@
           </article>
           <article class="download-card" id="platform-linux">
             <span class="platform-kicker">Linux</span>
-            <h3>AppImage for x64</h3>
-            <p>For 64 bit Linux computers. Download, make executable, and run.</p>
-            <a class="pill pill-dark download-link" href="https://sparky.llc/get?platform=linux">Download Sparky.AppImage</a>
+            <h3>Debian package for x64</h3>
+            <p>For 64 bit Linux computers. Install with your software center or with <code>sudo apt install ./Sparky-amd64.deb</code>.</p>
+            <a class="pill pill-dark download-link" href="https://sparky-downloads-494452560242.s3.us-east-1.amazonaws.com/releases/linux/Sparky-amd64.deb">Download Sparky.deb</a>
           </article>
         </div>
         <p class="download-release-meta">Version <strong id="release-version">1.1.2</strong> <span aria-hidden="true">|</span> <a href="changelog.html">What is new</a></p>
         <div class="download-notes">
           <p><strong>Windows:</strong> Until Sparky is code signed, SmartScreen may ask you to choose More info and Run anyway.</p>
           <p><strong>macOS:</strong> Until Sparky is notarized, right click Sparky.dmg, choose Open, then choose Open again.</p>
-          <p><strong>Linux:</strong> Download the AppImage, make it executable with <code>chmod +x Sparky-x64.AppImage</code>, then launch it.</p>
+          <p><strong>Linux:</strong> Download the Debian package and open it with your software center, or run <code>sudo apt install ./Sparky-amd64.deb</code>.</p>
         </div>
       </section>
     </main>
@@ -96,7 +96,7 @@
         const detected = isMac
           ? { name: "macOS", label: "Download for macOS", url: "https://sparky.llc/get?platform=macos", card: "platform-mac" }
           : isLinux
-            ? { name: "Linux", label: "Download for Linux", url: "https://sparky.llc/get?platform=linux", card: "platform-linux" }
+            ? { name: "Linux", label: "Download Sparky.deb", url: "https://sparky-downloads-494452560242.s3.us-east-1.amazonaws.com/releases/linux/Sparky-amd64.deb", card: "platform-linux" }
             : { name: "Windows", label: "Download for Windows", url: "https://sparky.llc/get?platform=windows", card: "platform-windows" };
 
         document.getElementById("detected-system").textContent = detected.name;
@@ -106,32 +106,16 @@
         document.getElementById(detected.card)?.classList.add("recommended");
 
         const status = document.getElementById("download-status");
-        const links = [...document.querySelectorAll(".download-link")];
-        const pauseDownloads = (message) => {
-          status.textContent = message;
-          for (const link of links) {
-            link.classList.add("download-link-disabled");
-            link.setAttribute("aria-disabled", "true");
-            link.addEventListener("click", (event) => event.preventDefault());
-          }
-        };
+        status.textContent = "Downloads are ready.";
 
+
+        // Update the displayed release version when available; direct installer links never depend on this request.
         fetch("/get/manifest", { cache: "no-store" })
-          .then((response) => {
-            if (!response.ok) {
-              pauseDownloads("Downloads are temporarily paused while third-party release notices are finalized.");
-              throw new Error("Release unavailable");
-            }
-            return response.json();
-          })
+          .then((response) => (response.ok ? response.json() : null))
           .then((release) => {
-            if (release.version) document.getElementById("release-version").textContent = String(release.version).replace(/^v/, "");
+            if (release?.version) document.getElementById("release-version").textContent = String(release.version).replace(/^v/, "");
           })
-          .catch(() => {
-            if (!status.textContent || status.textContent === "Checking download availability…") {
-              pauseDownloads("Downloads are temporarily unavailable. Please check back soon.");
-            }
-          });
+          .catch(() => {});
       })();
     </script>
   </body>

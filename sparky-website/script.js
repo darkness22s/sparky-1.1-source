@@ -10,7 +10,7 @@
   const detectedDownload = isMac
     ? { label: "Download for macOS", url: "https://sparky.llc/get?platform=macos" }
     : isLinux
-      ? { label: "Download for Linux", url: "https://sparky.llc/get?platform=linux" }
+      ? { label: "Download Sparky.deb", url: "https://sparky-downloads-494452560242.s3.us-east-1.amazonaws.com/releases/linux/Sparky-amd64.deb" }
       : { label: "Download for Windows", url: "https://sparky.llc/get?platform=windows" };
   $$('[data-system-download]').forEach((link) => {
     link.href = detectedDownload.url;
