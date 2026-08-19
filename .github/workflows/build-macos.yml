@@ -231,7 +231,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s release/Sparky-x64.deb
+          test -s release/Sparky-amd64.deb
           find release -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Upload Linux artifacts to release
@@ -239,7 +239,7 @@ jobs:
         shell: bash
         run: |
           gh release create "v1.1.8" --verify-tag --title "Sparky v1.1.8" --notes "Sparky v1.1.8 installers" 2>/dev/null || true
-          gh release upload "v1.1.8" release/Sparky-x64.deb --clobber
+          gh release upload "v1.1.8" release/Sparky-amd64.deb --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
