@@ -566,7 +566,11 @@ interface StagePackageJson {
   readonly private: true;
   readonly packageManager: string;
   readonly description: string;
-  readonly author: string;
+  readonly author: {
+    readonly name: string;
+    readonly email: string;
+  };
+  readonly homepage: string;
   readonly main: string;
   readonly build: Record<string, unknown>;
   readonly dependencies: Record<string, unknown>;
@@ -1440,6 +1444,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.linux = {
       target: [target],
       executableName: "t3code",
+      maintainer: "support@sparky.llc",
       icon: "icons",
       category: "Development",
       desktop: {
@@ -1776,7 +1781,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "Sparky desktop coding agent",
-    author: "Sparky",
+    author: {
+      name: "Sparky",
+      email: "support@sparky.llc",
+    },
+    homepage: "https://sparky.llc",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
       options.platform,

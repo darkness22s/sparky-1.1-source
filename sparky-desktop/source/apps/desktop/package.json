@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
+  "author": {
+    "name": "Sparky",
+    "email": "support@sparky.llc"
+  },
+  "homepage": "https://sparky.llc",
   "scripts": {
     "ensure:electron": "node scripts/ensure-electron-runtime.mjs",
     "start": "node scripts/start-electron.mjs",
