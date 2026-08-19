@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory - Sparky Docs</title>
+  <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=14">
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items"><li><a href="read-edit.html">Read &amp; Edit Files</a></li><li><a href="terminal.html">Terminal Commands</a></li><li><a href="search.html">Search</a></li><li><a href="git.html">Git Operations</a></li><li><a href="preview.html">Preview Websites</a></li><li><a href="web-search.html">Web Search</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Chats &amp; Memory</div>
+        <ul class="docs-nav-items"><li><a href="stateless-chats.html">Stateless Chats</a></li><li><a href="memory.html" class="active">Memory</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">CHATS &amp; MEMORY</div>
+        <h1>Memory</h1>
+        <p>Give Sparky durable context you explicitly approve, without repeating the same preferences and conventions.</p>
+      </div>
+
+      <h2 id="introduced">Introduced in Sparky 1.1.7</h2>
+      <p>Sparky 1.1.7 is the first published update with Memory. It is stored locally and designed for user-approved facts, preferences, conventions, and decisions that help future sessions.</p>
+
+      <h2 id="what-to-save">What to save</h2>
+      <ul>
+        <li>Your preferred coding style or review conventions.</li>
+        <li>Stable project decisions and architecture notes.</li>
+        <li>Workflow preferences that should carry across sessions.</li>
+        <li>Useful project context that you explicitly want Sparky to remember.</li>
+      </ul>
+      <p>Never save API keys, passwords, tokens, private keys, or other credentials. Memory is for durable context, not secrets.</p>
+
+      <h2 id="scopes">Global and project Memory</h2>
+      <p><strong>Global</strong> memories apply across projects, such as your preferred handle or general coding conventions. <strong>Project</strong> memories stay with one workspace, such as an architecture decision or local test command.</p>
+      <p>Stateless chats use a separate project-free Memory store, so workspace context stays isolated until you open a project.</p>
+
+      <h2 id="manage">Manage Memory</h2>
+      <p>Use Sparky's Memory tools or Settings to manage entries:</p>
+      <ol>
+        <li><strong>Search</strong> when a remembered fact may be relevant.</li>
+        <li><strong>Add</strong> a fact only after you approve what should be saved.</li>
+        <li><strong>Update</strong> an entry after confirming the change.</li>
+        <li><strong>Delete</strong> an entry when you ask Sparky to forget it.</li>
+      </ol>
+      <p>Sparky can use relevant approved memories as context, but memories do not override your current request.</p>
+
+      <div class="docs-next"><h3>Next steps</h3><ul>
+        <li><a href="stateless-chats.html">Stateless Chats</a> — chat without workspace context</li>
+        <li><a href="sessions.html">Sessions</a> — keep conversation continuity</li>
+        <li><a href="troubleshooting.html">Troubleshooting</a> — resolve common issues</li>
+      </ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list"><li><a href="#introduced">Introduced in 1.1.7</a></li>
+        <li><a href="#what-to-save">What to save</a></li>
+        <li><a href="#scopes">Global and project Memory</a></li>
+        <li><a href="#manage">Manage Memory</a></li>
+      </ul>
+    </aside>
+  </div>
+<footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="../licenses.html">Legal &amp; licenses</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+</body>
+</html>

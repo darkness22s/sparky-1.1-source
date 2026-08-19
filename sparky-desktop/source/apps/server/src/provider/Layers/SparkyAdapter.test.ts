@@ -431,9 +431,11 @@ describe("Sparky session continuity", () => {
       cwd: "C:\\project-free-runtime",
       prompt: "Answer without project context",
       model: "openai/gpt-4o",
+      textOnly: true,
       workspaceContext: "none",
     });
 
+    expect(args).toContain("--text-only");
     expect(args).toContain("--no-workspace-context");
   });
 
@@ -510,19 +512,25 @@ describe("Sparky session continuity", () => {
   });
 
   it("caps only the OAuth Codex context window", () => {
-    expect(normalizeSparkyContextWindow("openai-codex/gpt-5.6-sol", "1m")).toBe("258400");
-    expect(normalizeSparkyContextWindow("openai/gpt-5.6-sol", "1m")).toBe("1m");
-    expect(normalizeSparkyContextWindow("openai-codex/gpt-5.6-sol", "128k")).toBe("128k");
+    const environment = { SPARKY_CODEX_HOME: "C:\\sparky-test-codex-home-that-does-not-exist" };
+    expect(normalizeSparkyContextWindow("openai-codex/gpt-5.6-sol", "1m", environment)).toBe("258400");
+    expect(normalizeSparkyContextWindow("openai/gpt-5.6-sol", "1m", environment)).toBe("1m");
+    expect(normalizeSparkyContextWindow("openai-codex/gpt-5.6-sol", "128k", environment)).toBe("128k");
   });
 
   it("does not pass an unverified Models.dev context window to the runtime", () => {
+    const environment = { SPARKY_CODEX_HOME: "C:\\sparky-test-codex-home-that-does-not-exist" };
     expect(
-      resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {
-        instanceId: ProviderInstanceId.make("sparky"),
-        model: "openai-codex/gpt-5.6-sol",
-        contextWindowSource: "models.dev",
-        options: [{ id: "contextWindow", value: "1m" }],
-      }),
+      resolveSparkyRuntimeContextWindow(
+        "openai-codex/gpt-5.6-sol",
+        {
+          instanceId: ProviderInstanceId.make("sparky"),
+          model: "openai-codex/gpt-5.6-sol",
+          contextWindowSource: "models.dev",
+          options: [{ id: "contextWindow", value: "1m" }],
+        },
+        environment,
+      ),
     ).toBe("258400");
     expect(
       resolveSparkyRuntimeContextWindow("openai-codex/gpt-5.6-sol", {

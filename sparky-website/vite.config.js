@@ -65,6 +65,14 @@ const pageSeo = {
     title: "Sparky Docs - Sessions and threads",
     description: "Keep project conversations organized with Sparky sessions and threads.",
   },
+  "docs/stateless-chats.html": {
+    title: "Sparky Docs - Stateless chats",
+    description: "Use Sparky chats without sending a project workspace as context.",
+  },
+  "docs/memory.html": {
+    title: "Sparky Docs - Memory",
+    description: "Use Sparky Memory for user-approved preferences, conventions, and project decisions.",
+  },
   "docs/prompts.html": {
     title: "Sparky Docs - Prompts",
     description: "Write clear, effective prompts for Sparky coding tasks and project workflows.",

@@ -36,7 +36,7 @@
               <span id="primary-download-label">Download for Windows</span>
               <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
             </a>
-
+            <div id="download-status" class="download-status" role="status">Checking download availability…</div>
             <a class="text-link" href="#all-platforms">View all platforms</a>
           </div>
         </div>
@@ -73,7 +73,7 @@
             <a class="pill pill-dark download-link" href="https://sparky-downloads-494452560242.s3.us-east-1.amazonaws.com/releases/linux/Sparky-amd64.deb">Download Sparky.deb</a>
           </article>
         </div>
-        <p class="download-release-meta">Version <strong id="release-version">1.1.2</strong> <span aria-hidden="true">|</span> <a href="changelog.html">What is new</a></p>
+        <p class="download-release-meta">Version <strong id="release-version">1.1.7</strong> <span aria-hidden="true">|</span> <a href="changelog.html">What is new</a></p>
         <div class="download-notes">
           <p><strong>Windows:</strong> Until Sparky is code signed, SmartScreen may ask you to choose More info and Run anyway.</p>
           <p><strong>macOS:</strong> Until Sparky is notarized, right click Sparky.dmg, choose Open, then choose Open again.</p>
@@ -104,10 +104,6 @@
         document.getElementById("primary-download").href = detected.url;
         document.getElementById("nav-system-download").href = detected.url;
         document.getElementById(detected.card)?.classList.add("recommended");
-
-
-
-
 
         // Update the displayed release version when available; direct installer links never depend on this request.
         fetch("/get/manifest", { cache: "no-store" })

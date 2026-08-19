@@ -5,6 +5,7 @@ import {
   ProviderDriverKind,
   TextGenerationError,
   type ProviderInstanceId,
+  type ProviderWorkspaceContext,
   type ModelSelection,
   type ServerProvider,
 } from "@sparky/contracts";
@@ -150,12 +151,19 @@ function makeTextGeneration(input: {
   readonly binaryPath: string;
   readonly environment: NodeJS.ProcessEnv;
 }): TextGeneration.TextGeneration["Service"] {
-  const run = (operation: string, cwd: string, modelSelection: ModelSelection, prompt: string) =>
+  const run = (
+    operation: string,
+    cwd: string,
+    modelSelection: ModelSelection,
+    prompt: string,
+    workspaceContext: ProviderWorkspaceContext = "project",
+  ) =>
     runSparkyTextGeneration({
       binaryPath: input.binaryPath,
       cwd,
       prompt,
       model: modelSelection.model,
+      ...(workspaceContext === "none" ? { workspaceContext } : {}),
       ...resolveSparkyTextGenerationRuntimeOptions({
         modelSelection,
         environment: input.environment,
@@ -221,6 +229,7 @@ function makeTextGeneration(input: {
         request.cwd,
         request.modelSelection,
         makeSparkyThreadTitlePrompt(request.message),
+        request.workspaceContext,
       ).pipe(
         Effect.map((result) => {
           const parsed = parseJsonObject(result.response);

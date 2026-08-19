@@ -1,7 +1,12 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@sparky/contracts";
+import type {
+  ChatAttachment,
+  ModelSelection,
+  ProviderInstanceId,
+  ProviderWorkspaceContext,
+} from "@sparky/contracts";
 import { TextGenerationError } from "@sparky/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
@@ -59,6 +64,8 @@ export interface ThreadTitleGenerationInput {
   cwd: string;
   message: string;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
+  /** Whether the title request should include project workspace context. */
+  workspaceContext?: ProviderWorkspaceContext | undefined;
   /** What model and provider to use for generation. */
   modelSelection: ModelSelection;
 }

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stateless Chats - Sparky Docs</title>
+  <link rel="icon" href="../logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css?v=14">
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="../index.html" class="nav-logo"><img src="../logo.svg" alt="Sparky"> Sparky</a>
+    <div class="nav-links"><a href="../index.html">Product</a><a href="overview.html" class="active">Docs</a><a href="../changelog.html">Changelog</a></div>
+    <div class="nav-right"><a href="../download.html" class="nav-download">Download<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+  </div></nav>
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <div class="docs-nav-section"><div class="docs-nav-label">Getting started</div>
+        <ul class="docs-nav-items"><li><a href="overview.html">Overview</a></li><li><a href="getting-started.html">Quickstart</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Tools</div>
+        <ul class="docs-nav-items"><li><a href="read-edit.html">Read &amp; Edit Files</a></li><li><a href="terminal.html">Terminal Commands</a></li><li><a href="search.html">Search</a></li><li><a href="git.html">Git Operations</a></li><li><a href="preview.html">Preview Websites</a></li><li><a href="web-search.html">Web Search</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Reference</div>
+        <ul class="docs-nav-items"><li><a href="models.html">Supported Models</a></li><li><a href="prompts.html">Writing Prompts</a></li><li><a href="sessions.html">Sessions</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul>
+      </div>
+      <div class="docs-nav-section"><div class="docs-nav-label">Chats &amp; Memory</div>
+        <ul class="docs-nav-items"><li><a href="stateless-chats.html" class="active">Stateless Chats</a></li><li><a href="memory.html">Memory</a></li></ul>
+      </div>
+    </aside>
+    <main class="docs-content">
+      <div class="docs-page-header">
+        <div class="docs-page-tag">CHATS</div>
+        <h1>Stateless Chats</h1>
+        <p>Ask questions without sending a project workspace as context.</p>
+      </div>
+
+      <h2 id="what-it-means">What stateless means</h2>
+      <p>A stateless chat, also called a project-free chat, runs without a project directory. Sparky does not read your files, extensions, MCP tools, or workspace settings until you open a project.</p>
+      <p>Stateless describes workspace context, not conversation continuity. The chat and provider session remain resumable across follow-ups and restarts.</p>
+
+      <h2 id="when-to-use">When to use one</h2>
+      <ul>
+        <li>Ask a general question without exposing project files.</li>
+        <li>Draft an idea before choosing a workspace.</li>
+        <li>Keep personal or general conversations separate from project threads.</li>
+        <li>Use a clean conversation when workspace context would be distracting.</li>
+      </ul>
+
+      <h2 id="start">Start a stateless chat</h2>
+      <ol>
+        <li>Create a new chat without selecting a project.</li>
+        <li>Choose your provider and model as usual.</li>
+        <li>Send the prompt. Sparky runs without project tools or workspace context.</li>
+        <li>Open a project later when you need files, terminal commands, or project-scoped Memory.</li>
+      </ol>
+
+      <h2 id="memory">Stateless chats and Memory</h2>
+      <p>Stateless chats can still use the separate project-free Memory store when relevant. See <a href="memory.html">Memory</a> for how to control what Sparky remembers.</p>
+
+      <div class="docs-next"><h3>Next steps</h3><ul>
+        <li><a href="memory.html">Memory</a> — save useful context safely</li>
+        <li><a href="sessions.html">Sessions</a> — resume conversations</li>
+        <li><a href="getting-started.html">Quickstart</a> — open your first project</li>
+      </ul></div>
+    </main>
+    <aside class="docs-toc">
+      <div class="docs-toc-title">On this page</div>
+      <ul class="docs-toc-list"><li><a href="#what-it-means">What stateless means</a></li>
+        <li><a href="#when-to-use">When to use one</a></li>
+        <li><a href="#start">Start a stateless chat</a></li>
+        <li><a href="#memory">Stateless chats and Memory</a></li>
+      </ul>
+    </aside>
+  </div>
+<footer class="footer"><div class="container"><div class="footer-inner">
+    <div class="footer-logo"><img src="../logo.svg" alt="Sparky"><span>Sparky</span></div>
+    <span class="footer-tagline">local · private · your call</span>
+    <div class="footer-links"><a href="overview.html">Docs</a><a href="../changelog.html">Changelog</a><a href="../download.html">Download</a><a href="../licenses.html">Legal &amp; licenses</a><a href="https://x.com/Sparky_AIz" target="_blank" rel="noopener noreferrer">X / Twitter</a></div>
+  </div></div></footer>
+</body>
+</html>

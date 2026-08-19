@@ -31,6 +31,7 @@ import {
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveDesktopPublishConfig,
+  resolveServerRuntimeDependencies,
   resolveMockUpdateServerPort,
   resolveMockUpdateServerUrl,
   resolvePackageManagerUserAgent,
@@ -165,6 +166,26 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           "@sparky/tailscale": "workspace:*",
           effect: "catalog:",
           electron: "41.5.0",
+        },
+        {
+          "@effect/platform-node": "4.0.0-beta.59",
+          effect: "4.0.0-beta.59",
+        },
+      ),
+      {
+        "@effect/platform-node": "4.0.0-beta.59",
+        effect: "4.0.0-beta.59",
+      },
+    );
+  });
+
+  it("omits Electron from staged server dependencies", () => {
+    assert.deepStrictEqual(
+      resolveServerRuntimeDependencies(
+        {
+          "@effect/platform-node": "catalog:",
+          electron: "41.5.0",
+          effect: "catalog:",
         },
         {
           "@effect/platform-node": "4.0.0-beta.59",

@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@sparky/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
+import { ServerConfig } from "../../config.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
 import type { ProviderServiceError } from "../../provider/Errors.ts";
@@ -79,6 +80,7 @@ type ThreadTitleGenerationInput = {
   readonly messageText: string;
   readonly attachments?: ReadonlyArray<ChatAttachment>;
   readonly titleSeed?: string;
+  readonly workspaceContext: ProviderWorkspaceContext;
   readonly modelSelection: ModelSelection;
 };
 
@@ -221,6 +223,7 @@ const make = Effect.gen(function* () {
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
+  const serverConfig = yield* ServerConfig;
   const textGeneration = yield* TextGeneration;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
@@ -375,7 +378,6 @@ const make = Effect.gen(function* () {
       },
       createdAt: input.createdAt,
     });
-
     // Provider control can time out or race with already-buffered runtime
     // events. Finalize every projected assistant segment after publishing the
     // terminal session state so the composer and message tail stop
@@ -971,6 +973,9 @@ const make = Effect.gen(function* () {
             cwd: input.cwd,
             message: input.messageText,
             ...(attachments.length > 0 ? { attachments } : {}),
+            ...(input.workspaceContext === "none"
+              ? { workspaceContext: input.workspaceContext }
+              : {}),
             modelSelection: input.modelSelection,
           })
           .pipe(Effect.timeout(Duration.seconds(30)));
@@ -1052,14 +1057,20 @@ const make = Effect.gen(function* () {
     const isFirstUserMessageTurn =
       thread.messages.filter((entry) => entry.role === "user").length === 1;
     let generationInput: ThreadTitleGenerationInput | undefined;
-    if (isFirstUserMessageTurn && thread.projectId !== UNSCOPED_CHAT_PROJECT_ID) {
-      const project = yield* resolveProject(thread.projectId);
-      const generationCwd = resolveThreadWorkspaceCwd({
-        thread,
-        projects: project ? [project] : [],
-      });
+    const workspaceContext: ProviderWorkspaceContext =
+      thread.projectId === UNSCOPED_CHAT_PROJECT_ID ? "none" : "project";
+    if (isFirstUserMessageTurn) {
+      const project =
+        workspaceContext === "none" ? undefined : yield* resolveProject(thread.projectId);
+      const generationCwd =
+        workspaceContext === "none"
+          ? serverConfig.attachmentsDir
+          : resolveThreadWorkspaceCwd({
+              thread,
+              projects: project ? [project] : [],
+            });
       if (generationCwd === undefined) {
-        yield* Effect.logWarning("skipping project title generation without a workspace", {
+        yield* Effect.logWarning("skipping thread title generation without a workspace", {
           threadId: event.payload.threadId,
         });
       } else {
@@ -1069,15 +1080,18 @@ const make = Effect.gen(function* () {
           messageText: message.text,
           ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
           ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
+          workspaceContext,
           modelSelection: event.payload.modelSelection ?? thread.modelSelection,
         };
-        const firstTurnGenerationInput = generationInput;
+        if (workspaceContext === "project") {
+          const firstTurnGenerationInput = generationInput;
 
-        yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
-          branch: thread.branch,
-          worktreePath: thread.worktreePath,
-          ...firstTurnGenerationInput,
-        }).pipe(Effect.forkScoped);
+          yield* maybeGenerateAndRenameWorktreeBranchForFirstTurn({
+            branch: thread.branch,
+            worktreePath: thread.worktreePath,
+            ...firstTurnGenerationInput,
+          }).pipe(Effect.forkScoped);
+        }
       }
     }
 
@@ -1196,33 +1210,36 @@ const make = Effect.gen(function* () {
     // session. Always settle the local lifecycle even when the provider RPC
     // cannot return (for example, a dead app-server child).
     const turnId = event.payload.turnId ?? thread.session?.activeTurnId ?? null;
-    const [failureDetail] = yield* Effect.all(
-      [
-        runProviderControl(providerService.interruptTurn({ threadId: event.payload.threadId })),
-        settleProviderControl({
-          thread,
-          status: "interrupted",
-          createdAt: event.payload.createdAt,
-          failureDetail: null,
-          activityKind: "provider.turn.interrupt.failed",
-          activitySummary: "Provider turn interrupt failed",
-          turnId,
-        }),
-      ],
-      { concurrency: "unbounded" },
-    );
+    yield* settleProviderControl({
+      thread,
+      status: "interrupted",
+      createdAt: event.payload.createdAt,
+      failureDetail: null,
+      activityKind: "provider.turn.interrupt.failed",
+      activitySummary: "Provider turn interrupt failed",
+      turnId,
+    }).pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
 
-    if (failureDetail !== null) {
-      yield* settleProviderControl({
-        thread,
-        status: "interrupted",
-        createdAt: event.payload.createdAt,
-        failureDetail,
-        activityKind: "provider.turn.interrupt.failed",
-        activitySummary: "Provider turn interrupt failed",
-        turnId,
-      });
-    }
+    yield* runProviderControl(
+      providerService.interruptTurn({ threadId: event.payload.threadId }),
+    ).pipe(
+      Effect.flatMap((failureDetail) =>
+        failureDetail === null
+          ? Effect.void
+          : settleProviderControl({
+              thread,
+              status: "interrupted",
+              createdAt: event.payload.createdAt,
+              failureDetail,
+              activityKind: "provider.turn.interrupt.failed",
+              activitySummary: "Provider turn interrupt failed",
+              turnId,
+            }),
+      ),
+      Effect.catchCause(() => Effect.void),
+      Effect.forkDetach({ startImmediately: true }),
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
@@ -1322,21 +1339,38 @@ const make = Effect.gen(function* () {
     }
 
     const now = event.payload.createdAt;
-    const failureDetail =
-      thread.session && thread.session.status !== "stopped"
-        ? yield* runProviderControl(providerService.stopSession({ threadId: thread.id }))
-        : null;
 
     if (thread.session) {
+      const session = thread.session;
       yield* settleProviderControl({
         thread,
         status: "stopped",
         createdAt: now,
-        failureDetail,
+        failureDetail: null,
         activityKind: "provider.session.stop.failed",
         activitySummary: "Provider session stop failed",
-        turnId: thread.session.activeTurnId,
-      });
+        turnId: session.activeTurnId,
+      }).pipe(Effect.forkDetach({ startImmediately: true }));
+
+      if (session.status !== "stopped") {
+        yield* runProviderControl(providerService.stopSession({ threadId: thread.id })).pipe(
+          Effect.flatMap((failureDetail) =>
+            failureDetail === null
+              ? Effect.void
+              : settleProviderControl({
+                  thread,
+                  status: "stopped",
+                  createdAt: now,
+                  failureDetail,
+                  activityKind: "provider.session.stop.failed",
+                  activitySummary: "Provider session stop failed",
+                  turnId: session.activeTurnId,
+                }),
+          ),
+          Effect.catchCause(() => Effect.void),
+          Effect.forkDetach({ startImmediately: true }),
+        );
+      }
       return;
     }
 

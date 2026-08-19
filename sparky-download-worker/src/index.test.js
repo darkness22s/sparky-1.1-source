@@ -104,7 +104,9 @@ test("architecture-specific updater paths cannot cross platforms", () => {
   assert.deepEqual(updateRequest("/get/updates/windows/x64/latest.yml"), { platform: "windows-x64", name: "latest.yml" });
   assert.deepEqual(updateRequest("/get/updates/linux/Sparky-x64.AppImage"), { platform: "linux-x64", name: "Sparky-x64.AppImage" });
   assert.deepEqual(updateRequest("/get/updates/linux/Sparky-x64.AppImage.asc"), { platform: "linux-x64", name: "Sparky-x64.AppImage.asc" });
-  assert.deepEqual(updateRequest("/get/updates/macos/arm64/latest-mac.yml"), { platform: "macos-arm64", name: "latest-mac.yml" });
+  assert.deepEqual(updateRequest("/get/updates/linux/latest-linux.yml"), { platform: "linux-x64", name: "latest-linux.yml" });
+  assert.deepEqual(updateRequest("/get/updates/macos/arm64/latest-mac.yml"), { platform: "macos-arm64", name: "latest-mac-arm64.yml" });
+  assert.deepEqual(updateRequest("/get/updates/macos/x64/latest-mac.yml"), { platform: "macos-x64", name: "latest-mac-x64.yml" });
   assert.deepEqual(updateRequest("/get/updates/macos/x64/Sparky-x64.zip"), { platform: "macos-x64", name: "Sparky-x64.zip" });
   assert.equal(updateRequest("/get/updates/macos/arm64/../secret"), null);
 });
@@ -139,9 +141,13 @@ test("GitHub release manifests keep Intel and Apple Silicon feeds distinct", () 
     RELEASE_MAC_X64_BLOCKMAP_SIZE: "17",
     RELEASE_MAC_X64_YML_SIZE: "18",
     RELEASE_MAC_X64_YML_NAME: "latest-mac-x64.yml",
+    RELEASE_LINUX_SIZE: "19",
+    RELEASE_LINUX_ASC_SIZE: "20",
+    RELEASE_LINUX_YML_SIZE: "21",
   });
   assert.equal(manifest.files.find((file) => file.platform === "macos-arm64" && file.name.endsWith(".yml")).name, "latest-mac-arm64.yml");
   assert.equal(manifest.files.find((file) => file.platform === "macos-x64" && file.name.endsWith(".yml")).name, "latest-mac-x64.yml");
+  assert.equal(manifest.files.find((file) => file.platform === "linux-x64" && file.name.endsWith(".yml")).name, "latest-linux.yml");
   assert.equal(manifest.files.filter((file) => file.name.endsWith(".zip")).length, 2);
 });
 
