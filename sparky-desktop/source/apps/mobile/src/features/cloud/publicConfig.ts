@@ -1,12 +1,11 @@
 import Constants from "expo-constants";
-import { relayClerkTokenOptions } from "@sparky/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@sparky/shared/relayUrl";
 import * as Schema from "effect/Schema";
 
 export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<CloudPublicConfigMissingError>()(
   "CloudPublicConfigMissingError",
   {
-    key: Schema.Literal("T3CODE_CLERK_JWT_TEMPLATE"),
+    key: Schema.Literal("T3CODE_NEON_AUTH_URL"),
   },
 ) {
   override get message(): string {
@@ -15,9 +14,8 @@ export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<Cloud
 }
 
 export interface CloudPublicConfig {
-  readonly clerk: {
-    readonly publishableKey: string | null;
-    readonly jwtTemplate: string | null;
+  readonly neonAuth: {
+    readonly url: string | null;
   };
   readonly relay: {
     readonly url: string | null;
@@ -56,11 +54,20 @@ function normalizeSecureUrl(value: unknown): string | null {
   }
 }
 
+function normalizeNeonAuthUrl(value: unknown): string | null {
+  const normalized = normalizeSecureUrl(value);
+  if (normalized === null) return null;
+  try {
+    return new URL(normalized).origin + "/";
+  } catch {
+    return null;
+  }
+}
+
 export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig?.extra) {
   return {
-    clerk: {
-      publishableKey: trimNonEmpty(extra?.clerk?.publishableKey),
-      jwtTemplate: trimNonEmpty(extra?.clerk?.jwtTemplate),
+    neonAuth: {
+      url: normalizeNeonAuthUrl(extra?.neonAuth?.url),
     },
     relay: {
       url: normalizeSecureRelayUrl(trimNonEmpty(extra?.relay?.url) ?? ""),
@@ -75,7 +82,7 @@ export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig
 
 export function hasCloudPublicConfig(): boolean {
   const config = resolveCloudPublicConfig();
-  return Boolean(config.clerk.publishableKey && config.clerk.jwtTemplate && config.relay.url);
+  return Boolean(config.neonAuth.url && config.relay.url);
 }
 
 type Configured<T> = {
@@ -94,12 +101,4 @@ export function hasTracingPublicConfig(
     config.observability.tracesDataset &&
     config.observability.tracesToken,
   );
-}
-
-export function resolveRelayClerkTokenOptions() {
-  const { jwtTemplate } = resolveCloudPublicConfig().clerk;
-  if (!jwtTemplate) {
-    throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
-  }
-  return relayClerkTokenOptions(jwtTemplate);
 }

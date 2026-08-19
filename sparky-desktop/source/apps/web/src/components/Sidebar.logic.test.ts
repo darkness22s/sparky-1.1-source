@@ -708,6 +708,27 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({ label: "Working", pulse: true });
   });
 
+  it("shows a red error status when the session fails", () => {
+    expect(
+      resolveThreadStatusPill({
+        thread: {
+          ...baseThread,
+          session: {
+            ...baseThread.session,
+            status: "error",
+            activeTurnId: null,
+            lastError: "Provider unavailable",
+          },
+        },
+      }),
+    ).toMatchObject({
+      label: "Error",
+      colorClass: "text-red-600 dark:text-red-300/90",
+      dotClass: "bg-red-500 dark:bg-red-300/90",
+      pulse: false,
+    });
+  });
+
   it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
     expect(
       resolveThreadStatusPill({
@@ -756,7 +777,12 @@ describe("resolveThreadStatusPill", () => {
           },
         },
       }),
-    ).toMatchObject({ label: "Completed", pulse: false });
+    ).toMatchObject({
+      label: "Completed",
+      colorClass: "text-blue-600 dark:text-blue-300/90",
+      dotClass: "bg-blue-500 dark:bg-blue-300/90",
+      pulse: false,
+    });
   });
 });
 

@@ -149,7 +149,7 @@ const makeRelayBroker = Effect.fn("clientRuntime.connection.broker.makeRelay")(f
       const authorized = yield* remote.authorizeDpop({
         expectedEnvironmentId: target.environmentId,
         obtainBootstrap: Effect.gen(function* () {
-          const clerkToken = yield* session.clerkToken.pipe(
+          const accountToken = yield* session.accountToken.pipe(
             Effect.withSpan("relay.connection.cloudSessionToken.resolve"),
           );
           const deviceId = yield* identity.deviceId.pipe(
@@ -157,7 +157,7 @@ const makeRelayBroker = Effect.fn("clientRuntime.connection.broker.makeRelay")(f
           );
           const connected = yield* relay
             .connectEnvironment({
-              clerkToken,
+              accountToken,
               scopes: [RelayEnvironmentConnectScope],
               environmentId: target.environmentId,
               ...(Option.isSome(deviceId) ? { deviceId: deviceId.value } : {}),

@@ -82,67 +82,46 @@ it.effect("rejects malformed or insecure hosted app URLs", () =>
   }),
 );
 
-it.effect("derives direct Clerk OAuth endpoints from statically injected public config", () =>
+it.effect("uses statically injected Neon Auth OAuth config", () =>
   Effect.gen(function* () {
     const config = yield* makeCloudCliOAuthConfig({
-      clerkPublishableKeyFallback: "pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA==",
-      clerkCliOAuthClientIdFallback: "oauth_client_embedded",
+      neonAuthOAuthAuthorizeUrlFallback: "https://auth.example.test/oauth/authorize",
+      neonAuthCliOAuthClientIdFallback: "account-cli",
     }).pipe(provideEnv({}));
 
     assert.deepEqual(config, {
-      authorizationEndpoint: "https://clerk.example.test/oauth/authorize",
-      tokenEndpoint: "https://clerk.example.test/oauth/token",
-      clientId: "oauth_client_embedded",
+      authorizationEndpoint: "https://auth.example.test/oauth/authorize",
+      tokenEndpoint: "https://auth.example.test/oauth/token",
+      clientId: "account-cli",
       redirectUri: "http://127.0.0.1:34338/callback",
       scopes: ["openid", "profile", "email"],
     });
   }),
 );
 
-it.effect("prefers runtime Clerk OAuth config overrides over statically injected values", () =>
+it.effect("prefers runtime Neon Auth OAuth config overrides", () =>
   Effect.gen(function* () {
     const config = yield* makeCloudCliOAuthConfig({
-      clerkPublishableKeyFallback: "pk_test_ZW1iZWRkZWQuZXhhbXBsZS50ZXN0JA==",
-      clerkCliOAuthClientIdFallback: "oauth_client_embedded",
+      neonAuthOAuthAuthorizeUrlFallback: "https://embedded.example.test/oauth/authorize",
+      neonAuthCliOAuthClientIdFallback: "account-cli-embedded",
     }).pipe(
       provideEnv({
-        T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_cnVudGltZS5leGFtcGxlLnRlc3Qk",
-        T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_client_runtime",
+        T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL: "https://runtime.example.test/oauth/authorize",
+        T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID: "account-cli-runtime",
       }),
     );
 
     assert.equal(config.authorizationEndpoint, "https://runtime.example.test/oauth/authorize");
     assert.equal(config.tokenEndpoint, "https://runtime.example.test/oauth/token");
-    assert.equal(config.clientId, "oauth_client_runtime");
+    assert.equal(config.clientId, "account-cli-runtime");
   }),
 );
 
-it.effect("requires Clerk OAuth config when the server bundle has no injected values", () =>
+it.effect("requires Neon Auth OAuth config when the server bundle has no injected values", () =>
   makeCloudCliOAuthConfig({
-    clerkPublishableKeyFallback: "",
-    clerkCliOAuthClientIdFallback: "",
+    neonAuthOAuthAuthorizeUrlFallback: "",
+    neonAuthCliOAuthClientIdFallback: "",
   }).pipe(provideEnv({}), Effect.flip),
-);
-
-it.effect("reports malformed Clerk publishable keys as typed configuration failures", () =>
-  Effect.gen(function* () {
-    const result = yield* makeCloudCliOAuthConfig({
-      clerkPublishableKeyFallback: "pk_test_not-base64!!",
-      clerkCliOAuthClientIdFallback: "oauth_client_embedded",
-    }).pipe(provideEnv({}), Effect.result);
-
-    assert.isTrue(Result.isFailure(result));
-    if (Result.isFailure(result)) {
-      assert.equal(result.failure.cause._tag, "SourceError");
-      if (result.failure.cause._tag === "SourceError") {
-        assert.equal(
-          result.failure.cause.message,
-          "Failed to derive Clerk Frontend API URL from the publishable key.",
-        );
-        assert.instanceOf(result.failure.cause.cause, Error);
-      }
-    }
-  }),
 );
 
 it("resolves relay client tracing from runtime config with build-time fallback", () => {

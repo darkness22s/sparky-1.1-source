@@ -24,7 +24,7 @@ export interface ProvisionedSshEnvironment extends PreparedSshEnvironment {
 export class CloudSession extends Context.Service<
   CloudSession,
   {
-    readonly clerkToken: Effect.Effect<string, ConnectionAttemptError>;
+    readonly accountToken: Effect.Effect<string, ConnectionAttemptError>;
   }
 >()("@sparky/client-runtime/platform/capabilities/CloudSession") {}
 

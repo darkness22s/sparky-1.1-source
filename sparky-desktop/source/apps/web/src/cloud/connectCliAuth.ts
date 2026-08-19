@@ -1,48 +1,47 @@
 import {
-  buildConnectClerkAuthorizeUrl,
+  buildConnectAuthorizeUrl,
   connectCallbackUrl,
   CONNECT_OAUTH_SCOPES,
   type ConnectAuthorizeRequest,
 } from "@sparky/shared/connectAuth";
-import { clerkFrontendApiUrlFromPublishableKey } from "@sparky/shared/relayAuth";
 
 import { configuredHostedAppUrl, isHostedStaticApp } from "../hostedPairing";
 import { hasCloudPublicConfig, resolveCloudPublicConfig, trimNonEmpty } from "./publicConfig";
 
-const CONNECT_CLI_AUTH_STATE_STORAGE_KEY = "t3code-connect-cli-auth-state";
+const CONNECT_CLI_AUTH_STATE_STORAGE_KEY = "sparky-connect-cli-auth-state";
 
 export function resolveConnectCliOAuthClientId(): string | null {
-  return trimNonEmpty(import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID as string | undefined);
+  return trimNonEmpty(import.meta.env.VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID as string | undefined);
 }
 
 export function hasConnectCliAuthConfig(): boolean {
   return Boolean(
-    resolveCloudPublicConfig().clerkPublishableKey && resolveConnectCliOAuthClientId(),
+    resolveCloudPublicConfig().neonAuthUrl && resolveConnectCliOAuthClientId(),
   );
 }
 
 /**
  * Gate for the /connect routes: the CLI handshake only exists on the hosted
  * deployment (the same bundle ships inside local instances) and needs the
- * Clerk CLI OAuth client configured at build time.
+ * Neon Auth CLI OAuth client configured at build time.
  */
 export function connectCliAuthRoutesEnabled(): boolean {
   return isHostedStaticApp() && hasCloudPublicConfig() && hasConnectCliAuthConfig();
 }
 
 /**
- * Builds the Clerk authorize URL for a CLI-initiated connect request. The
+ * Builds the Neon Auth authorize URL for a CLI-initiated connect request. The
  * state is mirrored into sessionStorage so the callback page can verify the
  * response matches a request this browser actually started.
  */
-export function buildConnectCliClerkAuthorizeUrl(request: ConnectAuthorizeRequest): string | null {
-  const { clerkPublishableKey } = resolveCloudPublicConfig();
+export function buildConnectCliAuthorizeUrl(request: ConnectAuthorizeRequest): string | null {
+  const { neonAuthOAuthAuthorizeUrl } = resolveCloudPublicConfig();
   const clientId = resolveConnectCliOAuthClientId();
-  if (!clerkPublishableKey || !clientId) {
+  if (!neonAuthOAuthAuthorizeUrl || !clientId) {
     return null;
   }
-  return buildConnectClerkAuthorizeUrl({
-    authorizationEndpoint: `${clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey)}/oauth/authorize`,
+  return buildConnectAuthorizeUrl({
+    authorizationEndpoint: neonAuthOAuthAuthorizeUrl,
     clientId,
     redirectUri: connectCallbackUrl(configuredHostedAppUrl()),
     scopes: CONNECT_OAUTH_SCOPES,
@@ -56,7 +55,7 @@ export function rememberConnectCliAuthState(state: string): void {
     window.sessionStorage.setItem(CONNECT_CLI_AUTH_STATE_STORAGE_KEY, state);
   } catch {
     // Session storage can be unavailable (e.g. blocked). The callback page
-    // then falls back to trusting the state Clerk echoed back.
+    // then falls back to trusting the state echoed back by the authorization service.
   }
 }
 

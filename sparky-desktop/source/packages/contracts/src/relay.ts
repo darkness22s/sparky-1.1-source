@@ -542,7 +542,7 @@ export class RelayEnvironmentPrincipal extends Context.Service<
 const RelayClientBearerAuthorization = HttpApiSecurity.http({ scheme: "bearer" }).pipe(
   HttpApiSecurity.annotate(
     OpenApi.Description,
-    "Clerk session or OAuth bearer token for the signed-in Sparky Cloud user.",
+    "Neon Auth bearer token for the signed-in Sparky account.",
   ),
 );
 
@@ -638,7 +638,7 @@ export const RelayWebClientId = "t3-web" as const;
 export const RelayDpopAccessTokenRequest = Schema.Struct({
   grant_type: Schema.Literal(RelayDpopTokenExchangeGrantType),
   subject_token: TrimmedNonEmptyString.annotate({
-    description: "Clerk bearer token for the signed-in cloud user.",
+    description: "Neon Auth bearer token for the signed-in account.",
   }),
   subject_token_type: Schema.Literal(RelayJwtSubjectTokenType),
   requested_token_type: Schema.Literal(RelayAccessTokenType),
@@ -960,10 +960,10 @@ export const RelayExchangeDpopAccessTokenEndpoint = HttpApiEndpoint.post(
     error: RelayAuthAndInternalErrors,
   },
 )
-  .annotate(OpenApi.Summary, "Exchange a Clerk token for a DPoP access token")
+  .annotate(OpenApi.Summary, "Exchange a Neon Auth token for a DPoP access token")
   .annotate(
     OpenApi.Description,
-    "Bootstrap endpoint. Send the DPoP proof JWT in the dpop header and the Clerk token in subject_token. The returned access token is bound to the proof key.",
+    "Bootstrap endpoint. Send the DPoP proof JWT in the dpop header and the Neon Auth token in subject_token. The returned access token is bound to the proof key.",
   );
 
 export const RelayTokenGroup = HttpApiGroup.make("token")

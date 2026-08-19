@@ -178,7 +178,7 @@ const bootstrap = Effect.gen(function* () {
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     targetOrigin: rendererTarget,
     backendOrigin: backendConfig.httpBaseUrl,
-    clerkFrontendApiHostname: undefined,
+    neonAuthHostname: undefined,
   });
   yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
     baseUrl: backendConfig.httpBaseUrl.href,

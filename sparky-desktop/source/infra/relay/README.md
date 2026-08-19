@@ -85,7 +85,7 @@ vp run --filter t3code-relay deploy
 The stack provisions the Cloudflare Worker and queues, managed endpoint resources, database
 connectivity, and relay tracing resources. Copy [`infra/relay/.env.example`](./.env.example) to
 `infra/relay/.env` and fill in the deployment-specific values before deploying. Alchemy loads that
-file from the relay directory. Runtime secrets include Clerk and APNs credentials. Production adopts
+file from the relay directory. Runtime secrets include Neon Auth verification and APNs credentials. Production adopts
 the configured API and tunnel DNS zones as retained Cloudflare resources. Personal stages reference
 the production-owned zones.
 
@@ -138,9 +138,9 @@ The `production` GitHub environment must define these Actions variables:
 - `RELAY_API_ZONE_NAME`
 - `RELAY_TUNNEL_ZONE_NAME`
 - `RELAY_DOMAIN` if overriding the derived production relay domain
-- `CLERK_PUBLISHABLE_KEY`
-- `CLERK_JWT_AUDIENCE`
-- `CLERK_JWT_TEMPLATE`
+- `NEON_AUTH_JWKS_URL`
+- `NEON_AUTH_ISSUER`
+- `NEON_AUTH_AUDIENCE`
 - `APNS_ENVIRONMENT`
 - `APNS_TEAM_ID`
 - `APNS_KEY_ID`
@@ -148,19 +148,17 @@ The `production` GitHub environment must define these Actions variables:
 
 The `production` GitHub environment must define these Actions secrets:
 
-- `CLERK_SECRET_KEY`
 - `APNS_PRIVATE_KEY`
 
 The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
 are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
 so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The release workflow reads the production relay's
-derived public URL and Clerk publishable key from the same environment for downstream desktop, CLI,
-and hosted web builds.
+derived public URL and Neon Auth public configuration from the same environment for downstream desktop,
+CLI, and hosted web builds.
 
 See:
 
-- [Sparky Connect Clerk Setup](../../docs/cloud/sparky-connect-clerk.md) for Clerk keys, JWT templates, and waitlist
-  setup.
+- Neon Auth project configuration for the issuer, audience, and JWKS endpoint.
 - [Relay Observability](../../docs/relay-observability.md) for deployment tracing and diagnostics.
 - [Sparky Connect Architecture Overview](../../docs/cloud/sparky-code-connect-auth-flow.html) for the full link,
   connect, endpoint, and notification flows.

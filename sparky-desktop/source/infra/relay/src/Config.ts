@@ -19,9 +19,9 @@ export class RelayConfiguration extends Context.Service<
   {
     readonly relayIssuer: string;
     readonly apns: ApnsCredentials;
-    readonly clerkSecretKey: Redacted.Redacted<string>;
-    readonly clerkPublishableKey: string;
-    readonly clerkJwtAudience: string;
+    readonly neonAuthJwksUrl: string;
+    readonly neonAuthIssuer: string;
+    readonly neonAuthAudience: string;
     readonly apnsDeliveryJobSigningSecret: Redacted.Redacted<string>;
     readonly cloudMintPrivateKey: Redacted.Redacted<string>;
     readonly cloudMintPublicKey: string;

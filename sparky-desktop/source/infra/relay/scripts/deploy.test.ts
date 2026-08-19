@@ -97,11 +97,11 @@ describe("reconcileRootEnvRelayUrl", () => {
   it("preserves unrelated root env entries while replacing a previous relay URL", () => {
     expect(
       reconcileRootEnvRelayUrl(
-        "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example\nT3CODE_RELAY_URL=https://old.example.test\n",
+        "T3CODE_UNRELATED_PUBLIC_CONFIG=example\nT3CODE_RELAY_URL=https://old.example.test\n",
         "https://relay.example.test",
       ),
     ).toBe(
-      "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example\nT3CODE_RELAY_URL=https://relay.example.test\n",
+      "T3CODE_UNRELATED_PUBLIC_CONFIG=example\nT3CODE_RELAY_URL=https://relay.example.test\n",
     );
   });
 });
@@ -136,7 +136,7 @@ describe("reconcileRootEnvPublicConfig", () => {
     expect(
       reconcileRootEnvPublicConfig(
         [
-          "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example",
+          "T3CODE_UNRELATED_PUBLIC_CONFIG=example",
           "T3CODE_RELAY_URL=https://old.example.test",
           "T3CODE_MOBILE_OTLP_TRACES_URL=https://old.example.test/v1/traces",
           "T3CODE_MOBILE_OTLP_TRACES_DATASET=old-dataset",
@@ -150,7 +150,7 @@ describe("reconcileRootEnvPublicConfig", () => {
       ),
     ).toBe(
       [
-        "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example",
+        "T3CODE_UNRELATED_PUBLIC_CONFIG=example",
         "T3CODE_RELAY_URL=https://relay.example.test",
         "T3CODE_MOBILE_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
         "T3CODE_MOBILE_OTLP_TRACES_DATASET=t3-code-mobile-traces-dev",

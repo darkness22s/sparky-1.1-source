@@ -177,7 +177,7 @@ const capabilitiesLayer = Layer.effectContext(
       scopes: AuthStandardClientScopes,
     });
     const cloudSession = CloudSession.of({
-      clerkToken: Effect.gen(function* () {
+      accountToken: Effect.gen(function* () {
         const session = appAtomRegistry.get(managedRelaySessionAtom);
         if (session === null) {
           return yield* new ConnectionBlockedError({
@@ -185,7 +185,7 @@ const capabilitiesLayer = Layer.effectContext(
             detail: "Sign in to Sparky Cloud to connect this environment.",
           });
         }
-        const token = yield* session.readClerkToken().pipe(
+        const token = yield* session.readAccountToken().pipe(
           Effect.mapError(
             (error) =>
               new ConnectionTransientError({
@@ -566,9 +566,13 @@ const platformConnectionSourceLayer = Layer.effect(
     }).pipe(Effect.provide(FetchHttpClient.layer));
 
     return PlatformConnectionSource.of({
-      registrations: Stream.tick(PLATFORM_POLL_INTERVAL).pipe(
-        Stream.mapEffect(() => buildPlatformRegistrations),
-      ),
+      // Register the primary environment immediately so the first user action
+      // does not race the background topology refresh. The periodic tick keeps
+      // desktop-local backends and changed endpoints reconciled afterward.
+      registrations: Stream.concat(
+        Stream.succeed(undefined),
+        Stream.tick(PLATFORM_POLL_INTERVAL),
+      ).pipe(Stream.mapEffect(() => buildPlatformRegistrations)),
     });
   }),
 );

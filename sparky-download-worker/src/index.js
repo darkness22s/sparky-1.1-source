@@ -258,17 +258,12 @@ async function handleRequest(request, env, executionContext) {
   if (path === "/get/manifest") return json(publicManifest(release));
   if (path === "/get/releases") return json([publicManifest(release)]);
   if (path.startsWith("/get/updates/")) {
+    // Desktop auto-updaters poll these feeds in the background. They are not
+    // user-initiated installer calls, so keep them out of download analytics.
     const requested = updateRequest(path);
-    if (!requested) {
-      trackDownloadRequest(env, request, executionContext, release, { platform: "unknown", file: "unknown", outcome: "invalid-update-path", status: 404 });
-      return errorResponse("Update asset not found.", 404);
-    }
+    if (!requested) return errorResponse("Update asset not found.", 404);
     const file = release.files.find((candidate) => candidate.platform === requested.platform && candidate.name === requested.name);
-    if (!file) {
-      trackDownloadRequest(env, request, executionContext, release, { platform: requested.platform, file: requested.name, outcome: "missing-update-asset", status: 404 });
-      return errorResponse("Update asset not found.", 404);
-    }
-    trackDownloadRequest(env, request, executionContext, release, { platform: file.platform, file: file.name, outcome: "redirect", status: 302 });
+    if (!file) return errorResponse("Update asset not found.", 404);
     return redirect(file.url);
   }
   if (path !== "/get" && path !== "/") return errorResponse("Not found.", 404);

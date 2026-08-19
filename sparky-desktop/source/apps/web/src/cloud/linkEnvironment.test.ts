@@ -188,11 +188,11 @@ describe("web cloud link environment client", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const environments = yield* withServices(
-        listManagedCloudEnvironments({ clerkToken: "clerk-token" }),
+        listManagedCloudEnvironments({ accountToken: "account-token" }),
       );
 
       expect(environments).toHaveLength(1);
-      expect(fetchMock.mock.calls[0]?.[1]?.headers.authorization).toBe("Bearer clerk-token");
+      expect(fetchMock.mock.calls[0]?.[1]?.headers.authorization).toBe("Bearer account-token");
     }),
   );
 
@@ -324,7 +324,7 @@ describe("web cloud link environment client", () => {
       yield* withServices(
         linkPrimaryEnvironmentToCloud({
           target: TARGET,
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
         }),
       );
 
@@ -378,7 +378,7 @@ describe("web cloud link environment client", () => {
       yield* withServices(
         linkPrimaryEnvironmentToCloud({
           target: TARGET,
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           mode: "publish_only",
         }),
       );
@@ -401,7 +401,7 @@ describe("web cloud link environment client", () => {
       yield* withServices(
         linkPrimaryEnvironmentToCloud({
           target: TARGET,
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
         }),
         {
           status: { status: "available", version: "2026.6.0" },
@@ -426,7 +426,7 @@ describe("web cloud link environment client", () => {
       yield* withServices(
         unlinkPrimaryEnvironmentFromCloud({
           target: TARGET,
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
         }),
       );
 

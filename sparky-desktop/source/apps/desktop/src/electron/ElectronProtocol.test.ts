@@ -63,7 +63,7 @@ describe("ElectronProtocol", () => {
             scheme: "t3code-dev",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             backendOrigin: new URL("http://127.0.0.1:3774/"),
-            clerkFrontendApiHostname: "clerk.t3.codes",
+            neonAuthHostname: "auth.sparky.codes",
           });
           assert.isDefined(handler);
 
@@ -82,7 +82,7 @@ describe("ElectronProtocol", () => {
           assert.equal(yield* Effect.promise(() => response.text()), "ok");
           assert.include(
             response.headers.get("content-security-policy") ?? "",
-            "script-src 'self' t3code-dev: 'unsafe-inline' https://clerk.t3.codes https://challenges.cloudflare.com",
+            "script-src 'self' t3code-dev: 'unsafe-inline' https://auth.sparky.codes https://challenges.cloudflare.com",
           );
           assert.include(
             response.headers.get("content-security-policy") ?? "",
@@ -127,7 +127,7 @@ describe("ElectronProtocol", () => {
             scheme: "t3code",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             backendOrigin: new URL("http://127.0.0.1:3773/"),
-            clerkFrontendApiHostname: undefined,
+            neonAuthHostname: undefined,
           });
           return yield* Effect.promise(() => handler!(new Request("t3code://other/")));
         }),
@@ -155,7 +155,7 @@ describe("ElectronProtocol", () => {
             scheme: "t3code-dev",
             targetOrigin: new URL("http://127.0.0.1:5733/"),
             backendOrigin: new URL("http://127.0.0.1:3773/"),
-            clerkFrontendApiHostname: undefined,
+            neonAuthHostname: undefined,
           });
           return yield* Effect.promise(() => handler!(new Request("sparky-dev://app/")));
         }),
@@ -179,7 +179,7 @@ describe("ElectronProtocol", () => {
           scheme: "t3code-dev",
           targetOrigin: new URL("http://127.0.0.1:3773/"),
           backendOrigin: new URL("http://127.0.0.1:3774/"),
-          clerkFrontendApiHostname: undefined,
+          neonAuthHostname: undefined,
         }),
       ).pipe(Effect.flip);
 
@@ -204,7 +204,7 @@ describe("ElectronProtocol", () => {
             scheme: "t3code",
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             backendOrigin: new URL("http://127.0.0.1:3773/"),
-            clerkFrontendApiHostname: undefined,
+            neonAuthHostname: undefined,
           }),
         ),
       );
@@ -225,7 +225,7 @@ describe("ElectronProtocol", () => {
       scheme: "t3code",
       targetOrigin: new URL("http://127.0.0.1:3773/"),
       backendOrigin: new URL("http://127.0.0.1:3773/"),
-      clerkFrontendApiHostname: "clerk.t3.codes",
+      neonAuthHostname: "auth.sparky.codes",
     });
     const directives = Object.fromEntries(
       policy.split("; ").map((directive) => {
@@ -238,7 +238,7 @@ describe("ElectronProtocol", () => {
       "'self'",
       "t3code:",
       "'unsafe-inline'",
-      "https://clerk.t3.codes",
+      "https://auth.sparky.codes",
       "https://challenges.cloudflare.com",
     ]);
     assert.deepEqual(directives["connect-src"], ["'self'", "http:", "https:", "ws:", "wss:"]);

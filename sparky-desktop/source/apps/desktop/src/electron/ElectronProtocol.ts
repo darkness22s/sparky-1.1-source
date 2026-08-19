@@ -67,7 +67,7 @@ export interface DesktopProtocolRegistrationInput {
   readonly scheme: string;
   readonly targetOrigin: URL;
   readonly backendOrigin: URL;
-  readonly clerkFrontendApiHostname: string | undefined;
+  readonly neonAuthHostname: string | undefined;
 }
 
 export class ElectronProtocol extends Context.Service<
@@ -80,19 +80,17 @@ export class ElectronProtocol extends Context.Service<
 >()("@sparky/desktop/electron/ElectronProtocol") {}
 
 export function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInput): string {
-  const clerkOrigin = input.clerkFrontendApiHostname
-    ? `https://${input.clerkFrontendApiHostname}`
-    : undefined;
+  const neonAuthOrigin = input.neonAuthHostname ? `https://${input.neonAuthHostname}` : undefined;
   const scriptSources = [
     "'self'",
     `${input.scheme}:`,
     "'unsafe-inline'",
-    ...(clerkOrigin ? [clerkOrigin] : []),
+    ...(neonAuthOrigin ? [neonAuthOrigin] : []),
     "https://challenges.cloudflare.com",
   ];
 
   // The renderer connects directly to user-configured environments in addition to
-  // the build-configured Clerk, relay, and OTLP endpoints. Those environment
+  // the build-configured Neon Auth, relay, and OTLP endpoints. Those environment
   // origins are not known when this response policy is created, so restrict
   // connections by the network schemes the client supports instead of by host.
   const connectSources = ["'self'", "http:", "https:", "ws:", "wss:"];

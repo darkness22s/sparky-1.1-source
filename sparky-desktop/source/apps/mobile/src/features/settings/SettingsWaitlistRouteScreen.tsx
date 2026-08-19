@@ -1,10 +1,10 @@
-import { useAuth } from "@clerk/expo";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback } from "react";
 import { ScrollView } from "react-native";
 
 import { CloudWaitlistEnrollment } from "../cloud/CloudWaitlistEnrollment";
-import { useClerkSettingsSheetDetent } from "../cloud/ClerkSettingsSheetDetent";
+import { useAccountAuth } from "../cloud/AccountAuthProvider";
+import { useAccountSettingsSheetDetent } from "../cloud/AccountSettingsSheetDetent";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 
 export function SettingsWaitlistRouteScreen() {
@@ -22,8 +22,8 @@ export function SettingsWaitlistRouteScreen() {
 }
 
 function ConfiguredSettingsWaitlistRouteScreen() {
-  const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
-  const { expand } = useClerkSettingsSheetDetent();
+  const { isLoaded, isSignedIn } = useAccountAuth();
+  const { expand } = useAccountSettingsSheetDetent();
   const navigation = useNavigation();
 
   useFocusEffect(

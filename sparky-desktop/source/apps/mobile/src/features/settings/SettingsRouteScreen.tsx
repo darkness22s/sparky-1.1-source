@@ -1,4 +1,3 @@
-import { useAuth, useUser } from "@clerk/expo";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
@@ -30,8 +29,9 @@ import {
   subscribeAgentAwarenessRegistrationStatus,
 } from "../agent-awareness/remoteRegistration";
 import { refreshManagedRelayEnvironments } from "../cloud/managedRelayState";
-import { useClerkSettingsSheetDetent } from "../cloud/ClerkSettingsSheetDetent";
-import { hasCloudPublicConfig, resolveRelayClerkTokenOptions } from "../cloud/publicConfig";
+import { useAccountSettingsSheetDetent } from "../cloud/AccountSettingsSheetDetent";
+import { useAccountAuth } from "../cloud/AccountAuthProvider";
+import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 import { WorkspaceSidebarToolbar } from "../layout/workspace-sidebar-toolbar";
 import { runtime } from "../../lib/runtime";
@@ -137,9 +137,8 @@ function ConfiguredSettingsRouteScreen() {
   const agentAwarenessPushAvailable = supportsAgentAwarenessPush();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { expand: expandClerkSheet } = useClerkSettingsSheetDetent();
-  const { getToken, isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
-  const { user } = useUser();
+  const { expand: expandAccountSheet } = useAccountSettingsSheetDetent();
+  const { getToken, isLoaded, isSignedIn, user } = useAccountAuth();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>("checking");
   const [liveActivityStatus, setLiveActivityStatus] = useState<LiveActivityStatus>("checking");
@@ -153,8 +152,8 @@ function ConfiguredSettingsRouteScreen() {
   const accountLabel = useMemo(() => {
     if (!isLoaded) return "Checking";
     if (!isSignedIn) return "Request access";
-    return user?.primaryEmailAddress?.emailAddress ?? "Signed in";
-  }, [isLoaded, isSignedIn, user?.primaryEmailAddress?.emailAddress]);
+    return user?.email ?? "Signed in";
+  }, [isLoaded, isSignedIn, user?.email]);
 
   const refreshNotifications = useCallback(async () => {
     if (process.env.EXPO_OS !== "ios") {
@@ -278,7 +277,7 @@ function ConfiguredSettingsRouteScreen() {
     }
 
     setLiveActivityStatus("linking");
-    const tokenResult = await settlePromise(() => getToken(resolveRelayClerkTokenOptions()));
+    const tokenResult = await settlePromise(() => getToken());
     if (tokenResult._tag === "Failure") {
       setLiveActivityStatus("disabled");
       const error = squashAtomCommandFailure(tokenResult);
@@ -299,7 +298,7 @@ function ConfiguredSettingsRouteScreen() {
         setLiveActivityUpdatesEnabled({
           enabled: true,
           previousEnabled: liveActivitiesPreferenceEnabled,
-          clerkToken: tokenResult.value,
+          accountToken: tokenResult.value,
           connections,
         }),
       ),
@@ -371,9 +370,7 @@ function ConfiguredSettingsRouteScreen() {
         void (async () => {
           let token: string | null = null;
           if (isSignedIn) {
-            const tokenResult = await settlePromise(() =>
-              getToken(resolveRelayClerkTokenOptions()),
-            );
+            const tokenResult = await settlePromise(() => getToken());
             if (tokenResult._tag === "Failure") {
               reportAtomCommandResult(tokenResult, {
                 label: "live activity disable token lookup",
@@ -388,7 +385,7 @@ function ConfiguredSettingsRouteScreen() {
               setLiveActivityUpdatesEnabled({
                 enabled: false,
                 previousEnabled: liveActivitiesPreferenceEnabled,
-                clerkToken: token,
+                accountToken: token,
                 connections,
               }),
             ),
@@ -430,9 +427,9 @@ function ConfiguredSettingsRouteScreen() {
       navigation.navigate("SettingsSheet", { screen: "SettingsWaitlist" });
       return;
     }
-    expandClerkSheet();
+    expandAccountSheet();
     navigation.navigate("SettingsSheet", { screen: "SettingsAuth" });
-  }, [expandClerkSheet, isLoaded, isSignedIn, navigation]);
+  }, [expandAccountSheet, isLoaded, isSignedIn, navigation]);
 
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
@@ -449,7 +446,7 @@ function ConfiguredSettingsRouteScreen() {
           <SettingsSection title="Account">
             <SettingsRow
               icon="person.crop.circle"
-              label="T3 Account"
+              label="Sparky Account"
               value={accountLabel}
               onPress={openAccount}
             />

@@ -1,16 +1,15 @@
 import { CONNECT_OAUTH_SCOPES, DEFAULT_HOSTED_APP_URL } from "@sparky/shared/connectAuth";
-import { clerkFrontendApiUrlFromPublishableKey } from "@sparky/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@sparky/shared/relayUrl";
 import * as Config from "effect/Config";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 
 declare const __T3CODE_BUILD_RELAY_URL__: string | undefined;
-declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
-declare const __T3CODE_BUILD_CLERK_CLI_OAUTH_CLIENT_ID__: string | undefined;
+declare const __T3CODE_BUILD_NEON_AUTH_URL__: string | undefined;
+declare const __T3CODE_BUILD_NEON_AUTH_OAUTH_AUTHORIZE_URL__: string | undefined;
+declare const __T3CODE_BUILD_NEON_AUTH_CLI_OAUTH_CLIENT_ID__: string | undefined;
 declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_URL__: string | undefined;
 declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_DATASET__: string | undefined;
 declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_TOKEN__: string | undefined;
@@ -50,15 +49,20 @@ export const buildTimeRelayUrl =
   typeof __T3CODE_BUILD_RELAY_URL__ === "undefined"
     ? ""
     : (normalizeSecureRelayUrl(__T3CODE_BUILD_RELAY_URL__) ?? "");
-export const buildTimeClerkPublishableKey = readBuildTimeValue(
-  typeof __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__ === "undefined"
+export const buildTimeNeonAuthUrl = readBuildTimeValue(
+  typeof __T3CODE_BUILD_NEON_AUTH_URL__ === "undefined"
     ? undefined
-    : __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__,
+    : __T3CODE_BUILD_NEON_AUTH_URL__,
 );
-export const buildTimeClerkCliOAuthClientId = readBuildTimeValue(
-  typeof __T3CODE_BUILD_CLERK_CLI_OAUTH_CLIENT_ID__ === "undefined"
+export const buildTimeNeonAuthOAuthAuthorizeUrl = readBuildTimeValue(
+  typeof __T3CODE_BUILD_NEON_AUTH_OAUTH_AUTHORIZE_URL__ === "undefined"
     ? undefined
-    : __T3CODE_BUILD_CLERK_CLI_OAUTH_CLIENT_ID__,
+    : __T3CODE_BUILD_NEON_AUTH_OAUTH_AUTHORIZE_URL__,
+);
+export const buildTimeNeonAuthCliOAuthClientId = readBuildTimeValue(
+  typeof __T3CODE_BUILD_NEON_AUTH_CLI_OAUTH_CLIENT_ID__ === "undefined"
+    ? undefined
+    : __T3CODE_BUILD_NEON_AUTH_CLI_OAUTH_CLIENT_ID__,
 );
 export const buildTimeRelayClientTracing = {
   tracesUrl: readBuildTimeValue(
@@ -155,52 +159,41 @@ export interface CloudCliOAuthConfig {
 }
 
 export function makeCloudCliOAuthConfig({
-  clerkPublishableKeyFallback = buildTimeClerkPublishableKey,
-  clerkCliOAuthClientIdFallback = buildTimeClerkCliOAuthClientId,
+  neonAuthOAuthAuthorizeUrlFallback = buildTimeNeonAuthOAuthAuthorizeUrl,
+  neonAuthCliOAuthClientIdFallback = buildTimeNeonAuthCliOAuthClientId,
 }: {
-  readonly clerkPublishableKeyFallback?: string;
-  readonly clerkCliOAuthClientIdFallback?: string;
+  readonly neonAuthOAuthAuthorizeUrlFallback?: string;
+  readonly neonAuthCliOAuthClientIdFallback?: string;
 } = {}) {
   return Config.all({
-    clerkPublishableKey: makePublicValueConfig(
-      "T3CODE_CLERK_PUBLISHABLE_KEY",
-      clerkPublishableKeyFallback,
+    authorizationEndpoint: makePublicValueConfig(
+      "T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL",
+      neonAuthOAuthAuthorizeUrlFallback,
     ),
     clientId: makePublicValueConfig(
-      "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID",
-      clerkCliOAuthClientIdFallback,
+      "T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID",
+      neonAuthCliOAuthClientIdFallback,
     ),
   }).pipe(
-    Config.mapOrFail(({ clerkPublishableKey, clientId }) =>
-      Effect.try({
-        try: () => clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey),
-        catch: (cause) =>
-          new Config.ConfigError(
-            new ConfigProvider.SourceError({
-              message: "Failed to derive Clerk Frontend API URL from the publishable key.",
-              cause,
-            }),
-          ),
-      }).pipe(
-        Effect.map(
-          (clerkFrontendApiUrl) =>
-            ({
-              authorizationEndpoint: `${clerkFrontendApiUrl}/oauth/authorize`,
-              tokenEndpoint: `${clerkFrontendApiUrl}/oauth/token`,
-              clientId,
-              redirectUri: CLOUD_CLI_OAUTH_REDIRECT_URI,
-              scopes: CLOUD_CLI_OAUTH_SCOPES,
-            }) satisfies CloudCliOAuthConfig,
-        ),
-      ),
-    ),
+    Config.map(({ authorizationEndpoint, clientId }) => {
+      const tokenEndpoint = new URL(authorizationEndpoint);
+      tokenEndpoint.pathname = tokenEndpoint.pathname.replace(/\/authorize\/?$/u, "/token");
+      return {
+        authorizationEndpoint,
+        tokenEndpoint: tokenEndpoint.toString(),
+        clientId,
+        redirectUri: CLOUD_CLI_OAUTH_REDIRECT_URI,
+        scopes: CLOUD_CLI_OAUTH_SCOPES,
+      } satisfies CloudCliOAuthConfig;
+    }),
   );
 }
 
 export const cloudCliOAuthConfig = makeCloudCliOAuthConfig();
 
 export const hasCloudPublicConfig = Boolean(
-  (normalizeSecureRelayUrl(process.env.T3CODE_RELAY_URL ?? "") ?? buildTimeRelayUrl) &&
-  (process.env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() || buildTimeClerkPublishableKey) &&
-  (process.env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || buildTimeClerkCliOAuthClientId),
+  (process.env.T3CODE_RELAY_URL?.trim() || buildTimeRelayUrl) &&
+  (process.env.T3CODE_NEON_AUTH_URL?.trim() || buildTimeNeonAuthUrl) &&
+  (process.env.T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL?.trim() || buildTimeNeonAuthOAuthAuthorizeUrl) &&
+  (process.env.T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID?.trim() || buildTimeNeonAuthCliOAuthClientId),
 );

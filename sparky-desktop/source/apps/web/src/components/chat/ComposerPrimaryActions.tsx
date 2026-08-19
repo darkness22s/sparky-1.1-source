@@ -1,5 +1,5 @@
 import { memo, type PointerEventHandler } from "react";
-import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronLeftIcon, MicIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
@@ -24,6 +24,9 @@ interface ComposerPrimaryActionsProps {
   isEnvironmentUnavailable: boolean;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
+  dictationSupported?: boolean;
+  isDictating?: boolean;
+  onToggleDictation?: () => void;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -52,6 +55,52 @@ const preventPointerFocus: PointerEventHandler<HTMLElement> = (event) => {
   event.preventDefault();
 };
 
+export interface VoiceDictationButtonProps {
+  readonly isDictating: boolean;
+  readonly isSupported: boolean;
+  readonly disabled: boolean;
+  readonly preserveComposerFocusOnPointerDown?: boolean;
+  readonly onToggle: () => void;
+}
+
+export const VoiceDictationButton = memo(function VoiceDictationButton({
+  isDictating,
+  isSupported,
+  disabled,
+  preserveComposerFocusOnPointerDown = false,
+  onToggle,
+}: VoiceDictationButtonProps) {
+  const pointerFocusProps = preserveComposerFocusOnPointerDown
+    ? { onPointerDown: preventPointerFocus }
+    : undefined;
+  const isDisabled = disabled || (!isSupported && !isDictating);
+  const label = isDictating
+    ? "Stop voice dictation"
+    : isSupported
+      ? "Start voice dictation"
+      : "Voice dictation unavailable in this browser";
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex h-9 w-9 items-center justify-center rounded-full text-primary-foreground shadow-xs transition-all duration-150 disabled:pointer-events-none disabled:opacity-30 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8",
+        isDictating
+          ? "bg-destructive/90 shadow-destructive/24 hover:bg-destructive hover:scale-105"
+          : "bg-primary/90 shadow-primary/24 enabled:cursor-pointer enabled:inset-shadow-[0_1px_--theme(--color-white/16%)] hover:bg-primary hover:scale-105",
+      )}
+      {...pointerFocusProps}
+      disabled={isDisabled}
+      aria-label={label}
+      aria-pressed={isDictating}
+      title={label}
+      onClick={onToggle}
+    >
+      <MicIcon className={cn("size-4", isDictating && "animate-pulse")} aria-hidden="true" />
+    </button>
+  );
+});
+
 export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
@@ -63,6 +112,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isEnvironmentUnavailable,
   isPreparingWorktree,
   hasSendableContent,
+  dictationSupported = false,
+  isDictating = false,
+  onToggleDictation = () => {},
   preserveComposerFocusOnPointerDown = false,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -190,6 +242,19 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           </MenuPopup>
         </Menu>
       </div>
+    );
+  }
+
+  const shouldShowDictation = isDictating || (!promptHasText && !hasSendableContent);
+  if (shouldShowDictation) {
+    return (
+      <VoiceDictationButton
+        isDictating={isDictating}
+        isSupported={dictationSupported}
+        disabled={isSendBusy || isConnecting || isEnvironmentUnavailable || isPreparingWorktree}
+        preserveComposerFocusOnPointerDown={preserveComposerFocusOnPointerDown}
+        onToggle={onToggleDictation}
+      />
     );
   }
 

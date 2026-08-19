@@ -1,11 +1,10 @@
-import { relayClerkTokenOptions } from "@sparky/shared/relayAuth";
 import { normalizeSecureRelayUrl } from "@sparky/shared/relayUrl";
 import * as Schema from "effect/Schema";
 
 export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<CloudPublicConfigMissingError>()(
   "CloudPublicConfigMissingError",
   {
-    key: Schema.Literal("T3CODE_CLERK_JWT_TEMPLATE"),
+    key: Schema.Literal("T3CODE_NEON_AUTH_URL"),
   },
 ) {
   override get message(): string {
@@ -14,8 +13,10 @@ export class CloudPublicConfigMissingError extends Schema.TaggedErrorClass<Cloud
 }
 
 export interface CloudPublicConfig {
-  readonly clerkPublishableKey: string | null;
-  readonly clerkJwtTemplate: string | null;
+  readonly neonAuthUrl: string | null;
+  readonly neonAuthOAuthAuthorizeUrl: string | null;
+  readonly neonAuthCliOAuthClientId: string | null;
+  readonly accountApiUrl: string | null;
   readonly relayUrl: string | null;
   readonly relayTracing: {
     readonly tracesUrl: string | null;
@@ -39,10 +40,18 @@ function normalizeSecureUrl(value: string): string | null {
 
 export function resolveCloudPublicConfig(): CloudPublicConfig {
   return {
-    clerkPublishableKey: trimNonEmpty(
-      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined,
+    neonAuthUrl: normalizeSecureUrl(
+      (import.meta.env.VITE_NEON_AUTH_URL as string | undefined) ?? "",
     ),
-    clerkJwtTemplate: trimNonEmpty(import.meta.env.VITE_CLERK_JWT_TEMPLATE as string | undefined),
+    neonAuthOAuthAuthorizeUrl: normalizeSecureUrl(
+      (import.meta.env.VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL as string | undefined) ?? "",
+    ),
+    neonAuthCliOAuthClientId: trimNonEmpty(
+      import.meta.env.VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID as string | undefined,
+    ),
+    accountApiUrl: normalizeSecureUrl(
+      (import.meta.env.VITE_ACCOUNT_API_URL as string | undefined) ?? "",
+    ),
     relayUrl: normalizeSecureRelayUrl(
       (import.meta.env.VITE_T3CODE_RELAY_URL as string | undefined) ?? "",
     ),
@@ -71,13 +80,5 @@ export function resolveRelayTracingConfig() {
 
 export function hasCloudPublicConfig(): boolean {
   const config = resolveCloudPublicConfig();
-  return Boolean(config.clerkPublishableKey && config.clerkJwtTemplate && config.relayUrl);
-}
-
-export function resolveRelayClerkTokenOptions() {
-  const { clerkJwtTemplate } = resolveCloudPublicConfig();
-  if (!clerkJwtTemplate) {
-    throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
-  }
-  return relayClerkTokenOptions(clerkJwtTemplate);
+  return Boolean(config.neonAuthUrl && config.relayUrl);
 }

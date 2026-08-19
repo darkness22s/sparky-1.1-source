@@ -16,9 +16,12 @@ const port = Number(process.env.PORT ?? 5733);
 const host = process.env.HOST?.trim() || "localhost";
 const configuredWsUrl = process.env.VITE_WS_URL?.trim();
 const configuredRelayUrl = repoEnv.VITE_T3CODE_RELAY_URL?.trim() || "";
-const configuredClerkPublishableKey = repoEnv.VITE_CLERK_PUBLISHABLE_KEY?.trim() || "";
-const configuredClerkJwtTemplate = repoEnv.VITE_CLERK_JWT_TEMPLATE?.trim() || "";
-const configuredClerkCliOAuthClientId = repoEnv.VITE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || "";
+const configuredNeonAuthUrl = repoEnv.VITE_NEON_AUTH_URL?.trim() || "";
+const configuredNeonAuthOAuthAuthorizeUrl =
+  repoEnv.VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL?.trim() || "";
+const configuredNeonAuthCliOAuthClientId = repoEnv.VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID?.trim() || "";
+const configuredAccountApiUrl = repoEnv.VITE_ACCOUNT_API_URL?.trim() || "";
+const configuredAnalyticsEndpoint = process.env.VITE_SPARKY_ANALYTICS_ENDPOINT?.trim() || "";
 const configuredRelayTracingUrl = repoEnv.VITE_RELAY_OTLP_TRACES_URL?.trim() || "";
 const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.trim() || "";
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
@@ -123,11 +126,15 @@ export default defineConfig(({ mode }) => {
       // In dev mode, tell the web app where the WebSocket server lives
       "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
       "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
-      "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
-      "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
-      "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
-        configuredClerkCliOAuthClientId,
+      "import.meta.env.VITE_NEON_AUTH_URL": JSON.stringify(configuredNeonAuthUrl),
+      "import.meta.env.VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL": JSON.stringify(
+        configuredNeonAuthOAuthAuthorizeUrl,
       ),
+      "import.meta.env.VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID": JSON.stringify(
+        configuredNeonAuthCliOAuthClientId,
+      ),
+      "import.meta.env.VITE_ACCOUNT_API_URL": JSON.stringify(configuredAccountApiUrl),
+      "import.meta.env.VITE_SPARKY_ANALYTICS_ENDPOINT": JSON.stringify(configuredAnalyticsEndpoint),
       "import.meta.env.VITE_RELAY_OTLP_TRACES_URL": JSON.stringify(configuredRelayTracingUrl),
       "import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET": JSON.stringify(
         configuredRelayTracingDataset,

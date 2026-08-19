@@ -107,6 +107,7 @@ export interface ThreadStatusPill {
   label:
     | "Working"
     | "Connecting"
+    | "Error"
     | "Completed"
     | "Pending Approval"
     | "Awaiting Input"
@@ -117,6 +118,7 @@ export interface ThreadStatusPill {
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
+  Error: 6,
   "Pending Approval": 5,
   "Awaiting Input": 4,
   Working: 3,
@@ -438,6 +440,20 @@ export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusPill | null {
   const { thread } = input;
+  const hasActiveTurn =
+    (thread.session?.status === "running" || thread.session?.status === "starting") &&
+    thread.session.activeTurnId != null;
+  const hasError =
+    thread.session?.status === "error" || (!hasActiveTurn && thread.latestTurn?.state === "error");
+
+  if (hasError) {
+    return {
+      label: "Error",
+      colorClass: "text-red-600 dark:text-red-300/90",
+      dotClass: "bg-red-500 dark:bg-red-300/90",
+      pulse: false,
+    };
+  }
 
   if (thread.hasPendingApprovals) {
     return {
@@ -457,7 +473,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.session?.status === "running") {
+  if (thread.session?.status === "running" && thread.session.activeTurnId != null) {
     return {
       label: "Working",
       colorClass: "text-sky-600 dark:text-sky-300/80",
@@ -492,8 +508,8 @@ export function resolveThreadStatusPill(input: {
   if (hasUnseenCompletion(thread)) {
     return {
       label: "Completed",
-      colorClass: "text-emerald-600 dark:text-emerald-300/90",
-      dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
+      colorClass: "text-blue-600 dark:text-blue-300/90",
+      dotClass: "bg-blue-500 dark:bg-blue-300/90",
       pulse: false,
     };
   }

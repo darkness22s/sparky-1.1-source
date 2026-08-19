@@ -243,7 +243,7 @@ Checklist:
    - `APPLE_API_KEY`: contents of the downloaded `.p8`
    - `APPLE_API_KEY_ID`: Key ID
    - `APPLE_API_ISSUER`: Issuer ID
-10. Complete the Clerk Native API and AASA setup in [Sparky Cloud Clerk Setup](../cloud/sparky-connect-clerk.md#desktop-passkeys).
+10. Complete the Neon Auth and AASA setup in [Sparky Cloud Neon Auth Setup](../cloud/sparky-connect-neon-auth.md#desktop-passkeys).
 11. Re-run a tag release and confirm macOS artifacts are signed/notarized and contain the expected
     `com.apple.developer.associated-domains` entitlement.
 

@@ -17,6 +17,7 @@ import { resolveThreadStatusPill, type ThreadStatusPill } from "./Sidebar.logic"
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Spinner } from "./ui/spinner";
 
 export interface PrStatusIndicator {
   label: string;
@@ -136,6 +137,9 @@ export function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
+  const showSpinner = status.label === "Working" || status.label === "Connecting";
+  const showText = !showSpinner && status.label !== "Error" && status.label !== "Completed";
+
   if (compact) {
     return (
       <Tooltip>
@@ -147,11 +151,15 @@ export function ThreadStatusLabel({
             />
           }
         >
-          <span
-            className={`size-[9px] rounded-full ${status.dotClass} ${
-              status.pulse ? "animate-status-pulse" : ""
-            }`}
-          />
+          {showSpinner ? (
+            <Spinner className="size-3.5" aria-hidden="true" />
+          ) : (
+            <span
+              className={`size-[9px] rounded-full ${status.dotClass} ${
+                status.pulse ? "animate-status-pulse" : ""
+              }`}
+            />
+          )}
         </TooltipTrigger>
         <TooltipPopup side="top">{status.label}</TooltipPopup>
       </Tooltip>
@@ -168,12 +176,18 @@ export function ThreadStatusLabel({
           />
         }
       >
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
-            status.pulse ? "animate-status-pulse" : ""
-          }`}
-        />
-        <span className="hidden md:inline">{status.label}</span>
+        {showSpinner ? (
+          <Spinner className="size-3.5" aria-hidden="true" />
+        ) : (
+          <>
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
+                status.pulse ? "animate-status-pulse" : ""
+              }`}
+            />
+            {showText ? <span className="hidden md:inline">{status.label}</span> : null}
+          </>
+        )}
       </TooltipTrigger>
       <TooltipPopup side="top">{status.label}</TooltipPopup>
     </Tooltip>

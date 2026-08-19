@@ -19,6 +19,7 @@ const metricKeys = [
   "engagedMs",
   "appUsers",
   "appLaunches",
+  "modelRequests",
 ];
 
 function metricValue(value) {
@@ -176,6 +177,7 @@ function render(data) {
     ["Confirmed requests", compactNumber.format(data.totals.downloadRequests), "Router returned an installer", "pointer"],
     ["Download page opens", compactNumber.format(data.totals.downloadPageOpens), pageOpenDetail, "clock"],
     ["App installations", compactNumber.format(data.totals.appUsers), `${compactNumber.format(data.totals.appLaunches)} launches · ${duration(average)} avg attention`, "laptop"],
+    ["Model requests", compactNumber.format(data.totals.modelRequests), "Completed provider turns", "pointer"],
   ];
   metrics[5][2] = appInstallationDetail;
   document.getElementById("metric-grid").innerHTML = metrics.map(([label, value, detail, icon]) => `<article class="metric-card"><div class="metric-icon icon-${icon}"></div><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>`).join("");
@@ -193,6 +195,7 @@ function render(data) {
     demo_interaction: "Demo explored",
     desktop_render_interaction: "Demo interaction",
     app_launch: "Sparky launched",
+    model_request: "Model request",
   };
   document.getElementById("activity-list").innerHTML = data.recent.length ? data.recent.map((event) => {
     const detail = event.kind === "download_request"
@@ -201,7 +204,9 @@ function render(data) {
         ? `${event.outcome || "request failed"} · ${platformLabel(event.platform || "unknown")}`
         : event.kind === "page_view"
           ? `${event.path || "page"} · ${event.os || "environment pending"}`
-          : event.label || event.path || "No additional detail";
+          : event.kind === "model_request"
+            ? `${event.provider || "provider unknown"} · ${event.model || event.label || "model unknown"} · ${compactNumber.format(event.totalTokens || 0)} tokens`
+            : event.label || event.path || "No additional detail";
     return `<div class="activity"><span class="activity-icon kind-${escapeHtml(event.kind)}"></span><div><b>${labels[event.kind] || "Activity"}</b><small>${escapeHtml(detail)}</small></div><time>${new Date(event.at).toLocaleDateString("en", { month: "short", day: "numeric" })} ${new Date(event.at).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })}</time></div>`;
   }).join("") : '<div class="empty-activity">No events yet. The stream is connected and waiting.</div>';
 }

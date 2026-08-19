@@ -66,6 +66,7 @@ import {
 } from "@sparky/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { recordCompletedTurnUsage } from "../account/usageTelemetry";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
@@ -1143,6 +1144,21 @@ function ChatViewContent(props: ChatViewProps) {
   const composerDraftTarget: ScopedThreadRef | DraftId =
     routeKind === "server" ? routeThreadRef : props.draftId;
   const serverThread = useThread(routeThreadRef);
+  const recordedUsageTurnsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (routeKind !== "server" || serverThread === null) return;
+    const settledTurn = serverThread.latestTurn;
+    if (settledTurn === null || settledTurn.state === "running") return;
+
+    const usageKey = `${environmentId}:${String(serverThread.id)}:${String(settledTurn.turnId)}`;
+    if (recordedUsageTurnsRef.current.has(usageKey)) return;
+    recordedUsageTurnsRef.current.add(usageKey);
+
+    void recordCompletedTurnUsage({ environmentId, thread: serverThread }).catch(() => {
+      recordedUsageTurnsRef.current.delete(usageKey);
+    });
+  }, [environmentId, routeKind, serverThread]);
+
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
   const activeThreadLastVisitedAt = useUiStateStore(
     (store) => store.threadLastVisitedAtById[routeThreadKey],

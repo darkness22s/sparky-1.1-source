@@ -5,19 +5,15 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { activateCloudRelayAccount, deactivateCloudRelayAccount } from "./CloudAuthProvider";
 import { setAgentAwarenessRelayTokenProvider } from "../agent-awareness/remoteRegistration";
 
-vi.mock("@clerk/expo", () => ({
-  ClerkProvider: vi.fn(),
-  useAuth: vi.fn(),
-}));
-
-vi.mock("@clerk/expo/token-cache", () => ({
-  tokenCache: {},
-}));
-
 vi.mock("../../lib/runtime", () => ({
   runtime: {
     runPromiseExit: vi.fn(),
   },
+}));
+
+vi.mock("./AccountAuthProvider", () => ({
+  AccountAuthProvider: ({ children }: { readonly children: unknown }) => children,
+  useAccountAuth: vi.fn(),
 }));
 
 vi.mock("../../connection/catalog", () => ({
@@ -28,10 +24,9 @@ vi.mock("../../connection/catalog", () => ({
 
 vi.mock("./publicConfig", () => ({
   resolveCloudPublicConfig: vi.fn(() => ({
-    clerk: { publishableKey: null },
+    neonAuth: { url: null },
     relay: { url: null },
   })),
-  resolveRelayClerkTokenOptions: vi.fn(),
 }));
 
 vi.mock("../agent-awareness/remoteRegistration", () => ({

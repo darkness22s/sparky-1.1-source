@@ -2,7 +2,6 @@
 
 import { fromYaml } from "@sparky/shared/schemaYaml";
 import { HostProcessPlatform } from "@sparky/shared/hostProcess";
-import { clerkFrontendApiHostnameFromPublishableKey } from "@sparky/shared/relayAuth";
 import { resolveSpawnCommand } from "@sparky/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
@@ -160,8 +159,8 @@ export class MacPasskeySigningConfigurationResolutionError extends Schema.Tagged
   }
 }
 
-export class ClerkPasskeyNativePackageMissingError extends Schema.TaggedErrorClass<ClerkPasskeyNativePackageMissingError>()(
-  "ClerkPasskeyNativePackageMissingError",
+export class AccountPasskeyNativePackageMissingError extends Schema.TaggedErrorClass<AccountPasskeyNativePackageMissingError>()(
+  "AccountPasskeyNativePackageMissingError",
   {
     packageName: Schema.String,
     binaryFileName: Schema.String,
@@ -172,7 +171,7 @@ export class ClerkPasskeyNativePackageMissingError extends Schema.TaggedErrorCla
   },
 ) {
   override get message(): string {
-    return `Clerk passkey native package is missing: ${this.packageName}`;
+    return `Account passkey native package is missing: ${this.packageName}`;
   }
 }
 
@@ -637,18 +636,18 @@ export class MissingMacPasskeyDomainConfigurationError extends Schema.TaggedErro
   {},
 ) {
   override get message(): string {
-    return "T3CODE_CLERK_PUBLISHABLE_KEY or T3CODE_CLERK_PASSKEY_RP_DOMAINS is required for signed macOS passkey builds.";
+    return "T3CODE_NEON_AUTH_URL or T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS is required for signed macOS passkey builds.";
   }
 }
 
-export class InvalidMacPasskeyPublishableKeyError extends Schema.TaggedErrorClass<InvalidMacPasskeyPublishableKeyError>()(
-  "InvalidMacPasskeyPublishableKeyError",
+export class InvalidMacPasskeyAuthUrlError extends Schema.TaggedErrorClass<InvalidMacPasskeyAuthUrlError>()(
+  "InvalidMacPasskeyAuthUrlError",
   {
     cause: Schema.Defect(),
   },
 ) {
   override get message(): string {
-    return "T3CODE_CLERK_PUBLISHABLE_KEY is invalid.";
+    return "T3CODE_NEON_AUTH_URL is invalid.";
   }
 }
 
@@ -657,7 +656,7 @@ export class MissingMacPasskeyRpDomainError extends Schema.TaggedErrorClass<Miss
   {},
 ) {
   override get message(): string {
-    return "At least one Clerk passkey RP domain is required.";
+    return "At least one Neon Auth passkey RP domain is required.";
   }
 }
 
@@ -666,7 +665,7 @@ export const MacPasskeySigningConfigurationError = Schema.Union([
   InvalidAppleTeamIdError,
   MissingMacPasskeyProvisioningProfileError,
   MissingMacPasskeyDomainConfigurationError,
-  InvalidMacPasskeyPublishableKeyError,
+  InvalidMacPasskeyAuthUrlError,
   MissingMacPasskeyRpDomainError,
 ]);
 export type MacPasskeySigningConfigurationError = typeof MacPasskeySigningConfigurationError.Type;
@@ -726,20 +725,24 @@ export function resolveMacPasskeySigningConfiguration(
     throw new MissingMacPasskeyProvisioningProfileError();
   }
 
-  const configuredRpDomains = env.T3CODE_CLERK_PASSKEY_RP_DOMAINS?.trim();
+  const configuredRpDomains = env.T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS?.trim();
   let rpDomains: readonly string[];
   if (configuredRpDomains) {
     rpDomains = configuredRpDomains.split(",").map(normalizePasskeyRpDomain);
   } else {
-    const publishableKey = env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim();
-    if (!publishableKey) {
+    const neonAuthUrl = env.T3CODE_NEON_AUTH_URL?.trim();
+    if (!neonAuthUrl) {
       throw new MissingMacPasskeyDomainConfigurationError();
     }
     let hostname: string;
     try {
-      hostname = clerkFrontendApiHostnameFromPublishableKey(publishableKey);
+      const parsed = new URL(neonAuthUrl);
+      if (parsed.protocol !== "https:" || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+        throw new Error("Neon Auth URL must be an HTTPS origin.");
+      }
+      hostname = parsed.hostname;
     } catch (cause) {
-      throw new InvalidMacPasskeyPublishableKeyError({ cause });
+      throw new InvalidMacPasskeyAuthUrlError({ cause });
     }
     rpDomains = [normalizePasskeyRpDomain(hostname)];
   }
@@ -820,34 +823,6 @@ export function resolveFffNativeDependencies(
       ["gnu", "musl"].map((libc) => [`@ff-labs/fff-bin-linux-${architecture}-${libc}`, version]),
     ),
   );
-}
-
-export interface ClerkPasskeyNativeArtifact {
-  readonly packageName: string;
-  readonly binaryFileName: string;
-}
-
-export function resolveClerkPasskeyNativeArtifacts(
-  platform: typeof BuildPlatform.Type,
-  arch: typeof BuildArch.Type,
-): readonly ClerkPasskeyNativeArtifact[] {
-  const architectures = arch === "universal" ? (["arm64", "x64"] as const) : [arch];
-
-  if (platform === "mac") {
-    return architectures.map((architecture) => ({
-      packageName: `@clerk/electron-passkeys-darwin-${architecture}`,
-      binaryFileName: `electron-passkeys.darwin-${architecture}.node`,
-    }));
-  }
-
-  if (platform === "win") {
-    return architectures.map((architecture) => ({
-      packageName: `@clerk/electron-passkeys-win32-${architecture}-msvc`,
-      binaryFileName: `electron-passkeys.win32-${architecture}-msvc.node`,
-    }));
-  }
-
-  return [];
 }
 
 export function createStageWorkspaceConfig(input: {

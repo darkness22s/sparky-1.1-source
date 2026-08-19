@@ -17,10 +17,11 @@ import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import type { OutOfBandOAuthPromptInput } from "./CliTokenManager.ts";
 
-// pk_test_<base64 of "clerk.example.test$">
+// Neon Auth public OAuth configuration used by the hosted CLI flow.
 const TEST_ENV = {
-  T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA==",
-  T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: "oauth_client_test",
+  T3CODE_NEON_AUTH_URL: "https://auth.example.test",
+  T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL: "https://auth.example.test/oauth/authorize",
+  T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID: "account-cli",
   T3CODE_HOSTED_APP_URL: "https://hosted.example.test",
 };
 
@@ -95,10 +96,10 @@ class PromptRejectedError extends Schema.TaggedErrorClass<PromptRejectedError>()
 
 it("formats loopback authorization with a headless-host fallback", () => {
   assert.equal(
-    CliTokenManager.formatLoopbackAuthorizationPrompt("https://clerk.example.test/authorize"),
+    CliTokenManager.formatLoopbackAuthorizationPrompt("https://auth.example.test/authorize"),
     [
       "Open this URL to authorize Sparky Cloud:",
-      "  https://clerk.example.test/authorize",
+      "  https://auth.example.test/authorize",
       "",
       "Press \u001b[1mEnter\u001b[22m to open it in your browser.",
       "No browser on this device? Press \u001b[1mH\u001b[22m to switch to headless mode.",
@@ -127,7 +128,7 @@ it.effect("opens the browser on Enter and switches the active flow on H", () =>
     const opened: Array<string> = [];
 
     const result = yield* CliTokenManager.waitForLoopbackAuthorization({
-      authorizationUrl: "https://clerk.example.test/authorize",
+      authorizationUrl: "https://auth.example.test/authorize",
       callback: Effect.never,
       terminal: makeTestTerminal(queue),
       launchBrowser: (url) =>
@@ -136,7 +137,7 @@ it.effect("opens the browser on Enter and switches the active flow on H", () =>
         }),
     });
 
-    assert.deepEqual(opened, ["https://clerk.example.test/authorize"]);
+    assert.deepEqual(opened, ["https://auth.example.test/authorize"]);
     assert.deepEqual(result, { _tag: "HeadlessRequested" });
   }),
 );
@@ -145,16 +146,16 @@ it.effect("finishes normally when the browser callback wins", () =>
   Effect.gen(function* () {
     const queue = yield* Queue.make<Terminal.UserInput>();
     const callback = yield* Deferred.make<string>();
-    yield* Deferred.succeed(callback, "clerk-code-123");
+    yield* Deferred.succeed(callback, "auth-code-123");
 
     const result = yield* CliTokenManager.waitForLoopbackAuthorization({
-      authorizationUrl: "https://clerk.example.test/authorize",
+      authorizationUrl: "https://auth.example.test/authorize",
       callback: Deferred.await(callback),
       terminal: makeTestTerminal(queue),
       launchBrowser: () => Effect.die("browser launch should not run"),
     });
 
-    assert.deepEqual(result, { _tag: "AuthorizationCode", code: "clerk-code-123" });
+    assert.deepEqual(result, { _tag: "AuthorizationCode", code: "auth-code-123" });
   }),
 );
 
@@ -170,7 +171,7 @@ it.layer(NodeServices.layer)("CliTokenManager.outOfBandOAuthLogin", (it) => {
             seenAuthorizeUrl = authorizeUrl;
             const request = readConnectAuthorizeRequest(new URL(authorizeUrl));
             assert.isNotNull(request);
-            return yield* validate(`clerk-code-123.${request!.state}`).pipe(
+            return yield* validate(`auth-code-123.${request!.state}`).pipe(
               Effect.mapError((message) => new PromptRejectedError({ message })),
             );
           }),
@@ -191,14 +192,14 @@ it.layer(NodeServices.layer)("CliTokenManager.outOfBandOAuthLogin", (it) => {
 
       assert.lengthOf(requests, 1);
       const exchange = requests[0]!;
-      assert.equal(exchange.url, "https://clerk.example.test/oauth/token");
+      assert.equal(exchange.url, "https://auth.example.test/oauth/token");
       assert.equal(exchange.params.get("grant_type"), "authorization_code");
-      assert.equal(exchange.params.get("code"), "clerk-code-123");
+      assert.equal(exchange.params.get("code"), "auth-code-123");
       assert.equal(
         exchange.params.get("redirect_uri"),
         "https://hosted.example.test/connect/callback",
       );
-      assert.equal(exchange.params.get("client_id"), "oauth_client_test");
+      assert.equal(exchange.params.get("client_id"), "account-cli");
       // The verifier must hash to the challenge advertised in the authorize URL.
       const verifier = exchange.params.get("code_verifier");
       assert.isNotNull(verifier);
@@ -215,7 +216,7 @@ it.layer(NodeServices.layer)("CliTokenManager.outOfBandOAuthLogin", (it) => {
       const validationErrors: Array<string> = [];
       const result = yield* CliTokenManager.outOfBandOAuthLogin(
         ({ validate }: OutOfBandOAuthPromptInput) =>
-          validate("clerk-code-123.wrong-state").pipe(
+          validate("auth-code-123.wrong-state").pipe(
             Effect.tapError((message) => Effect.sync(() => validationErrors.push(message))),
             Effect.mapError((message) => new PromptRejectedError({ message })),
           ),
@@ -237,7 +238,7 @@ it.layer(NodeServices.layer)("CliTokenManager.outOfBandOAuthLogin", (it) => {
         ({ authorizeUrl }: OutOfBandOAuthPromptInput) => {
           const request = readConnectAuthorizeRequest(new URL(authorizeUrl));
           assert.isNotNull(request);
-          return Effect.succeed(`clerk-code-123.${request!.state}`);
+          return Effect.succeed(`auth-code-123.${request!.state}`);
         },
       ).pipe(
         Effect.provide(makeTokenEndpointLayer(requests, { idToken: malformedIdToken })),

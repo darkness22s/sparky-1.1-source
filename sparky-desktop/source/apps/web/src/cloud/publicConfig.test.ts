@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  CloudPublicConfigMissingError,
   hasCloudPublicConfig,
-  resolveRelayClerkTokenOptions,
+  resolveCloudPublicConfig,
 } from "./publicConfig.ts";
 
 afterEach(() => {
@@ -11,16 +10,12 @@ afterEach(() => {
 });
 
 describe("hasCloudPublicConfig", () => {
-  it("requires both public cloud values", () => {
-    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "");
-    vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "");
+  it("requires Neon Auth and relay public values", () => {
+    vi.stubEnv("VITE_NEON_AUTH_URL", "");
     vi.stubEnv("VITE_T3CODE_RELAY_URL", "");
     expect(hasCloudPublicConfig()).toBe(false);
 
-    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example");
-    expect(hasCloudPublicConfig()).toBe(false);
-
-    vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
+    vi.stubEnv("VITE_NEON_AUTH_URL", "https://auth.example.test");
     expect(hasCloudPublicConfig()).toBe(false);
 
     vi.stubEnv("VITE_T3CODE_RELAY_URL", "https://relay.example.test");
@@ -28,18 +23,23 @@ describe("hasCloudPublicConfig", () => {
   });
 
   it("rejects an insecure relay URL", () => {
-    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_example");
-    vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "t3-relay");
+    vi.stubEnv("VITE_NEON_AUTH_URL", "https://auth.example.test");
     vi.stubEnv("VITE_T3CODE_RELAY_URL", "http://relay.example.test");
 
     expect(hasCloudPublicConfig()).toBe(false);
   });
 
-  it("reports the missing Clerk JWT template as structured configuration", () => {
-    vi.stubEnv("VITE_CLERK_JWT_TEMPLATE", "");
+  it("normalizes the optional account API and authorization endpoints", () => {
+    vi.stubEnv("VITE_NEON_AUTH_URL", "https://auth.example.test/");
+    vi.stubEnv("VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL", "https://auth.example.test/oauth/authorize");
+    vi.stubEnv("VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID", " account-cli ");
+    vi.stubEnv("VITE_ACCOUNT_API_URL", "https://accounts.example.test/");
 
-    expect(() => resolveRelayClerkTokenOptions()).toThrowError(
-      new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" }),
-    );
+    expect(resolveCloudPublicConfig()).toMatchObject({
+      neonAuthUrl: "https://auth.example.test/",
+      neonAuthOAuthAuthorizeUrl: "https://auth.example.test/oauth/authorize",
+      neonAuthCliOAuthClientId: "account-cli",
+      accountApiUrl: "https://accounts.example.test/",
+    });
   });
 });

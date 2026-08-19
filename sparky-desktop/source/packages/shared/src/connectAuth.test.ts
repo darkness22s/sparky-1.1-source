@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildConnectAuthorizeRequestUrl,
-  buildConnectClerkAuthorizeUrl,
+  buildConnectAuthorizeUrl,
   connectCallbackUrl,
   encodeConnectAuthCode,
   parseConnectAuthCode,
@@ -37,10 +37,10 @@ describe("connectAuth", () => {
     ).toBeNull();
   });
 
-  it("builds a PKCE authorize URL against the Clerk endpoint", () => {
+  it("builds a PKCE authorize URL against the Neon Auth endpoint", () => {
     const url = new URL(
-      buildConnectClerkAuthorizeUrl({
-        authorizationEndpoint: "https://clerk.t3.codes/oauth/authorize",
+      buildConnectAuthorizeUrl({
+        authorizationEndpoint: "https://auth.sparky.codes/oauth/authorize",
         clientId: "oauthapp_123",
         redirectUri: connectCallbackUrl("https://app.t3.codes"),
         scopes: ["openid", "profile", "email"],
@@ -49,7 +49,7 @@ describe("connectAuth", () => {
       }),
     );
 
-    expect(url.origin).toBe("https://clerk.t3.codes");
+    expect(url.origin).toBe("https://auth.sparky.codes");
     expect(url.pathname).toBe("/oauth/authorize");
     expect(url.searchParams.get("client_id")).toBe("oauthapp_123");
     expect(url.searchParams.get("redirect_uri")).toBe("https://app.t3.codes/connect/callback");

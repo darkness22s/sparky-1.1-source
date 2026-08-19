@@ -57,7 +57,7 @@ const savedConnection = {
   bearerToken: "local-bearer",
 };
 
-const stableClerkToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyXzEyMyJ9.test";
+const stableAccountToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyXzEyMyJ9.test";
 
 const createProofMock = vi.fn(
   (input: { readonly method: string; readonly url: string; readonly accessToken?: string }) =>
@@ -224,7 +224,7 @@ describe("mobile cloud link environment client", () => {
       );
 
       const records = yield* withCloudServices(
-        listCloudEnvironments({ clerkToken: "clerk-token" }),
+        listCloudEnvironments({ accountToken: "account-token" }),
       );
       expect(records).toEqual([
         {
@@ -266,7 +266,7 @@ describe("mobile cloud link environment client", () => {
       );
 
       const error = yield* withCloudServices(
-        listCloudEnvironments({ clerkToken: "clerk-token" }),
+        listCloudEnvironments({ accountToken: "account-token" }),
       ).pipe(Effect.flip);
       expect(error).toMatchObject({
         _tag: "CloudEnvironmentLinkError",
@@ -323,7 +323,7 @@ describe("mobile cloud link environment client", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const records = yield* withCloudServices(
-        listCloudEnvironmentsWithStatus({ clerkToken: "clerk-token" }),
+        listCloudEnvironmentsWithStatus({ accountToken: "account-token" }),
       );
       expect(records).toMatchObject([
         {
@@ -388,7 +388,7 @@ describe("mobile cloud link environment client", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      yield* withCloudServices(listCloudEnvironmentsWithStatus({ clerkToken: stableClerkToken }));
+      yield* withCloudServices(listCloudEnvironmentsWithStatus({ accountToken: stableAccountToken }));
 
       expect(
         fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/v1/client/dpop-token")),
@@ -462,10 +462,10 @@ describe("mobile cloud link environment client", () => {
       yield* withCloudServices(
         Effect.gen(function* () {
           const records = yield* listCloudEnvironmentsWithStatus({
-            clerkToken: stableClerkToken,
+            accountToken: stableAccountToken,
           });
           yield* connectCloudEnvironment({
-            clerkToken: stableClerkToken,
+            accountToken: stableAccountToken,
             environment: records[0]!.environment,
           });
         }),
@@ -523,7 +523,7 @@ describe("mobile cloud link environment client", () => {
       );
 
       const records = yield* withCloudServices(
-        listCloudEnvironmentsWithStatus({ clerkToken: "clerk-token" }),
+        listCloudEnvironmentsWithStatus({ accountToken: "account-token" }),
       );
       expect(records).toMatchObject([
         {
@@ -587,7 +587,7 @@ describe("mobile cloud link environment client", () => {
       );
 
       const records = yield* withCloudServices(
-        listCloudEnvironmentsWithStatus({ clerkToken: "clerk-token" }),
+        listCloudEnvironmentsWithStatus({ accountToken: "account-token" }),
       );
       expect(records).toMatchObject([
         {
@@ -619,7 +619,7 @@ describe("mobile cloud link environment client", () => {
 
         const error = yield* withCloudServices(
           linkEnvironmentToCloud({
-            clerkToken: "clerk-token",
+            accountToken: "account-token",
             connection: savedConnection,
           }),
         ).pipe(Effect.flip);
@@ -651,7 +651,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         linkEnvironmentToCloud({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: savedConnection,
         }),
       ).pipe(Effect.flip);
@@ -688,7 +688,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         linkEnvironmentToCloud({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: savedConnection,
         }),
       ).pipe(Effect.flip);
@@ -725,7 +725,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         linkEnvironmentToCloud({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: savedConnection,
         }),
       ).pipe(Effect.flip);
@@ -763,7 +763,7 @@ describe("mobile cloud link environment client", () => {
 
       yield* withCloudServices(
         linkEnvironmentToCloud({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: savedConnection,
         }),
       );
@@ -818,7 +818,7 @@ describe("mobile cloud link environment client", () => {
 
       yield* withCloudServices(
         linkEnvironmentToCloudWithPreference({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: savedConnection,
           liveActivitiesEnabled: true,
         }),
@@ -882,7 +882,7 @@ describe("mobile cloud link environment client", () => {
 
         const connection = yield* withCloudServices(
           connectCloudEnvironment({
-            clerkToken: "clerk-token",
+            accountToken: "account-token",
             environment: {
               environmentId: EnvironmentId.make("env-1"),
               label: "Desktop",
@@ -968,7 +968,7 @@ describe("mobile cloud link environment client", () => {
 
       const connection = yield* withCloudServices(
         refreshCloudEnvironmentConnection({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           connection: {
             environmentId: EnvironmentId.make("env-1"),
             environmentLabel: "Desktop",
@@ -1018,7 +1018,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         connectCloudEnvironment({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           environment: {
             environmentId: EnvironmentId.make("env-1"),
             label: "Desktop",
@@ -1061,7 +1061,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         connectCloudEnvironment({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           environment: {
             environmentId: EnvironmentId.make("env-1"),
             label: "Desktop",
@@ -1107,7 +1107,7 @@ describe("mobile cloud link environment client", () => {
 
       const error = yield* withCloudServices(
         connectCloudEnvironment({
-          clerkToken: "clerk-token",
+          accountToken: "account-token",
           environment: {
             environmentId: EnvironmentId.make("env-1"),
             label: "Desktop",
@@ -1161,7 +1161,7 @@ describe("mobile cloud link environment client", () => {
 
         const error = yield* withCloudServices(
           connectCloudEnvironment({
-            clerkToken: "clerk-token",
+            accountToken: "account-token",
             environment: {
               environmentId: EnvironmentId.make("env-1"),
               label: "Desktop",

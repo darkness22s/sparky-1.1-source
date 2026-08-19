@@ -15,14 +15,13 @@ import {
   createBuildConfig,
   DESKTOP_ASAR_UNPACK,
   InvalidMacPasskeyRpDomainError,
-  InvalidMacPasskeyPublishableKeyError,
+  InvalidMacPasskeyAuthUrlError,
   InvalidMockUpdateServerPortError,
   isMacPasskeySigningConfigurationError,
   LinuxIconResizeError,
   MacPasskeySigningConfigurationResolutionError,
   MissingMacPasskeyProvisioningProfileError,
   renderMacPasskeyEntitlements,
-  resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
   resolveDesktopRuntimeDependencies,
   resolveFffNativeDependencies,
@@ -353,17 +352,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
   });
 
-  it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
+  it("derives macOS passkey signing configuration from the Neon Auth URL", () => {
     const configuration = resolveMacPasskeySigningConfiguration({
       T3CODE_APPLE_TEAM_ID: "abc1234567",
       T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+      T3CODE_NEON_AUTH_URL: "https://auth.example.test",
     });
 
     assert.deepStrictEqual(configuration, {
       appId: "com.sparky.desktop",
       teamId: "ABC1234567",
-      rpDomains: ["example.clerk.accounts.dev"],
+      rpDomains: ["auth.example.test"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
     });
   });
@@ -372,18 +371,20 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     const configuration = resolveMacPasskeySigningConfiguration({
       T3CODE_APPLE_TEAM_ID: "ABC1234567",
       T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS:
-        " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
+      T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS:
+        " Auth.Example.com,auth.example.test,login.example.com ",
     });
     const entitlements = renderMacPasskeyEntitlements(configuration);
 
     assert.deepStrictEqual(configuration.rpDomains, [
-      "clerk.example.com",
-      "example.clerk.accounts.dev",
+      "auth.example.com",
+      "auth.example.test",
+      "login.example.com",
     ]);
     assert.include(entitlements, "<string>ABC1234567.com.sparky.desktop</string>");
-    assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
-    assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
+    assert.include(entitlements, "<string>webcredentials:auth.example.com</string>");
+    assert.include(entitlements, "<string>webcredentials:auth.example.test</string>");
+    assert.include(entitlements, "<string>webcredentials:login.example.com</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
   });
 
@@ -399,7 +400,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     const missingProfileError = captureError({
       T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev",
+      T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS: "auth.example.test",
     });
     assert.instanceOf(missingProfileError, MissingMacPasskeyProvisioningProfileError);
     assert.equal(
@@ -408,11 +409,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     );
 
     const unsafeDomain =
-      "https://domain-user:domain-secret@example.clerk.accounts.dev/path?token=query-secret";
+      "https://domain-user:domain-secret@auth.example.test/path?token=query-secret";
     const invalidDomainError = captureError({
       T3CODE_APPLE_TEAM_ID: "ABC1234567",
       T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS: unsafeDomain,
+      T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS: unsafeDomain,
     });
     assert.instanceOf(invalidDomainError, InvalidMacPasskeyRpDomainError);
     assert.equal(invalidDomainError.reason, "scheme-not-allowed");
@@ -430,29 +431,29 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         resolveMacPasskeySigningConfiguration({
           T3CODE_APPLE_TEAM_ID: "ABC1234567",
           T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-          T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
+          T3CODE_NEON_AUTH_PASSKEY_RP_DOMAINS: "auth.example.test:8443",
         }),
       /Invalid passkey RP domain/u,
     );
-    const invalidPublishableKeyError = captureError({
+    const invalidAuthUrlError = captureError({
       T3CODE_APPLE_TEAM_ID: "ABC1234567",
       T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: "pk_test_%",
+      T3CODE_NEON_AUTH_URL: "not-a-url",
     });
-    assert.instanceOf(invalidPublishableKeyError, InvalidMacPasskeyPublishableKeyError);
-    assert.ok(invalidPublishableKeyError.cause);
-    assert.equal(invalidPublishableKeyError.message, "T3CODE_CLERK_PUBLISHABLE_KEY is invalid.");
-    assert.notProperty(invalidPublishableKeyError, "publishableKey");
-    assert.notInclude(invalidPublishableKeyError.message, "pk_test_%");
+    assert.instanceOf(invalidAuthUrlError, InvalidMacPasskeyAuthUrlError);
+    assert.ok(invalidAuthUrlError.cause);
+    assert.equal(invalidAuthUrlError.message, "T3CODE_NEON_AUTH_URL is invalid.");
+    assert.notProperty(invalidAuthUrlError, "neonAuthUrl");
+    assert.notInclude(invalidAuthUrlError.message, "not-a-url");
   });
 
   it("preserves known passkey signing configuration errors at the build boundary", () => {
-    const decodingCause = new Error("publishable-key-decode-failed");
-    const knownError = new InvalidMacPasskeyPublishableKeyError({ cause: decodingCause });
+    const decodingCause = new Error("auth-url-parse-failed");
+    const knownError = new InvalidMacPasskeyAuthUrlError({ cause: decodingCause });
     const error = MacPasskeySigningConfigurationResolutionError.fromCause(knownError);
 
     assert.strictEqual(error, knownError);
-    assert.instanceOf(error, InvalidMacPasskeyPublishableKeyError);
+    assert.instanceOf(error, InvalidMacPasskeyAuthUrlError);
     assert.strictEqual(error.cause, decodingCause);
     assert.isTrue(isMacPasskeySigningConfigurationError(error));
   });
@@ -523,26 +524,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "@ff-labs/fff-bin-linux-arm64-gnu": "0.9.4",
       "@ff-labs/fff-bin-linux-arm64-musl": "0.9.4",
     });
-  });
-
-  it("resolves target Clerk passkey native artifacts", () => {
-    assert.deepStrictEqual(resolveClerkPasskeyNativeArtifacts("mac", "universal"), [
-      {
-        packageName: "@clerk/electron-passkeys-darwin-arm64",
-        binaryFileName: "electron-passkeys.darwin-arm64.node",
-      },
-      {
-        packageName: "@clerk/electron-passkeys-darwin-x64",
-        binaryFileName: "electron-passkeys.darwin-x64.node",
-      },
-    ]);
-    assert.deepStrictEqual(resolveClerkPasskeyNativeArtifacts("win", "x64"), [
-      {
-        packageName: "@clerk/electron-passkeys-win32-x64-msvc",
-        binaryFileName: "electron-passkeys.win32-x64-msvc.node",
-      },
-    ]);
-    assert.deepStrictEqual(resolveClerkPasskeyNativeArtifacts("linux", "x64"), []);
   });
 
   it("falls back to the default mock update port when the configured port is blank", () => {

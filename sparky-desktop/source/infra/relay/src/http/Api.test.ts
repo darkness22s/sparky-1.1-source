@@ -1,4 +1,4 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
+import { jwtVerify } from "jose";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import * as Context from "effect/Context";
@@ -29,9 +29,9 @@ import {
 import * as RelayConfiguration from "../Config.ts";
 import * as EnvironmentCredentials from "../environments/EnvironmentCredentials.ts";
 
-vi.mock("@clerk/backend", () => ({
-  createClerkClient: vi.fn(),
-  verifyToken: vi.fn(),
+vi.mock("jose", () => ({
+  createRemoteJWKSet: vi.fn(() => ({})),
+  jwtVerify: vi.fn(),
 }));
 
 const relaySettings: RelayConfiguration.RelayConfiguration["Service"] = {
@@ -43,9 +43,9 @@ const relaySettings: RelayConfiguration.RelayConfiguration["Service"] = {
     bundleId: "com.example.t3",
     environment: "sandbox",
   },
-  clerkSecretKey: Redacted.make("clerk-secret-key"),
-  clerkPublishableKey: "pk_test_test",
-  clerkJwtAudience: "t3-code-relay",
+  neonAuthJwksUrl: "https://auth.example.test/.well-known/jwks.json",
+  neonAuthIssuer: "https://auth.example.test",
+  neonAuthAudience: "sparky-relay",
   apnsDeliveryJobSigningSecret: Redacted.make("apns-delivery-secret"),
   cloudMintPrivateKey: Redacted.make("cloud-mint-private-key"),
   cloudMintPublicKey: "cloud-mint-public-key",
@@ -54,58 +54,25 @@ const relaySettings: RelayConfiguration.RelayConfiguration["Service"] = {
 };
 
 describe("relay client authentication", () => {
-  it.effect("preserves the existing Clerk session JWT path", () =>
+  it.effect("verifies Neon Auth bearer sessions with the configured issuer and audience", () =>
     Effect.gen(function* () {
-      vi.mocked(verifyToken).mockResolvedValue({
-        sub: "user_session",
-        aud: relaySettings.clerkJwtAudience,
+      vi.mocked(jwtVerify).mockResolvedValue({
+        payload: { sub: "user_session" },
       } as never);
 
       expect(yield* verifyRelayClientBearerToken(relaySettings, "session-token")).toEqual({
         sub: "user_session",
-        mode: "clerk_session_bearer",
+        mode: "neon_auth_bearer",
       });
-      expect(verifyToken).toHaveBeenCalledWith("session-token", {
-        secretKey: "clerk-secret-key",
-        audience: relaySettings.clerkJwtAudience,
-      });
-      expect(createClerkClient).not.toHaveBeenCalled();
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          vi.mocked(verifyToken).mockReset();
-          vi.mocked(createClerkClient).mockReset();
+      expect(jwtVerify).toHaveBeenCalledWith(
+        "session-token",
+        expect.anything(),
+        expect.objectContaining({
+          issuer: relaySettings.neonAuthIssuer,
+          audience: relaySettings.neonAuthAudience,
         }),
-      ),
-    ),
-  );
-
-  it.effect("falls back to Clerk OAuth token verification for the headless CLI", () =>
-    Effect.gen(function* () {
-      vi.mocked(verifyToken).mockRejectedValue(new Error("not a session JWT"));
-      vi.mocked(createClerkClient).mockReturnValue({
-        authenticateRequest: vi.fn().mockResolvedValue({
-          isAuthenticated: true,
-          toAuth: () => ({ userId: "user_oauth" }),
-        }),
-      } as never);
-
-      expect(yield* verifyRelayClientBearerToken(relaySettings, "oauth-token")).toEqual({
-        sub: "user_oauth",
-        mode: "clerk_oauth_bearer",
-      });
-      expect(createClerkClient).toHaveBeenCalledWith({
-        secretKey: "clerk-secret-key",
-        publishableKey: "pk_test_test",
-      });
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          vi.mocked(verifyToken).mockReset();
-          vi.mocked(createClerkClient).mockReset();
-        }),
-      ),
-    ),
+      );
+    }).pipe(Effect.ensuring(Effect.sync(() => vi.mocked(jwtVerify).mockReset()))),
   );
 });
 

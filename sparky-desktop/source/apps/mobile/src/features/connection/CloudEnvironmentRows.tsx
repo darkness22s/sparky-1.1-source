@@ -1,4 +1,3 @@
-import { useAuth } from "@clerk/expo";
 import { SymbolView } from "../../components/AppSymbol";
 import {
   connectionStatusText,
@@ -21,6 +20,7 @@ import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { useThemeColor } from "../../lib/useThemeColor";
 import type { ConnectedEnvironmentSummary } from "../../state/remote-runtime-types";
 import { availableCloudEnvironmentPresentation } from "../cloud/cloudEnvironmentPresentation";
+import { useAccountAuth } from "../cloud/AccountAuthProvider";
 import { ConnectionStatusDot } from "./ConnectionStatusDot";
 import { type RelayEnvironmentView, useConnectionController } from "./useConnectionController";
 
@@ -42,7 +42,7 @@ export function CloudEnvironmentRows(props: {
    */
   readonly showHeader?: boolean;
 }) {
-  const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
+  const { isSignedIn } = useAccountAuth();
   const controller = useConnectionController();
   const iconColor = useThemeColor("--color-icon");
   const availableCloudEnvironments =

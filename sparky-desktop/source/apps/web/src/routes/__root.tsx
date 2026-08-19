@@ -34,6 +34,8 @@ import { useUiStateStore } from "../uiStateStore";
 import { syncBrowserChromeTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
+import { HostedAccountGate } from "../account/HostedAccountGate";
+import { hasNeonAuthConfig } from "../account/neonAuth";
 import { isHostedStaticApp } from "../hostedPairing";
 import { shellEnvironment } from "../state/shell";
 import { useAtomValue } from "@effect/atom-react";
@@ -52,6 +54,13 @@ import {
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
+    if (location.pathname === "/onboarding") {
+      return {
+        authGateState: {
+          status: "account-onboarding",
+        } as const,
+      };
+    }
     if (isHostedStaticApp(new URL(window.location.href))) {
       return {
         authGateState: {
@@ -103,7 +112,7 @@ function RootRouteView() {
     </CommandPalette>
   );
 
-  return (
+  const renderedApp = (
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
@@ -115,6 +124,12 @@ function RootRouteView() {
         <OnboardingGate />
       </AnchoredToastProvider>
     </ToastProvider>
+  );
+
+  return authGateState.status === "hosted-static" && hasNeonAuthConfig ? (
+    <HostedAccountGate appShell={renderedApp} />
+  ) : (
+    renderedApp
   );
 }
 

@@ -1,5 +1,4 @@
 import { NativeHeaderToolbar } from "../../native/StackHeader";
-import { useAuth } from "@clerk/expo";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, View } from "react-native";
@@ -13,6 +12,7 @@ import { CloudEnvironmentRows } from "../connection/CloudEnvironmentRows";
 import { splitEnvironmentSections } from "../connection/environmentSections";
 import { useConnectionController } from "../connection/useConnectionController";
 import { optOutOfConnectOnboarding } from "./connectOnboardingOptOut";
+import { useAccountAuth } from "./AccountAuthProvider";
 import { hasCloudPublicConfig } from "./publicConfig";
 
 /**
@@ -44,7 +44,7 @@ export function ConnectOnboardingRouteScreen() {
 function ConfiguredConnectOnboardingRouteScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
+  const { isSignedIn, userId } = useAccountAuth();
   const { connectedEnvironments, onReconnectEnvironment } = useRemoteConnections();
   const { refreshRelayEnvironments } = useConnectionController();
   const { connectedCloudEnvironments } = splitEnvironmentSections({
@@ -116,7 +116,7 @@ function ConfiguredConnectOnboardingRouteScreen() {
         ) : (
           <View collapsable={false} className="rounded-[24px] bg-card p-5">
             <Text className="text-sm leading-normal text-foreground-muted">
-              Sign in to your T3 account to set up Sparky Cloud.
+              Sign in to your Sparky account to set up Sparky Cloud.
             </Text>
           </View>
         )}

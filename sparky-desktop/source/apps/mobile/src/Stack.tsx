@@ -17,7 +17,7 @@ import { useResolveClassNames } from "uniwind";
 import { AppText as Text } from "./components/AppText";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
-import { ClerkSettingsSheetDetentProvider } from "./features/cloud/ClerkSettingsSheetDetent";
+import { AccountSettingsSheetDetentProvider } from "./features/cloud/AccountSettingsSheetDetent";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
 import { ThreadFilesTreeScreen, ThreadFileScreen } from "./features/files/ThreadFilesRouteScreen";
@@ -321,11 +321,11 @@ function RootStackLayout(props: {
   return (
     <HardwareKeyboardCommandProvider pathname={pathname}>
       <ShowcaseCaptureCoordinator pathname={pathname} />
-      <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
+      <AccountSettingsSheetDetentProvider initiallyExpanded={false}>
         <AdaptiveWorkspaceLayout pathname={workspacePathname}>
           {props.children}
         </AdaptiveWorkspaceLayout>
-      </ClerkSettingsSheetDetentProvider>
+      </AccountSettingsSheetDetentProvider>
     </HardwareKeyboardCommandProvider>
   );
 }

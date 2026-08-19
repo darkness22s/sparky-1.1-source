@@ -134,9 +134,9 @@ export default class Api extends Cloudflare.Worker<Api>()(
     const axiomIngestToken = yield* observability.workerIngestToken.token;
     const axiomTracesEndpoint = yield* observability.traces.otelTracesEndpoint;
 
-    const clerkSecretKey = yield* Config.redacted("CLERK_SECRET_KEY");
-    const clerkPublishableKey = yield* Config.string("CLERK_PUBLISHABLE_KEY");
-    const clerkJwtAudience = yield* Config.string("CLERK_JWT_AUDIENCE");
+    const neonAuthJwksUrl = yield* Config.string("NEON_AUTH_JWKS_URL");
+    const neonAuthIssuer = yield* Config.string("NEON_AUTH_ISSUER");
+    const neonAuthAudience = yield* Config.string("NEON_AUTH_AUDIENCE");
 
     const cloudMintPrivateKey = yield* cloudMintKeyPair.privateKey;
     const cloudMintPublicKey = yield* cloudMintKeyPair.publicKey;
@@ -165,9 +165,9 @@ export default class Api extends Cloudflare.Worker<Api>()(
           privateKey: apnsPrivateKey,
         },
         apnsDeliveryJobSigningSecret: yield* apnsDeliveryJobSigningSecret,
-        clerkSecretKey,
-        clerkPublishableKey,
-        clerkJwtAudience,
+        neonAuthJwksUrl,
+        neonAuthIssuer,
+        neonAuthAudience,
         cloudMintPrivateKey: yield* cloudMintPrivateKey,
         cloudMintPublicKey: yield* cloudMintPublicKey,
         managedEndpointBaseDomain: yield* managedEndpointZoneName,

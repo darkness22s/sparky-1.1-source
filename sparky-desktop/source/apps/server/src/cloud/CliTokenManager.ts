@@ -26,7 +26,7 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 
 import {
   buildConnectAuthorizeRequestUrl,
-  buildConnectClerkAuthorizeUrl,
+  buildConnectAuthorizeUrl,
   checkConnectAuthCode,
   connectCallbackUrl,
 } from "@sparky/shared/connectAuth";
@@ -301,7 +301,7 @@ export const outOfBandOAuthLogin = Effect.fn("cloud.cli_token.out_of_band_oauth_
       return typeof checked === "string" ? Effect.fail(checked) : Effect.succeed(value);
     },
   }).pipe(
-    // Clerk authorization codes expire on this horizon anyway; matching the
+    // Neon Auth authorization codes expire on this horizon anyway; matching the
     // loopback flow's timeout turns an abandoned prompt into a clear error.
     Effect.timeout(CLOUD_CLI_OAUTH_CALLBACK_TIMEOUT),
     Effect.catchTag("TimeoutError", (cause) =>
@@ -398,7 +398,7 @@ export const make = Effect.gen(function* () {
       ),
       Layer.build,
     );
-    const authorizationUrl = buildConnectClerkAuthorizeUrl({
+    const authorizationUrl = buildConnectAuthorizeUrl({
       authorizationEndpoint: metadata.authorizationEndpoint,
       clientId: metadata.clientId,
       redirectUri: metadata.redirectUri,

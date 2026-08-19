@@ -76,7 +76,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
-import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerPrimaryActions, VoiceDictationButton } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -131,6 +131,7 @@ import { formatProviderSkillDisplayName } from "../../providerSkillPresentation"
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
+import { useVoiceDictation } from "./voiceDictation";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 
@@ -361,6 +362,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
+  dictationSupported: boolean;
+  isDictating: boolean;
+  onToggleDictation: () => void;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -388,6 +392,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
+        dictationSupported={props.dictationSupported}
+        isDictating={props.isDictating}
+        onToggleDictation={props.onToggleDictation}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
@@ -927,6 +934,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const mobileComposerExpandReleaseFrameRef = useRef<number | null>(null);
   const mobileComposerExpandInFlightRef = useRef(false);
   const dragDepthRef = useRef(0);
+  const dictationSessionRef = useRef<{ start: number; text: string } | null>(null);
+  const stopDictationRef = useRef<() => void>(() => {});
 
   // ------------------------------------------------------------------
   // Derived: composer send state
@@ -1731,6 +1740,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const submitComposer = useCallback(
     (event?: { preventDefault: () => void }) => {
+      stopDictationRef.current();
       onSend(event);
       if (shouldBlurMobileComposerOnSubmit()) {
         blurMobileComposerAfterSend();
@@ -1921,6 +1931,90 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       needsLeadingSpace ? ` ${text}` : text,
     );
   };
+
+  const prepareDictation = useCallback(() => {
+    if (
+      isConnecting ||
+      isComposerApprovalState ||
+      pendingUserInputs.length > 0 ||
+      projectSelectionRequired ||
+      composerSendState.hasSendableContent
+    ) {
+      return false;
+    }
+
+    const snapshot = readComposerSnapshot();
+    if (snapshot.value.trim().length > 0) {
+      return false;
+    }
+    dictationSessionRef.current = { start: snapshot.value.length, text: "" };
+    return true;
+  }, [
+    composerSendState.hasSendableContent,
+    isComposerApprovalState,
+    isConnecting,
+    pendingUserInputs.length,
+    projectSelectionRequired,
+    readComposerSnapshot,
+  ]);
+
+  const applyDictationTranscript = useCallback(
+    (nextText: string) => {
+      const session = dictationSessionRef.current;
+      if (!session) {
+        return;
+      }
+
+      const currentPrompt = promptRef.current;
+      const currentDictation = currentPrompt.slice(
+        session.start,
+        session.start + session.text.length,
+      );
+      if (currentDictation !== session.text) {
+        dictationSessionRef.current = null;
+        stopDictationRef.current();
+        return;
+      }
+
+      const replaced = applyPromptReplacement(
+        session.start,
+        session.start + session.text.length,
+        nextText,
+        { expectedText: session.text, focusEditorAfterReplace: false },
+      );
+      if (!replaced) {
+        dictationSessionRef.current = null;
+        stopDictationRef.current();
+        return;
+      }
+      session.text = nextText;
+    },
+    [applyPromptReplacement, promptRef],
+  );
+
+  const handleDictationError = useCallback((message: string) => {
+    toastManager.add({
+      type: "error",
+      title: "Voice dictation",
+      description: message,
+    });
+  }, []);
+
+  const dictation = useVoiceDictation({
+    onStart: prepareDictation,
+    onStop: () => {
+      dictationSessionRef.current = null;
+    },
+    onTranscript: applyDictationTranscript,
+    onError: handleDictationError,
+  });
+  stopDictationRef.current = dictation.stop;
+
+  useEffect(() => {
+    if (phase === "running" || isSendBusy) {
+      dictation.stop();
+    }
+  }, [dictation.stop, isSendBusy, phase]);
 
   // File-tree drags land as mentions. Handled in the capture phase so the
   // editor never sees the drop; the load-bearing rules (native stop, "move"
@@ -2304,27 +2398,44 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     "Type your own answer, or leave this blank to use the selected option"
                   : prompt.trim() || "Ask anything..."}
               </button>
-              <button
-                type="button"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/90 text-primary-foreground disabled:opacity-30"
-                disabled={collapsedComposerPrimaryActionDisabled}
-                aria-label={collapsedComposerPrimaryActionLabel}
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  submitComposer();
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path
-                    d="M8 3L8 13M8 3L4 7M8 3L12 7"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+              {dictation.isListening ||
+              (!prompt.trim() && !composerSendState.hasSendableContent) ? (
+                <VoiceDictationButton
+                  isDictating={dictation.isListening}
+                  isSupported={dictation.isSupported}
+                  disabled={
+                    isSendBusy ||
+                    isConnecting ||
+                    environmentUnavailable !== null ||
+                    projectSelectionRequired ||
+                    isPreparingWorktree
+                  }
+                  preserveComposerFocusOnPointerDown
+                  onToggle={dictation.toggle}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/90 text-primary-foreground disabled:opacity-30"
+                  disabled={collapsedComposerPrimaryActionDisabled}
+                  aria-label={collapsedComposerPrimaryActionLabel}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    submitComposer();
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path
+                      d="M8 3L8 13M8 3L4 7M8 3L12 7"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           ) : null}
 
@@ -2493,7 +2604,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     : []
                 }
                 skills={selectedProviderStatus?.skills ?? []}
-                {...(showMobilePendingAnswerActions ? { className: "max-sm:pb-11" } : {})}
+                {...(showMobilePendingAnswerActions || dictation.isListening
+                  ? {
+                      className: cn(
+                        showMobilePendingAnswerActions ? "max-sm:pb-11" : null,
+                        dictation.isListening ? "italic text-muted-foreground/70" : null,
+                      ),
+                    }
+                  : {})}
                 onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                 onChange={onPromptChange}
                 onCommandKeyDown={onComposerCommandKey}
@@ -2648,6 +2766,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   isPreparingWorktree={isPreparingWorktree}
                   hasSendableContent={composerSendState.hasSendableContent}
+                  dictationSupported={dictation.isSupported}
+                  isDictating={dictation.isListening}
+                  onToggleDictation={dictation.toggle}
                   preserveComposerFocusOnPointerDown={isMobileViewport}
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}

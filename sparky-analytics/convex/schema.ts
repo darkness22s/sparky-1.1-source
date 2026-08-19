@@ -13,6 +13,7 @@ const eventKind = v.union(
   v.literal("demo_interaction"),
   v.literal("desktop_render_interaction"),
   v.literal("app_launch"),
+  v.literal("model_request"),
 );
 const channel = v.union(v.literal("release"), v.literal("beta"));
 const releaseStatus = v.union(v.literal("draft"), v.literal("published"));
@@ -50,6 +51,9 @@ export default defineSchema({
     engagedMs: v.optional(v.number()),
     downloadId: v.optional(v.string()),
     requestId: v.optional(v.string()),
+    environmentId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    turnId: v.optional(v.string()),
     platform: v.optional(v.string()),
     release: v.optional(v.string()),
     file: v.optional(v.string()),
@@ -64,6 +68,15 @@ export default defineSchema({
     timezone: v.optional(v.string()),
     viewport: v.optional(v.string()),
     status: v.optional(v.number()),
+    model: v.optional(v.string()),
+    provider: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    cachedInputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    reasoningOutputTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+    toolUses: v.optional(v.number()),
+    costUsd: v.optional(v.number()),
   })
     .index("by_session_id", ["sessionId"])
     .index("by_at", ["at"])
@@ -107,6 +120,7 @@ export default defineSchema({
     engagedMs: v.number(),
     appUsers: v.number(),
     appLaunches: v.number(),
+    modelRequests: v.optional(v.number()),
   }).index("by_date", ["date"]),
   metricTotals: defineTable({
     key: v.string(),

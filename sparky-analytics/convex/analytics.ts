@@ -14,6 +14,7 @@ const eventKindValidator = v.union(
   v.literal("demo_interaction"),
   v.literal("desktop_render_interaction"),
   v.literal("app_launch"),
+  v.literal("model_request"),
 );
 const visibleKindValidator = v.union(
   v.literal("page_view"),
@@ -25,6 +26,7 @@ const visibleKindValidator = v.union(
   v.literal("demo_interaction"),
   v.literal("desktop_render_interaction"),
   v.literal("app_launch"),
+  v.literal("model_request"),
 );
 
 const metricShape = {
@@ -40,11 +42,15 @@ const metricShape = {
   engagedMs: v.number(),
   appUsers: v.number(),
   appLaunches: v.number(),
+  modelRequests: v.number(),
 };
 
 const eventMetadataArgs = {
   downloadId: v.optional(v.string()),
   requestId: v.optional(v.string()),
+  environmentId: v.optional(v.string()),
+  threadId: v.optional(v.string()),
+  turnId: v.optional(v.string()),
   platform: v.optional(v.string()),
   release: v.optional(v.string()),
   file: v.optional(v.string()),
@@ -59,6 +65,15 @@ const eventMetadataArgs = {
   timezone: v.optional(v.string()),
   viewport: v.optional(v.string()),
   status: v.optional(v.number()),
+  model: v.optional(v.string()),
+  provider: v.optional(v.string()),
+  inputTokens: v.optional(v.number()),
+  cachedInputTokens: v.optional(v.number()),
+  outputTokens: v.optional(v.number()),
+  reasoningOutputTokens: v.optional(v.number()),
+  totalTokens: v.optional(v.number()),
+  toolUses: v.optional(v.number()),
+  costUsd: v.optional(v.number()),
 };
 
 async function requireAdmin(ctx: Pick<QueryCtx, "auth">) {
@@ -70,6 +85,14 @@ async function requireAdmin(ctx: Pick<QueryCtx, "auth">) {
 
 function utcDate(timestamp: number) {
   return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function isBackgroundUpdatePath(path: string) {
+  return path === "/get/updates" || path.startsWith("/get/updates/");
+}
+
+function isBackgroundUpdateEvent(event: { source: string; path: string }) {
+  return event.source === "edge" && isBackgroundUpdatePath(event.path);
 }
 
 async function incrementTotal(ctx: MutationCtx, key: string, amount: number) {
@@ -95,6 +118,7 @@ async function incrementDaily(ctx: MutationCtx, date: string, increments: Partia
       engagedMs: increments.engagedMs ?? 0,
       appUsers: increments.appUsers ?? 0,
       appLaunches: increments.appLaunches ?? 0,
+modelRequests: increments.modelRequests ?? 0,
     });
     return;
   }
@@ -120,6 +144,7 @@ export const recordEvent = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.source === "edge" && isBackgroundUpdatePath(args.path)) return null;
     const at = Math.min(Date.now() + 60_000, Math.max(0, args.at));
     const date = utcDate(at);
     const daily: Partial<Record<keyof typeof metricShape, number>> = {};
@@ -184,6 +209,9 @@ export const recordEvent = internalMutation({
         at,
         downloadId: args.downloadId?.slice(0, 100),
         requestId: args.requestId?.slice(0, 100),
+        environmentId: args.environmentId?.slice(0, 200),
+        threadId: args.threadId?.slice(0, 200),
+        turnId: args.turnId?.slice(0, 200),
         platform: args.platform?.slice(0, 80),
         release: args.release?.slice(0, 80),
         file: args.file?.slice(0, 160),
@@ -198,6 +226,15 @@ export const recordEvent = internalMutation({
         timezone: args.timezone?.slice(0, 80),
         viewport: args.viewport?.slice(0, 40),
         status: args.status,
+        model: args.model?.slice(0, 200),
+        provider: args.provider?.slice(0, 100),
+        inputTokens: args.inputTokens,
+        cachedInputTokens: args.cachedInputTokens,
+        outputTokens: args.outputTokens,
+        reasoningOutputTokens: args.reasoningOutputTokens,
+        totalTokens: args.totalTokens,
+        toolUses: args.toolUses,
+        costUsd: args.costUsd,
       });
       const key = args.kind === "page_view" ? "pageViews"
         : args.kind === "download" ? "downloads"
@@ -206,7 +243,8 @@ export const recordEvent = internalMutation({
               : args.kind === "download_request" ? "downloadRequests"
                 : args.kind === "download_error" ? "downloadErrors"
                   : args.kind === "demo_interaction" || args.kind === "desktop_render_interaction" ? "demoInteractions"
-                    : "appLaunches";
+                                         : args.kind === "model_request" ? "modelRequests"
+                       : "appLaunches";
       daily[key] = 1;
       await incrementTotal(ctx, key, 1);
 
@@ -224,6 +262,54 @@ export const recordEvent = internalMutation({
 
     await incrementDaily(ctx, date, daily);
     return null;
+  },
+});
+
+export const repairLegacyUpdaterAnalytics = internalMutation({
+  args: {},
+  returns: v.object({
+    alreadyRepaired: v.boolean(),
+    repairedRequests: v.number(),
+    repairedErrors: v.number(),
+  }),
+  handler: async (ctx) => {
+    const repairKey = "repair:legacy-updater-analytics:v1";
+    const existingRepair = await ctx.db.query("metricTotals").withIndex("by_key", (q) => q.eq("key", repairKey)).unique();
+    if (existingRepair) return { alreadyRepaired: true, repairedRequests: 0, repairedErrors: 0 };
+
+    const dailyDeltas = new Map<string, { downloadRequests: number; downloadErrors: number }>();
+    let repairedRequests = 0;
+    let repairedErrors = 0;
+    for (const event of await ctx.db.query("events").collect()) {
+      if (!isBackgroundUpdateEvent(event)) continue;
+      if (event.kind !== "download_request" && event.kind !== "download_error") continue;
+      const delta = dailyDeltas.get(utcDate(event.at)) ?? { downloadRequests: 0, downloadErrors: 0 };
+      if (event.kind === "download_request") {
+        delta.downloadRequests += 1;
+        repairedRequests += 1;
+      } else {
+        delta.downloadErrors += 1;
+        repairedErrors += 1;
+      }
+      dailyDeltas.set(utcDate(event.at), delta);
+    }
+
+    for (const [date, delta] of dailyDeltas) {
+      const row = await ctx.db.query("dailyMetrics").withIndex("by_date", (q) => q.eq("date", date)).unique();
+      if (!row) continue;
+      await ctx.db.patch(row._id, {
+        downloadRequests: Math.max(0, (row.downloadRequests ?? 0) - delta.downloadRequests),
+        downloadErrors: Math.max(0, (row.downloadErrors ?? 0) - delta.downloadErrors),
+      });
+    }
+
+    for (const [key, amount] of [["downloadRequests", repairedRequests], ["downloadErrors", repairedErrors]] as const) {
+      if (amount === 0) continue;
+      const row = await ctx.db.query("metricTotals").withIndex("by_key", (q) => q.eq("key", key)).unique();
+      if (row) await ctx.db.patch(row._id, { value: Math.max(0, row.value - amount) });
+    }
+    await ctx.db.insert("metricTotals", { key: repairKey, value: 1 });
+    return { alreadyRepaired: false, repairedRequests, repairedErrors };
   },
 });
 
@@ -251,6 +337,15 @@ export const dashboard = query({
       country: v.optional(v.string()),
       colo: v.optional(v.string()),
       status: v.optional(v.number()),
+      model: v.optional(v.string()),
+      provider: v.optional(v.string()),
+      inputTokens: v.optional(v.number()),
+      cachedInputTokens: v.optional(v.number()),
+      outputTokens: v.optional(v.number()),
+      reasoningOutputTokens: v.optional(v.number()),
+      totalTokens: v.optional(v.number()),
+      toolUses: v.optional(v.number()),
+      costUsd: v.optional(v.number()),
     })),
     downloadBreakdown: v.array(v.object({ platform: v.string(), clicks: v.number(), requests: v.number(), errors: v.number() })),
     environmentBreakdown: v.array(v.object({ browser: v.string(), os: v.string(), device: v.string(), visitors: v.number() })),
@@ -271,6 +366,7 @@ export const dashboard = query({
       engagedMs: 0,
       appUsers: 0,
       appLaunches: 0,
+modelRequests: 0,
     };
     for (const row of totalRows) {
       if (row.key in totals) totals[row.key as keyof typeof totals] = row.value;
@@ -278,7 +374,7 @@ export const dashboard = query({
 
     const daily = (await ctx.db.query("dailyMetrics").order("desc").take(30))
       .reverse()
-      .map(({ date, uniqueVisitors, sessions, pageViews, downloads, downloadClicks, downloadPageOpens, downloadRequests, downloadErrors, demoInteractions, engagedMs, appUsers, appLaunches }) => ({
+      .map(({ date, uniqueVisitors, sessions, pageViews, downloads, downloadClicks, downloadPageOpens, downloadRequests, downloadErrors, demoInteractions, engagedMs, appUsers, appLaunches, modelRequests }) => ({
         date,
         uniqueVisitors: uniqueVisitors ?? 0,
         sessions: sessions ?? 0,
@@ -292,13 +388,15 @@ export const dashboard = query({
         engagedMs: engagedMs ?? 0,
         appUsers: appUsers ?? 0,
         appLaunches: appLaunches ?? 0,
+modelRequests: modelRequests ?? 0,
       }));
 
     const events = await ctx.db.query("events").order("desc").take(5000);
-    const recent = events
+    const visibleEvents = events.filter((event) => !isBackgroundUpdateEvent(event));
+    const recent = visibleEvents
       .filter((event): event is typeof event & { kind: Exclude<typeof event.kind, "heartbeat"> } => event.kind !== "heartbeat")
       .slice(0, 24)
-      .map(({ kind, source, path, label, at, downloadId, requestId, platform, release, file, outcome, referrer, browser, os, device, country, colo, status }) => ({
+      .map(({ kind, source, path, label, at, downloadId, requestId, platform, release, file, outcome, referrer, browser, os, device, country, colo, status, model, provider, inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens, totalTokens, toolUses, costUsd }) => ({
         kind,
         source,
         path,
@@ -317,10 +415,19 @@ export const dashboard = query({
         country,
         colo,
         status,
+        model,
+        provider,
+        inputTokens,
+        cachedInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+        toolUses,
+        costUsd,
       }));
 
     const downloadGroups = new Map<string, { platform: string; clicks: number; requests: number; errors: number }>();
-    for (const event of events) {
+    for (const event of visibleEvents) {
       const isClick = event.kind === "download" || event.kind === "download_click";
       const isRequest = event.kind === "download_request";
       const isError = event.kind === "download_error";

@@ -259,7 +259,7 @@ function ensureConnectEndpointMatchesEnvironment(input: {
 
 interface LinkEnvironmentToCloudInput {
   readonly connection: SavedRemoteConnection;
-  readonly clerkToken: string;
+  readonly accountToken: string;
 }
 
 type LinkEnvironmentToCloudRequirements =
@@ -286,7 +286,7 @@ export function linkEnvironmentToCloudWithPreference(
     const liveActivitiesEnabled = input.liveActivitiesEnabled;
     const challenge = yield* relayClient
       .createEnvironmentLinkChallenge({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
         payload: {
           notificationsEnabled: true,
           liveActivitiesEnabled,
@@ -316,7 +316,7 @@ export function linkEnvironmentToCloudWithPreference(
       .pipe(Effect.mapError(cloudEnvironmentLinkError("Could not obtain environment link proof.")));
     const link = yield* relayClient
       .linkEnvironment({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
         payload: {
           deviceId,
           proof,
@@ -372,7 +372,7 @@ export function linkEnvironmentToCloud(
 }
 
 export function listCloudEnvironments(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
 }): Effect.Effect<
   ReadonlyArray<RelayClientEnvironmentRecord>,
   CloudEnvironmentLinkError,
@@ -384,14 +384,14 @@ export function listCloudEnvironments(input: {
 
     return yield* relayClient
       .listEnvironments({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
       })
       .pipe(Effect.mapError(decodedRelayClientError(`${relayUrl}/v1/environments failed`)));
   });
 }
 
 export function getCloudEnvironmentStatus(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
   readonly environment: RelayClientEnvironmentRecord;
   readonly relayScopes?: ReadonlyArray<RelayDpopAccessTokenScope>;
 }): Effect.Effect<
@@ -404,7 +404,7 @@ export function getCloudEnvironmentStatus(input: {
     const relayClient = yield* ManagedRelay.ManagedRelayClient;
     const status = yield* relayClient
       .getEnvironmentStatus({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
         scopes: input.relayScopes ?? [RelayEnvironmentStatusScope],
         environmentId: input.environment.environmentId,
       })
@@ -431,7 +431,7 @@ export function cloudEnvironmentsPendingStatus(
 }
 
 export function loadCloudEnvironmentStatuses(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
   readonly environments: ReadonlyArray<RelayClientEnvironmentRecord>;
 }): Effect.Effect<
   ReadonlyArray<CloudEnvironmentRecordWithStatus>,
@@ -442,7 +442,7 @@ export function loadCloudEnvironmentStatuses(input: {
     input.environments,
     (environment) =>
       getCloudEnvironmentStatus({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
         environment,
         relayScopes: RELAY_STATUS_AND_CONNECT_SCOPES,
       }).pipe(
@@ -464,7 +464,7 @@ export function loadCloudEnvironmentStatuses(input: {
 }
 
 export function listCloudEnvironmentsWithStatus(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
 }): Effect.Effect<
   ReadonlyArray<CloudEnvironmentRecordWithStatus>,
   CloudEnvironmentLinkError,
@@ -473,7 +473,7 @@ export function listCloudEnvironmentsWithStatus(input: {
   return Effect.gen(function* () {
     const environments = yield* listCloudEnvironments(input);
     return yield* loadCloudEnvironmentStatuses({
-      clerkToken: input.clerkToken,
+      accountToken: input.accountToken,
       environments,
     });
   });
@@ -490,7 +490,7 @@ const loadAgentAwarenessDeviceId = Effect.fn("mobile.cloud.loadAgentAwarenessDev
 
 const connectRelayManagedEnvironment = Effect.fn("mobile.cloud.connectRelayManagedEnvironment")(
   function* (input: {
-    readonly clerkToken: string;
+    readonly accountToken: string;
     readonly environmentId: RelayClientEnvironmentRecord["environmentId"];
     readonly expectedEnvironment?: RelayClientEnvironmentRecord;
   }) {
@@ -501,7 +501,7 @@ const connectRelayManagedEnvironment = Effect.fn("mobile.cloud.connectRelayManag
     const deviceId = yield* loadAgentAwarenessDeviceId();
     const connect = yield* relayClient
       .connectEnvironment({
-        clerkToken: input.clerkToken,
+        accountToken: input.accountToken,
         scopes: [RelayEnvironmentConnectScope],
         environmentId: input.environmentId,
         deviceId,
@@ -573,7 +573,7 @@ const connectRelayManagedEnvironment = Effect.fn("mobile.cloud.connectRelayManag
 );
 
 export function connectCloudEnvironment(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
   readonly environment: RelayClientEnvironmentRecord;
 }): Effect.Effect<
   SavedRemoteConnection,
@@ -584,14 +584,14 @@ export function connectCloudEnvironment(input: {
   | MobileStorage.MobileStorage
 > {
   return connectRelayManagedEnvironment({
-    clerkToken: input.clerkToken,
+    accountToken: input.accountToken,
     environmentId: input.environment.environmentId,
     expectedEnvironment: input.environment,
   });
 }
 
 export function refreshCloudEnvironmentConnection(input: {
-  readonly clerkToken: string;
+  readonly accountToken: string;
   readonly connection: SavedRemoteConnection;
 }): Effect.Effect<
   SavedRemoteConnection,
@@ -602,7 +602,7 @@ export function refreshCloudEnvironmentConnection(input: {
   | MobileStorage.MobileStorage
 > {
   return connectRelayManagedEnvironment({
-    clerkToken: input.clerkToken,
+    accountToken: input.accountToken,
     environmentId: input.connection.environmentId,
   });
 }

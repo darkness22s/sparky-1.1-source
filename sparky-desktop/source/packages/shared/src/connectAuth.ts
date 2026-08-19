@@ -57,7 +57,7 @@ export function connectCallbackUrl(hostedAppUrl: string): string {
   return new URL(CONNECT_CALLBACK_PATH, hostedAppUrl).toString();
 }
 
-export function buildConnectClerkAuthorizeUrl(input: {
+export function buildConnectAuthorizeUrl(input: {
   readonly authorizationEndpoint: string;
   readonly clientId: string;
   readonly redirectUri: string;
@@ -85,7 +85,7 @@ export interface ConnectAuthCode {
  * The single blob the hosted callback page displays and the CLI accepts.
  * Bundling `state` with the authorization code lets the CLI keep the loopback
  * flow's CSRF check without any backend: it verifies the returned state
- * matches the one it generated. Clerk authorization codes and the CLI's
+ * matches the one it generated. Authorization codes and the CLI's
  * base64url states never contain ".".
  */
 export function encodeConnectAuthCode(input: ConnectAuthCode): string {

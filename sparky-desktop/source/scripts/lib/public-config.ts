@@ -5,9 +5,10 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
 export interface T3CodePublicConfig {
-  readonly clerkPublishableKey: string | undefined;
-  readonly clerkJwtTemplate: string | undefined;
-  readonly clerkCliOAuthClientId: string | undefined;
+  readonly neonAuthUrl: string | undefined;
+  readonly neonAuthOAuthAuthorizeUrl: string | undefined;
+  readonly neonAuthCliOAuthClientId: string | undefined;
+  readonly accountApiUrl: string | undefined;
   readonly relayUrl: string | undefined;
   readonly mobileOtlpTracesUrl: string | undefined;
   readonly mobileOtlpTracesDataset: string | undefined;
@@ -38,24 +39,29 @@ export function loadRepoEnv({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
-    ...(config.clerkPublishableKey
+    ...(config.neonAuthUrl
       ? {
-          T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
-          VITE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
-          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
+          T3CODE_NEON_AUTH_URL: config.neonAuthUrl,
+          VITE_NEON_AUTH_URL: config.neonAuthUrl,
+          EXPO_PUBLIC_NEON_AUTH_URL: config.neonAuthUrl,
         }
       : {}),
-    ...(config.clerkJwtTemplate
+    ...(config.neonAuthOAuthAuthorizeUrl
       ? {
-          T3CODE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
-          VITE_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
-          EXPO_PUBLIC_CLERK_JWT_TEMPLATE: config.clerkJwtTemplate,
+          T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL: config.neonAuthOAuthAuthorizeUrl,
+          VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL: config.neonAuthOAuthAuthorizeUrl,
         }
       : {}),
-    ...(config.clerkCliOAuthClientId
+    ...(config.neonAuthCliOAuthClientId
       ? {
-          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
-          VITE_CLERK_CLI_OAUTH_CLIENT_ID: config.clerkCliOAuthClientId,
+          T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID: config.neonAuthCliOAuthClientId,
+          VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID: config.neonAuthCliOAuthClientId,
+        }
+      : {}),
+    ...(config.accountApiUrl
+      ? {
+          T3CODE_ACCOUNT_API_URL: config.accountApiUrl,
+          VITE_ACCOUNT_API_URL: config.accountApiUrl,
         }
       : {}),
     ...(config.relayUrl
@@ -105,22 +111,26 @@ export function loadRepoEnv({
 
 export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
   return {
-    clerkPublishableKey: firstNonEmpty(
+    neonAuthUrl: firstNonEmpty(
       sources,
-      "T3CODE_CLERK_PUBLISHABLE_KEY",
-      "VITE_CLERK_PUBLISHABLE_KEY",
-      "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+      "T3CODE_NEON_AUTH_URL",
+      "VITE_NEON_AUTH_URL",
+      "EXPO_PUBLIC_NEON_AUTH_URL",
     ),
-    clerkJwtTemplate: firstNonEmpty(
+    neonAuthOAuthAuthorizeUrl: firstNonEmpty(
       sources,
-      "T3CODE_CLERK_JWT_TEMPLATE",
-      "VITE_CLERK_JWT_TEMPLATE",
-      "EXPO_PUBLIC_CLERK_JWT_TEMPLATE",
+      "T3CODE_NEON_AUTH_OAUTH_AUTHORIZE_URL",
+      "VITE_NEON_AUTH_OAUTH_AUTHORIZE_URL",
     ),
-    clerkCliOAuthClientId: firstNonEmpty(
+    neonAuthCliOAuthClientId: firstNonEmpty(
       sources,
-      "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID",
-      "VITE_CLERK_CLI_OAUTH_CLIENT_ID",
+      "T3CODE_NEON_AUTH_CLI_OAUTH_CLIENT_ID",
+      "VITE_NEON_AUTH_CLI_OAUTH_CLIENT_ID",
+    ),
+    accountApiUrl: firstNonEmpty(
+      sources,
+      "T3CODE_ACCOUNT_API_URL",
+      "VITE_ACCOUNT_API_URL",
     ),
     relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
     mobileOtlpTracesUrl: firstNonEmpty(

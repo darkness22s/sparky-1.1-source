@@ -59,6 +59,46 @@ test("the desktop updater resolves only known AWS release assets", async () => {
   assert.equal(traversal.status, 404);
 });
 
+test("desktop updater feed checks do not record installer analytics", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (...args) => {
+    calls.push(args);
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const response = await handleRequest(
+      new Request("https://sparky.llc/get/updates/latest.yml"),
+      { ...env, ANALYTICS_ENDPOINT: "https://analytics.example.test/analytics/event" },
+    );
+    assert.equal(response.status, 302);
+    assert.equal(calls.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("public installer redirects remain real installer analytics calls", async () => {
+  const originalFetch = globalThis.fetch;
+  let payload;
+  globalThis.fetch = async (_input, init) => {
+    payload = JSON.parse(init.body);
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const response = await handleRequest(
+      new Request("https://sparky.llc/get?platform=windows&downloadId=click-1"),
+      { ...env, ANALYTICS_ENDPOINT: "https://analytics.example.test/analytics/event" },
+    );
+    assert.equal(response.status, 302);
+    assert.equal(payload.kind, "download_request");
+    assert.equal(payload.platform, "windows-x64");
+    assert.equal(payload.file, "Sparky-x64.exe");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("architecture-specific updater paths cannot cross platforms", () => {
   assert.deepEqual(updateRequest("/get/updates/windows/latest.yml"), { platform: "windows-x64", name: "latest.yml" });
   assert.deepEqual(updateRequest("/get/updates/windows/x64/latest.yml"), { platform: "windows-x64", name: "latest.yml" });
