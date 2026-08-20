@@ -144,13 +144,26 @@ test("GitHub release manifests keep Intel and Apple Silicon feeds distinct", () 
     RELEASE_LINUX_SIZE: "19",
     RELEASE_LINUX_ASC_SIZE: "20",
     RELEASE_LINUX_YML_SIZE: "21",
+    RELEASE_LINUX_DEB_SIZE: "22",
+    RELEASE_LINUX_DEB_SHA256: "DEBHASH",
   });
   assert.equal(manifest.files.find((file) => file.platform === "macos-arm64" && file.name.endsWith(".yml")).name, "latest-mac-arm64.yml");
   assert.equal(manifest.files.find((file) => file.platform === "macos-x64" && file.name.endsWith(".yml")).name, "latest-mac-x64.yml");
+  assert.equal(manifest.files.find((file) => file.platform === "linux-x64" && file.name === "Sparky-amd64.deb").sha256, "DEBHASH");
   assert.equal(manifest.files.find((file) => file.platform === "linux-x64" && file.name.endsWith(".yml")).name, "latest-linux.yml");
   assert.equal(manifest.files.filter((file) => file.name.endsWith(".zip")).length, 2);
 });
 
+test("GitHub releases route Linux downloads to the Debian installer", async () => {
+  const response = await handleRequest(new Request("https://sparky.llc/get?platform=linux"), {
+    RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.8",
+    RELEASE_VERSION: "1.1.8",
+    RELEASE_LINUX_DEB_SIZE: "131277620",
+    RELEASE_LINUX_DEB_SHA256: "8f5b484f3766075f761101fb1a2ff31c381de25ceee65ea2567305d72c73d61b",
+  });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://github.com/darkness22s/sparky-releases/releases/download/v1.1.8/Sparky-amd64.deb");
+});
 test("a versioned public release overrides stale external manifest bindings", async () => {
   const response = await handleRequest(new Request("https://sparky.llc/get/updates/macos/x64/latest-mac-x64.yml"), {
     RELEASE_PUBLIC_BASE_URL: "https://github.com/darkness22s/Sparky-primary-related/releases/download/v1.1.2",

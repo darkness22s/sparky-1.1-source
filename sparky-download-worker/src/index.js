@@ -88,6 +88,9 @@ function githubReleaseConfig(env, baseUrl) {
     file("Sparky-x64.AppImage.asc", "linux-x64", Number(env.RELEASE_LINUX_ASC_SIZE), "application/pgp-signature", env.RELEASE_LINUX_ASC_SHA256),
     file("latest-linux.yml", "linux-x64", Number(env.RELEASE_LINUX_YML_SIZE), "text/yaml", env.RELEASE_LINUX_YML_SHA256),
   );
+  if (env.RELEASE_LINUX_DEB_SIZE?.trim()) {
+    files.push(file("Sparky-amd64.deb", "linux-x64", Number(env.RELEASE_LINUX_DEB_SIZE), "application/vnd.debian.binary-package", env.RELEASE_LINUX_DEB_SHA256));
+  }
   if (env.RELEASE_MAC_ARM64_SIZE?.trim()) {
     const manifestName = env.RELEASE_MAC_ARM64_YML_NAME?.trim() || "latest-mac.yml";
     files.push(
@@ -150,7 +153,7 @@ function publicManifest(release) {
     channel: release.channel ?? "release",
     changelog: release.changelog ?? "",
     publishedAt: release.publishedAt ?? null,
-    files: release.files.filter((file) => /\.(?:exe|dmg|AppImage|asc)$/iu.test(file.name)).map(({ name, platform, size, contentType, sha256 }) => ({ name, platform, size, contentType, sha256: sha256 ?? null })),
+    files: release.files.filter((file) => /(?:\.exe|\.dmg|\.deb|\.AppImage|\.asc)$/iu.test(file.name)).map(({ name, platform, size, contentType, sha256 }) => ({ name, platform, size, contentType, sha256: sha256 ?? null })),
   };
 }
 
@@ -164,7 +167,7 @@ function requestedPlatform(request, url) {
 }
 
 function findInstaller(release, platform) {
-  return release.files.find((file) => file.platform === platform && (file.name.endsWith(".exe") || file.name.endsWith(".dmg") || file.name.endsWith(".AppImage")));
+  return release.files.find((file) => file.platform === platform && (file.name.endsWith(".exe") || file.name.endsWith(".dmg") || file.name.endsWith(".deb") || file.name.endsWith(".AppImage")));
 }
 
 function updateRequest(path) {
@@ -183,7 +186,7 @@ function updateRequest(path) {
   if (decoded[0] === "windows" && decoded[1] === "x64" && decoded.length === 3) {
     return { platform: "windows-x64", name: decoded[2] };
   }
-  if (decoded[0] === "linux" && decoded.length === 2 && (decoded[1] === "latest-linux.yml" || decoded[1].endsWith(".AppImage") || decoded[1].endsWith(".asc"))) return { platform: "linux-x64", name: decoded[1] };
+  if (decoded[0] === "linux" && decoded.length === 2 && (decoded[1] === "latest-linux.yml" || decoded[1].endsWith(".deb") || decoded[1].endsWith(".AppImage") || decoded[1].endsWith(".asc"))) return { platform: "linux-x64", name: decoded[1] };
   if (decoded[0] === "macos" && decoded.length === 3 && (decoded[1] === "arm64" || decoded[1] === "x64")) {
     const name = decoded[2] === "latest-mac.yml" ? `latest-mac-${decoded[1]}.yml` : decoded[2];
     return { platform: `macos-${decoded[1]}`, name };
