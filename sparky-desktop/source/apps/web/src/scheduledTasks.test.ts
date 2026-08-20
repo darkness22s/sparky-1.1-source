@@ -4,6 +4,7 @@ import {
   buildScheduledTask,
   formatScheduleSummary,
   formatTimeLabel,
+  getNextRunAt,
   getNextRunLabel,
   matchesScheduledTask,
   removePreloadedScheduledTasks,
@@ -55,6 +56,15 @@ describe("scheduled task formatting", () => {
       nextRunLabel: "Next run in 3 hours",
       active: true,
     });
+  });
+
+  it("calculates weekly dates using the Sunday-based JavaScript weekday index", () => {
+    const next = getNextRunAt(
+      { ...baseDraft, frequency: "weekly", dayOfWeek: "monday", time: "09:00" },
+      new Date("2027-01-03T10:00:00"),
+    );
+    expect(next?.getDay()).toBe(1);
+    expect(next?.getHours()).toBe(9);
   });
 });
 

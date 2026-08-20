@@ -18,6 +18,11 @@ export type ScheduledTaskAccent = "blue" | "violet" | "green";
 
 export interface ScheduledTask {
   id: string;
+  /** Server automation id. Kept separate from the chat thread id. */
+  threadId?: string;
+  runAt?: string;
+  nextRunAt?: string | null;
+  timezone?: string;
   title: string;
   description: string;
   frequency: ScheduleFrequency;
@@ -34,6 +39,10 @@ export interface ScheduledTask {
 
 export const ScheduledTaskSchema = Schema.Struct({
   id: Schema.String,
+  threadId: Schema.optional(Schema.String),
+  runAt: Schema.optional(Schema.String),
+  nextRunAt: Schema.optional(Schema.NullOr(Schema.String)),
+  timezone: Schema.optional(Schema.String),
   title: Schema.String,
   description: Schema.String,
   frequency: Schema.Literals(["hourly", "daily", "weekly", "once"]),
@@ -142,6 +151,52 @@ export function getNextRunLabel(timing: ScheduleTiming): string {
   }
 }
 
+export function getNextRunAt(timing: ScheduleTiming, from = new Date()): Date | null {
+  const next = new Date(from);
+  if (timing.frequency === "hourly") {
+    next.setMinutes(next.getMinutes() + Math.max(1, Math.round(timing.intervalHours)) * 60);
+    next.setSeconds(0, 0);
+    return next;
+  }
+  if (timing.frequency === "once") {
+    if (!timing.date || !timing.time) return null;
+    return new Date(`${timing.date}T${timing.time}:00`);
+  }
+  const [hoursText, minutesText] = (timing.time || "00:00").split(":");
+  next.setHours(Number(hoursText) || 0, Number(minutesText) || 0, 0, 0);
+  const targetDay =
+    timing.frequency === "weekly"
+      ? ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].indexOf(
+          timing.dayOfWeek,
+        )
+      : -1;
+  if (timing.frequency === "weekly") {
+    let days = (targetDay - next.getDay() + 7) % 7;
+    if (days === 0 && next.getTime() <= from.getTime()) days = 7;
+    next.setDate(next.getDate() + days);
+  } else if (next.getTime() <= from.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+export function formatNextRunAtLabel(
+  nextRunAt: string | null | undefined,
+  now = new Date(),
+): string {
+  if (!nextRunAt) return "Completed";
+  const next = new Date(nextRunAt);
+  if (Number.isNaN(next.getTime())) return "Next run pending";
+  const seconds = Math.max(0, Math.round((next.getTime() - now.getTime()) / 1000));
+  if (seconds < 60) return "Next run in less than a minute";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `Next run in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Next run in ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `Next run in ${days} day${days === 1 ? "" : "s"}`;
+}
+
 export function buildScheduledTask(
   draft: ScheduleDraft,
   id: string,
@@ -149,6 +204,7 @@ export function buildScheduledTask(
 ): ScheduledTask {
   const intervalHours = Math.max(1, Number.parseInt(draft.intervalHours.toString(), 10) || 1);
   const timing = { ...draft, intervalHours };
+  const nextRunAt = getNextRunAt(timing)?.toISOString() ?? null;
   return {
     id,
     title: draft.title.trim(),
@@ -158,8 +214,9 @@ export function buildScheduledTask(
     time: draft.time,
     dayOfWeek: draft.dayOfWeek,
     date: draft.date,
-    nextRunLabel: getNextRunLabel(timing),
-    scheduleLabel: "Scheduled task",
+    nextRunAt,
+    nextRunLabel: formatNextRunAtLabel(nextRunAt),
+    scheduleLabel: formatScheduleSummary(timing),
     statusLabel: "Scheduled",
     active: true,
     accent,

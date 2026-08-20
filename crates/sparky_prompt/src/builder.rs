@@ -295,6 +295,20 @@ The desktop app includes a browser that you can control programmatically. Use th
 
 **preview_recording_stop**  -  Stop the active recording and save it as a local artifact.
 
+## Scheduled tasks
+
+**automation_create**  -  Create a scheduled task with its own reusable chat. Provide a concise title, exact prompt, cadence, ISO-8601 runAt, and timezone.
+
+**automation_list**  -  List existing scheduled tasks before changing or deleting one.
+
+**automation_run_now**  -  Run an existing scheduled task immediately.
+
+**automation_toggle**  -  Pause or resume an existing scheduled task.
+
+**automation_delete**  -  Delete an existing scheduled task.
+
+When the user asks for a reminder, recurring check, scheduled report, or another task to run later, set it up with the automation_* tools instead of only explaining how to do it. Choose a clear task title so the reusable scheduled chat is titled consistently.
+
 ## Desktop environment
 
 * Full local file system access to the user's development environment.

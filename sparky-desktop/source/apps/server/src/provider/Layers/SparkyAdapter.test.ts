@@ -292,6 +292,14 @@ describe("sparkyToolPresentation", () => {
     });
   });
 
+  it("gives scheduled-task MCP tools readable titles", () => {
+    expect(sparkyToolPresentation("automation_create", { title: "Daily brief" })).toMatchObject({
+      itemType: "dynamic_tool_call",
+      title: "Create scheduled task",
+      data: { toolName: "automation_create", rawInput: { title: "Daily brief" } },
+    });
+  });
+
   it("preserves a dedicated lifecycle type for web search", () => {
     expect(sparkyToolPresentation("web_search", { query: "Rust serde" })).toMatchObject({
       itemType: "web_search",

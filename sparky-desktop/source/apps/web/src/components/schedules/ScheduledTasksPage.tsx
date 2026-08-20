@@ -1,3 +1,4 @@
+import type { Automation } from "@sparky/contracts";
 import {
   BellRingIcon,
   CircleIcon,
@@ -11,23 +12,23 @@ import * as Schema from "effect/Schema";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+
+import { fetchPrimaryEnvironment } from "../../environments/primary/httpLayer";
+import { resolvePrimaryEnvironmentHttpUrl } from "../../environments/primary/target";
+import { useThreadShells } from "../../state/entities";
 import { cn } from "../../lib/utils";
 import {
-  buildScheduledTask,
-  DEFAULT_SCHEDULED_TASKS,
+  formatNextRunAtLabel,
   formatScheduleSummary,
   formatTimeLabel,
-  getNextRunLabel,
+  getNextRunAt,
   matchesScheduledTask,
-  removePreloadedScheduledTasks,
-  SCHEDULED_TASKS_STORAGE_KEY,
   SCHEDULED_TASKS_SUGGESTION_CYCLE_STORAGE_KEY,
   selectCycledSuggestions,
   type ScheduleDraft,
   type ScheduleFrequency,
   type ScheduledTask,
   type ScheduledTaskAccent,
-  ScheduledTaskListSchema,
   WEEKDAY_OPTIONS,
 } from "../../scheduledTasks";
 import {
@@ -449,12 +450,76 @@ function taskMatchesFilter(task: ScheduledTask, filter: TaskFilter): boolean {
   return filter === "active" ? task.active : !task.active;
 }
 
+function automationToScheduledTask(
+  automation: Automation,
+  index: number,
+  now = new Date(),
+): ScheduledTask {
+  const runAt = new Date(automation.runAt);
+  const frequency: ScheduleFrequency =
+    automation.schedule === "hourly"
+      ? "hourly"
+      : automation.schedule === "once"
+        ? "once"
+        : automation.schedule === "weekly"
+          ? "weekly"
+          : "daily";
+  const weekday = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+    runAt.getDay()
+  ] as ScheduleDraft["dayOfWeek"];
+  const statusLabel =
+    automation.status === "running"
+      ? "Running"
+      : automation.status === "failed"
+        ? "Failed"
+        : automation.status === "completed"
+          ? "Completed"
+          : automation.enabled
+            ? "Scheduled"
+            : "Paused";
+  return {
+    id: automation.id,
+    threadId: automation.threadId,
+    runAt: automation.runAt,
+    nextRunAt: automation.nextRunAt,
+    timezone: automation.timezone,
+    title: automation.title,
+    description: automation.prompt,
+    frequency,
+    intervalHours: automation.intervalHours,
+    time: Number.isNaN(runAt.getTime())
+      ? "08:00"
+      : `${runAt.getHours().toString().padStart(2, "0")}:${runAt.getMinutes().toString().padStart(2, "0")}`,
+    dayOfWeek: weekday,
+    date: Number.isNaN(runAt.getTime()) ? "" : automation.runAt.slice(0, 10),
+    nextRunLabel: formatNextRunAtLabel(automation.nextRunAt, now),
+    scheduleLabel: formatScheduleSummary({
+      frequency,
+      intervalHours: automation.intervalHours,
+      time: "",
+      dayOfWeek: weekday,
+      date: "",
+    }),
+    statusLabel,
+    active: automation.enabled,
+    accent: ACCENT_CYCLE[index % ACCENT_CYCLE.length] ?? "blue",
+  };
+}
+
+async function automationRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchPrimaryEnvironment(resolvePrimaryEnvironmentHttpUrl(path), {
+    ...init,
+    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+  });
+  if (!response.ok)
+    throw new Error((await response.text()) || `Request failed (${response.status})`);
+  return (await response.json()) as T;
+}
+
 export function ScheduledTasksPage() {
-  const [tasks, setTasks] = useLocalStorage(
-    SCHEDULED_TASKS_STORAGE_KEY,
-    DEFAULT_SCHEDULED_TASKS,
-    ScheduledTaskListSchema,
-  );
+  const templateThreads = useThreadShells();
+  const templateThread = templateThreads[0] ?? null;
+  const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [suggestionCycleIndex, setSuggestionCycleIndex] = useLocalStorage(
@@ -466,7 +531,21 @@ export function ScheduledTasksPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ScheduleDraft>(emptyScheduleDraft);
   const [formError, setFormError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [now, setNow] = useState(() => new Date());
   const didAdvanceSuggestionCycle = useRef(false);
+
+  const loadTasks = async () => {
+    try {
+      const automations = await automationRequest<Automation[]>("/api/automations");
+      setTasks(
+        automations.map((automation, index) => automationToScheduledTask(automation, index)),
+      );
+      setLoadError("");
+    } catch (cause) {
+      setLoadError(cause instanceof Error ? cause.message : "Could not load scheduled tasks.");
+    }
+  };
 
   useEffect(() => {
     if (didAdvanceSuggestionCycle.current) return;
@@ -475,16 +554,21 @@ export function ScheduledTasksPage() {
   }, [setSuggestionCycleIndex]);
 
   useEffect(() => {
-    const cleanedTasks = removePreloadedScheduledTasks(tasks);
-    if (cleanedTasks.length !== tasks.length) {
-      setTasks(cleanedTasks);
-    }
-  }, [setTasks, tasks]);
+    void loadTasks();
+    const refresh = window.setInterval(() => void loadTasks(), 15_000);
+    const clock = window.setInterval(() => setNow(new Date()), 1_000);
+    return () => {
+      window.clearInterval(refresh);
+      window.clearInterval(clock);
+    };
+  }, []);
 
   const visibleTasks = useMemo(
     () =>
-      tasks.filter((task) => taskMatchesFilter(task, filter) && matchesScheduledTask(task, query)),
-    [filter, query, tasks],
+      tasks
+        .map((task) => ({ ...task, nextRunLabel: formatNextRunAtLabel(task.nextRunAt, now) }))
+        .filter((task) => taskMatchesFilter(task, filter) && matchesScheduledTask(task, query)),
+    [filter, now, query, tasks],
   );
 
   const visibleSuggestions = useMemo(
@@ -517,7 +601,7 @@ export function ScheduledTasksPage() {
     setDialogOpen(true);
   };
 
-  const handleTaskSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleTaskSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!draft.title.trim()) {
       setFormError("Add a name for this scheduled task.");
@@ -527,49 +611,88 @@ export function ScheduledTasksPage() {
       setFormError("Describe what Sparky should do when this task runs.");
       return;
     }
-
-    if (editingTask) {
-      const updatedTask = buildScheduledTask(draft, editingTask.id, editingTask.accent);
-      setTasks((currentTasks) =>
-        currentTasks.map((task) =>
-          task.id === editingTask.id
-            ? { ...updatedTask, active: editingTask.active, statusLabel: editingTask.statusLabel }
-            : task,
-        ),
-      );
-    } else {
-      const nextAccent = ACCENT_CYCLE[tasks.length % ACCENT_CYCLE.length] ?? "blue";
-      setTasks((currentTasks) => [
-        ...currentTasks,
-        buildScheduledTask(draft, `scheduled-${Date.now()}`, nextAccent),
-      ]);
+    const runAt = getNextRunAt(draft, now);
+    if (!runAt || Number.isNaN(runAt.getTime())) {
+      setFormError("Choose a valid date and time.");
+      return;
     }
-
-    setDialogOpen(false);
-    setFormError("");
+    try {
+      if (editingTask) {
+        await automationRequest<Automation>(`/api/automations/${editingTask.id}/update`, {
+          method: "POST",
+          body: JSON.stringify({
+            title: draft.title.trim(),
+            prompt: draft.prompt.trim(),
+            schedule: draft.frequency,
+            intervalHours: draft.intervalHours,
+            runAt: runAt.toISOString(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        });
+      } else {
+        await automationRequest<Automation>("/api/automations", {
+          method: "POST",
+          body: JSON.stringify({
+            ...(templateThread
+              ? {
+                  templateThreadId: templateThread.id,
+                  providerInstanceId: templateThread.modelSelection.instanceId,
+                  modelSelection: templateThread.modelSelection,
+                  runtimeMode: templateThread.runtimeMode,
+                  interactionMode: templateThread.interactionMode,
+                }
+              : {}),
+            title: draft.title.trim(),
+            prompt: draft.prompt.trim(),
+            schedule: draft.frequency,
+            intervalHours: draft.intervalHours,
+            runAt: runAt.toISOString(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        });
+      }
+      await loadTasks();
+      setDialogOpen(false);
+      setFormError("");
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : "Could not save this scheduled task.");
+    }
   };
 
-  const toggleTask = (taskId: string) => {
-    setTasks((currentTasks) =>
-      currentTasks.map((task) =>
-        task.id === taskId
-          ? { ...task, active: !task.active, statusLabel: task.active ? "Paused" : "Scheduled" }
-          : task,
-      ),
-    );
+  const toggleTask = async (taskId: string) => {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    if (!task) return;
+    try {
+      await automationRequest<Automation>(`/api/automations/${taskId}/toggle`, {
+        method: "POST",
+        body: JSON.stringify({ enabled: !task.active }),
+      });
+      await loadTasks();
+    } catch (cause) {
+      setLoadError(
+        cause instanceof Error ? cause.message : "Could not update this scheduled task.",
+      );
+    }
   };
 
-  const deleteEditingTask = () => {
+  const deleteEditingTask = async () => {
     if (!editingTaskId) return;
-    setTasks((currentTasks) => currentTasks.filter((task) => task.id !== editingTaskId));
-    setDialogOpen(false);
-    setEditingTaskId(null);
+    try {
+      await automationRequest(`/api/automations/${editingTaskId}/delete`, { method: "POST" });
+      await loadTasks();
+      setDialogOpen(false);
+      setEditingTaskId(null);
+    } catch (cause) {
+      setFormError(
+        cause instanceof Error ? cause.message : "Could not delete this scheduled task.",
+      );
+    }
   };
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-background">
-        <div className="absolute top-2 right-3 z-20">
+        <div className="absolute top-2 right-3 z-20 wco:top-[calc(var(--workspace-topbar-height)+0.5rem)] wco:right-[var(--workspace-native-controls-inset)]">
           <button
             type="button"
             data-testid="schedules-create-button"
@@ -595,6 +718,7 @@ export function ScheduledTasksPage() {
             <p className="mt-2 text-base leading-6 tracking-[-0.01em] text-muted-foreground">
               Ask Sparky to schedule tasks, set reminders, or monitor for updates
             </p>
+            {loadError ? <p className="mt-2 text-sm text-destructive">{loadError}</p> : null}
           </header>
 
           <label className="mt-5 flex h-9 items-center rounded-full border border-input bg-muted/80 px-3 text-muted-foreground shadow-inner shadow-black/10 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
@@ -918,7 +1042,7 @@ export function ScheduledTasksPage() {
                   {formatScheduleSummary(draft)}
                 </span>
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                  {getNextRunLabel(draft)}
+                  {formatNextRunAtLabel(getNextRunAt(draft)?.toISOString() ?? null, now)}
                 </span>
               </div>
 

@@ -53,7 +53,8 @@ const T3_MCP_BEARER_TOKEN_ENV_VAR = "T3_MCP_BEARER_TOKEN";
 const HIDDEN_SPARKY_CONTROL_TOOLS = new Set(["end_task"]);
 const SPARKY_BROWSER_INSTRUCTIONS = `You are running inside Sparky Desktop. The t3-code MCP tools named preview_* control the collaborative browser shared with the user.
 For browser work, first call preview_status. If no automation-capable preview is attached, call preview_open. Then use preview_navigate, preview_snapshot, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
-Do not open the user's external browser or start a replacement browser automation stack when the preview_* tools are available.`;
+Do not open the user's external browser or start a replacement browser automation stack when the preview_* tools are available.
+When the user asks for a reminder, recurring check, scheduled report, or another task to run later, use the automation_* MCP tools instead of only describing how to schedule it. Use automation_create with a concise task title, the exact prompt to run, the requested cadence, an ISO-8601 runAt time, and the user's timezone. Use automation_list before changing an existing task, and automation_toggle, automation_run_now, or automation_delete for follow-up requests.`;
 const SPARKY_IMAGE_VIEW_INSTRUCTIONS = `ImageView is available as a visual-inspection helper. When you cannot directly inspect an image or browser screenshot, call image_view instead of guessing. Use path for a known local image; omit path to inspect the current collaborative browser tab. Give it the exact visual question you need answered. Treat its response as evidence, keep ownership of the task, and continue with your current model. Verify uncertain or changed page state with another ImageView call before clicking.`;
 const IMAGE_VIEW_PROMPT = `Analyze this image as a read-only visual specialist for another coding agent. Be exhaustive and factual. Include exact OCR text; page or application identity; visible state; every relevant control and icon; approximate positions using top/center/bottom and left/center/right plus relative relationships; enabled, disabled, selected, loading, error, modal, focus, and scroll state; safe click or cursor targets; what to wait for; and ambiguities or confidence limits. Do not perform the task, make choices for the agent, or claim hidden state.`;
 
@@ -478,6 +479,11 @@ export function sparkyToolPresentation(
         : normalizedName;
   const titleByName: Record<string, string> = {
     ask_user: "Ask user",
+    automation_list: "List scheduled tasks",
+    automation_create: "Create scheduled task",
+    automation_run_now: "Run scheduled task",
+    automation_toggle: "Pause or resume scheduled task",
+    automation_delete: "Delete scheduled task",
     bash: "Terminal",
     edit: "Edit file",
     find: "Find",
