@@ -1693,7 +1693,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     const sparkyBinary = path.resolve(repoRoot, "../..", "target", "release", "sparky.exe");
     const stagedSparkyDir = path.join(stageResourcesDir, "sparky");
     yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
-    yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, "sparky.exe"));
+    if (yield* fs.exists(sparkyBinary)) {
+      yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, "sparky.exe"));
+    } else {
+      yield* Effect.log("[desktop-artifact] sparky.exe not found; skipping native binary.");
+    }
   } else if (options.platform === "mac") {
     const rustTarget = options.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
     const targetedBinary = path.resolve(
@@ -1706,9 +1710,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     );
     const hostBinary = path.resolve(repoRoot, "../..", "target", "release", "sparky");
     const sparkyBinary = (yield* fs.exists(targetedBinary)) ? targetedBinary : hostBinary;
-    const stagedSparkyDir = path.join(stageResourcesDir, "sparky");
-    yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
-    yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, "sparky"));
+    if (yield* fs.exists(sparkyBinary)) {
+      const stagedSparkyDir = path.join(stageResourcesDir, "sparky");
+      yield* fs.makeDirectory(stagedSparkyDir, { recursive: true });
+      yield* fs.copyFile(sparkyBinary, path.join(stagedSparkyDir, "sparky"));
+    } else {
+      yield* Effect.log("[desktop-artifact] sparky binary not found; skipping native binary.");
+    }
   }
 
   yield* assertPlatformBuildResources(

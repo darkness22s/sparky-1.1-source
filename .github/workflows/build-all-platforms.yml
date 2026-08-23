@@ -109,7 +109,8 @@ jobs:
         run: |
           # Exclude infra/* (relay) from workspace — it needs private registry
           # auth not available in CI. Desktop packages don't depend on it.
-          sed -i '/infra\/\*/d' pnpm-workspace.yaml
+          grep -v 'infra/\*' pnpm-workspace.yaml > pnpm-workspace.yaml.tmp
+          mv pnpm-workspace.yaml.tmp pnpm-workspace.yaml
           pnpm install --no-frozen-lockfile
 
       - name: Align package versions
