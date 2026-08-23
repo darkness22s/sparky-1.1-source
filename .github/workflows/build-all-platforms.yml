@@ -105,7 +105,12 @@ jobs:
         run: npm install -g pnpm@9
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile --filter @sparky/desktop... --filter t3... --filter @sparky/web... --filter @sparky/contracts...
+        shell: bash
+        run: |
+          # Exclude infra/* (relay) from workspace — it needs private registry
+          # auth not available in CI. Desktop packages don't depend on it.
+          sed -i '/infra\/\*/d' pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
 
       - name: Align package versions
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
