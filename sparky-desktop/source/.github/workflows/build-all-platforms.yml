@@ -125,7 +125,7 @@ jobs:
             --verbose
           )
 
-          pnpm vp run dist:desktop:artifact "${args[@]}"
+          pnpm run dist:desktop:artifact "${args[@]}"
 
       - name: Collect release assets
         shell: bash
