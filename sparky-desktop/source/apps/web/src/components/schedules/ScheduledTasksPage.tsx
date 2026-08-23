@@ -1,4 +1,4 @@
-import type { Automation } from "@sparky/contracts";
+import type { Automation, ModelSelection } from "@sparky/contracts";
 import {
   BellRingIcon,
   CircleIcon,
@@ -9,13 +9,23 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import * as Schema from "effect/Schema";
+import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { usePrimarySettings } from "../../hooks/useSettings";
 
 import { fetchPrimaryEnvironment } from "../../environments/primary/httpLayer";
 import { resolvePrimaryEnvironmentHttpUrl } from "../../environments/primary/target";
+import { primaryServerProvidersAtom } from "../../state/server";
 import { useThreadShells } from "../../state/entities";
+import { getCustomModelOptionsByInstance } from "../../modelSelection";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  sortProviderInstanceEntries,
+} from "../../providerInstances";
+import { createModelSelection } from "@sparky/shared/model";
 import { cn } from "../../lib/utils";
 import {
   formatNextRunAtLabel,
@@ -40,6 +50,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { SidebarInset } from "../ui/sidebar";
 
 type TaskFilter = "all" | "active" | "paused";
@@ -503,6 +514,7 @@ function automationToScheduledTask(
     statusLabel,
     active: automation.enabled,
     accent: ACCENT_CYCLE[index % ACCENT_CYCLE.length] ?? "blue",
+    modelSelection: automation.modelSelection ?? null,
   };
 }
 
@@ -534,6 +546,24 @@ export function ScheduledTasksPage() {
   const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(() => new Date());
   const didAdvanceSuggestionCycle = useRef(false);
+
+  const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  const primarySettings = usePrimarySettings();
+  const instanceEntries = useMemo(
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), primarySettings),
+      ),
+    [primarySettings, serverProviders],
+  );
+  const [modelSelectionDraft, setModelSelectionDraft] = useState<ModelSelection | null>(null);
+  const activeInstanceId =
+    modelSelectionDraft?.instanceId ?? instanceEntries[0]?.instanceId ?? null;
+  const activeModel = modelSelectionDraft?.model ?? "";
+  const modelOptionsByInstance = useMemo(
+    () => getCustomModelOptionsByInstance(primarySettings, serverProviders),
+    [primarySettings, serverProviders],
+  );
 
   const loadTasks = async () => {
     try {
@@ -579,9 +609,18 @@ export function ScheduledTasksPage() {
   const editingTask =
     editingTaskId === null ? null : tasks.find((task) => task.id === editingTaskId);
 
+  const resolveDefaultModelSelection = (): ModelSelection | null => {
+    if (templateThread?.modelSelection) return templateThread.modelSelection;
+    const entry = instanceEntries[0];
+    if (!entry) return null;
+    const firstModel = modelOptionsByInstance.get(entry.instanceId)?.[0]?.slug ?? "";
+    return createModelSelection(entry.instanceId, firstModel);
+  };
+
   const openCreateDialog = (suggestionDraft?: ScheduleDraft) => {
     setEditingTaskId(null);
     setDraft(suggestionDraft ? { ...suggestionDraft } : emptyScheduleDraft());
+    setModelSelectionDraft(resolveDefaultModelSelection());
     setFormError("");
     setDialogOpen(true);
   };
@@ -597,6 +636,7 @@ export function ScheduledTasksPage() {
       dayOfWeek: task.dayOfWeek,
       date: task.date,
     });
+    setModelSelectionDraft(task.modelSelection ?? resolveDefaultModelSelection());
     setFormError("");
     setDialogOpen(true);
   };
@@ -617,10 +657,19 @@ export function ScheduledTasksPage() {
       return;
     }
     try {
+      const modelSelectionPayload = modelSelectionDraft
+        ? {
+            providerInstanceId: modelSelectionDraft.instanceId,
+            // The explicit picker choice must always reach the server — it
+            // takes priority over the template thread's default model.
+            modelSelection: modelSelectionDraft,
+          }
+        : {};
       if (editingTask) {
         await automationRequest<Automation>(`/api/automations/${editingTask.id}/update`, {
           method: "POST",
           body: JSON.stringify({
+            ...modelSelectionPayload,
             title: draft.title.trim(),
             prompt: draft.prompt.trim(),
             schedule: draft.frequency,
@@ -636,12 +685,11 @@ export function ScheduledTasksPage() {
             ...(templateThread
               ? {
                   templateThreadId: templateThread.id,
-                  providerInstanceId: templateThread.modelSelection.instanceId,
-                  modelSelection: templateThread.modelSelection,
                   runtimeMode: templateThread.runtimeMode,
                   interactionMode: templateThread.interactionMode,
                 }
               : {}),
+            ...modelSelectionPayload,
             title: draft.title.trim(),
             prompt: draft.prompt.trim(),
             schedule: draft.frequency,
@@ -1034,8 +1082,26 @@ export function ScheduledTasksPage() {
                 </div>
               ) : null}
 
+              {instanceEntries.length > 0 && activeInstanceId ? (
+                <div className="grid gap-2">
+                  <span className="text-[13px] font-medium text-foreground">Model</span>
+                  <ProviderModelPicker
+                    activeInstanceId={activeInstanceId}
+                    model={activeModel}
+                    lockedProvider={null}
+                    instanceEntries={instanceEntries}
+                    modelOptionsByInstance={modelOptionsByInstance}
+                    triggerVariant="outline"
+                    triggerClassName={cn(SELECT_TRIGGER_CLASS, "justify-start")}
+                    onInstanceModelChange={(instanceId, model) => {
+                      setModelSelectionDraft(createModelSelection(instanceId, model));
+                    }}
+                  />
+                </div>
+              ) : null}
+
               <div className="rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-[13px] text-muted-foreground">
-                <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="block text-[11px] font-medium tracking-wide text-muted-foreground">
                   Schedule preview
                 </span>
                 <span className="mt-1 block text-sm text-foreground">

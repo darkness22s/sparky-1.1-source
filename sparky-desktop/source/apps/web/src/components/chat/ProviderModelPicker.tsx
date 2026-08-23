@@ -16,6 +16,7 @@ import {
   ModelEsque,
   getTriggerDisplayModelLabel,
   getTriggerDisplayModelName,
+  resolveProviderIconForModel,
 } from "./providerIconUtils";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 
@@ -158,7 +159,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           />
         }
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
+        {/* Icon + label hug each other; `justify-between` on the button
+            pushes only the chevron to the far edge. */}
+        <span className="flex min-w-0 shrink items-center gap-2">
           {activeEntry ? (
             <ProviderInstanceIcon
               driverKind={activeEntry.driverKind}
@@ -172,10 +175,16 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3",
                 "px-0.5 text-[7px]",
               )}
+              overrideIcon={
+                resolveProviderIconForModel(
+                  activeEntry.driverKind,
+                  selectedModel ?? null,
+                ) ?? undefined
+              }
             />
           ) : null}
           <Tooltip>
-            <TooltipTrigger render={<span className="min-w-0 flex-1 overflow-hidden truncate" />}>
+            <TooltipTrigger render={<span className="min-w-0 overflow-hidden truncate" />}>
               {triggerTitle}
             </TooltipTrigger>
             <TooltipPopup side="top">{triggerLabel}</TooltipPopup>

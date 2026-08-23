@@ -268,11 +268,23 @@ export const AutomationServiceLive = Layer.effect(
           );
           const runAt = input.runAt ?? current.runAt;
           const nextRunAt = current.enabled ? runAt : null;
+          const modelSelectionJson =
+            input.modelSelection !== undefined
+              ? input.modelSelection === null
+                ? null
+                : JSON.stringify(input.modelSelection)
+              : undefined;
           return sql`
             UPDATE automations SET title = ${input.title ?? current.title},
               prompt = ${input.prompt ?? current.prompt}, schedule = ${input.schedule ?? current.schedule},
               interval_hours = ${intervalHours}, run_at = ${runAt}, next_run_at = ${nextRunAt},
               timezone = ${input.timezone ?? current.timezone},
+              provider_instance_id = ${input.providerInstanceId ?? current.providerInstanceId},
+              ${
+                modelSelectionJson !== undefined
+                  ? sql`model_selection_json = ${modelSelectionJson},`
+                  : sql``
+              }
               status = CASE WHEN ${current.enabled ? 1 : 0} = 1 THEN 'active' ELSE 'paused' END,
               updated_at = ${nowIso()}, last_error = NULL WHERE id = ${id}
           `.pipe(Effect.flatMap(() => requireAutomation(id)));

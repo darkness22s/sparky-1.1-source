@@ -1,6 +1,7 @@
 import { type CSSProperties, memo } from "react";
 import { type ProviderDriverKind } from "@sparky/contracts";
 
+import type { Icon } from "../Icons";
 import { PROVIDER_ICON_BY_PROVIDER } from "./providerIconUtils";
 import { cn } from "~/lib/utils";
 
@@ -25,8 +26,16 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
   badgeClassName?: string;
   statusDotClassName?: string;
   indicatorBackground?: string;
+  /** Optional model-specific brand icon that takes precedence over the driver glyph. */
+  overrideIcon?: Icon | undefined;
 }) {
-  const Icon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
+  const Icon = props.overrideIcon ?? PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
+  // With an override (brand wrapper span), avoid stacking a second size class
+  // on top of the caller's iconClassName — conflicting `size-*` utilities
+  // resolve by stylesheet order and cause misaligned icons.
+  const resolvedIconClassName = props.overrideIcon
+    ? (props.iconClassName ?? "size-5")
+    : cn("size-5 shrink-0", props.iconClassName);
   const indicatorBackground = props.indicatorBackground ?? "var(--card)";
   const accentStyle = props.accentColor
     ? ({ "--provider-accent": props.accentColor } as CSSProperties)
@@ -43,7 +52,7 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
       data-provider-accent-color={props.accentColor}
     >
       {Icon ? (
-        <Icon className={cn("size-5 shrink-0", props.iconClassName)} aria-hidden />
+        <Icon className={resolvedIconClassName} aria-hidden />
       ) : (
         <span className={cn("text-[10px] font-semibold leading-none", props.iconClassName)}>
           {providerInstanceInitials(props.displayName)}
