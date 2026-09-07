@@ -22,19 +22,6 @@ export const DEFAULT_TIMEOUT_MS = 4_000;
 // Auth status checks involve disk/network lookups and can be slow on first run (especially Windows)
 export const AUTH_PROBE_TIMEOUT_MS = 10_000;
 
-/**
- * Reject model entries from the removed legacy catalog, including entries
- * left in an older provider-status cache or custom-model setting.
- */
-export function isRetiredProviderModel(
-  model: Pick<ServerProviderModel, "slug" | "subProvider">,
-): boolean {
-  return (
-    model.slug.trim().toLowerCase().startsWith("opencode/") ||
-    model.subProvider?.trim().toLowerCase() === "opencode zen"
-  );
-}
-
 export interface CommandResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -162,7 +149,7 @@ export function providerModelsFromSettings(
 
   for (const candidate of customModels) {
     const normalized = normalizeCustomModelSlug(candidate);
-    if (!normalized || isRetiredProviderModel({ slug: normalized }) || seen.has(normalized)) {
+    if (!normalized || seen.has(normalized)) {
       continue;
     }
     seen.add(normalized);

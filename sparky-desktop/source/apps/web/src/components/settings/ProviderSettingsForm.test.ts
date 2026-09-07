@@ -22,8 +22,37 @@ describe("ProviderSettingsForm helpers", () => {
     ]);
   });
 
-  it("does not expose the retired provider in the settings picker", () => {
-    expect(DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")]).toBeUndefined();
+  it("sources labels and descriptions from schema annotations", () => {
+    const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
+    expect(opencode).toBeDefined();
+
+    const serverPassword = deriveProviderSettingsFields(opencode!).find(
+      (field) => field.key === "serverPassword",
+    );
+
+    expect(serverPassword).toMatchObject({
+      label: "Server password",
+      description: "Stored in plain text on disk.",
+      control: "password",
+    });
+  });
+
+  it("preserves unknown config keys while omitting empty configurable fields", () => {
+    const opencode = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("opencode")];
+    expect(opencode).toBeDefined();
+
+    const serverUrl = deriveProviderSettingsFields(opencode!).find(
+      (field) => field.key === "serverUrl",
+    );
+    expect(serverUrl).toBeDefined();
+
+    const next = nextProviderConfigWithFieldValue(
+      { forkOwned: 1, serverUrl: "http://127.0.0.1:4096" },
+      serverUrl!,
+      "",
+    );
+
+    expect(next).toEqual({ forkOwned: 1 });
   });
 
   it("reads non-string config values as blank strings", () => {

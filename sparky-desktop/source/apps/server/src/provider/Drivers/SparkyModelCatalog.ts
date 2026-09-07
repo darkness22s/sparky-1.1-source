@@ -8,9 +8,9 @@ import * as NodePath from "node:path";
 type FetchImplementation = typeof globalThis.fetch;
 
 type ProviderDefinition = {
-  readonly env?: "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY";
-  readonly prefix: "openai-codex" | "openai" | "anthropic" | "google";
-  readonly label: "OpenAI Codex" | "OpenAI" | "Claude" | "Google";
+  readonly env?: "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY" | "OPENCODE_API_KEY";
+  readonly prefix: "openai-codex" | "openai" | "anthropic" | "google" | "opencode";
+  readonly label: "OpenAI Codex" | "OpenAI" | "Claude" | "Google" | "OpenCode Zen";
   readonly load: (
     apiKey: string,
     fetchImplementation: FetchImplementation,
@@ -586,6 +586,22 @@ async function loadGoogleModels(
   );
 }
 
+async function loadOpenCodeModels(
+  apiKey: string,
+  fetchImplementation: FetchImplementation,
+  _environment: NodeJS.ProcessEnv,
+  modelsDev?: ModelsDevCatalog,
+): Promise<ReadonlyArray<RemoteModel>> {
+  const models = parseOpenAICompatibleModels(
+    await fetchJson(fetchImplementation, "https://opencode.ai/zen/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    }),
+  );
+  return models.map((model) =>
+    mergeRemoteModelMetadata(model, modelsDevModel(modelsDev, "opencode", model.id)),
+  );
+}
+
 async function loadCodexModels(
   _apiKey: string,
   _fetchImplementation: FetchImplementation,
@@ -713,6 +729,12 @@ const PROVIDERS: ReadonlyArray<ProviderDefinition> = [
     prefix: "google",
     label: "Google",
     load: loadGoogleModels,
+  },
+  {
+    env: "OPENCODE_API_KEY",
+    prefix: "opencode",
+    label: "OpenCode Zen",
+    load: loadOpenCodeModels,
   },
 ];
 
