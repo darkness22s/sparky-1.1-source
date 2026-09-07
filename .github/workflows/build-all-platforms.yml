@@ -38,6 +38,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       tag: ${{ steps.resolve.outputs.tag }}
       release_name: ${{ steps.resolve.outputs.name }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,6 +77,27 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "name=Sparky v$version" >> "$GITHUB_OUTPUT"
 
+          selection="${{ inputs.platform || 'all' }}"
+          case "$selection" in
+            windows)
+              matrix='{"include":[{"label":"Windows x64","runner":"windows-latest","platform":"win","target":"nsis","arch":"x64"}]}'
+              ;;
+            macos)
+              matrix='{"include":[{"label":"macOS (arm64)","runner":"macos-latest","platform":"mac","target":"dmg","arch":"arm64"}]}'
+              ;;
+            linux)
+              matrix='{"include":[{"label":"Linux x64","runner":"ubuntu-latest","platform":"linux","target":"AppImage","arch":"x64"}]}'
+              ;;
+            all)
+              matrix='{"include":[{"label":"macOS (arm64)","runner":"macos-latest","platform":"mac","target":"dmg","arch":"arm64"},{"label":"Linux x64","runner":"ubuntu-latest","platform":"linux","target":"AppImage","arch":"x64"},{"label":"Windows x64","runner":"windows-latest","platform":"win","target":"nsis","arch":"x64"}]}'
+              ;;
+            *)
+              echo "Invalid platform selection: $selection" >&2
+              exit 1
+              ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.label }}
     needs: preflight
@@ -89,23 +111,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: macOS (arm64)
-            runner: macos-latest
-            platform: mac
-            target: dmg
-            arch: arm64
-          - label: Linux x64
-            runner: ubuntu-latest
-            platform: linux
-            target: AppImage
-            arch: x64
-          - label: Windows x64
-            runner: windows-latest
-            platform: win
-            target: nsis
-            arch: x64
+      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
