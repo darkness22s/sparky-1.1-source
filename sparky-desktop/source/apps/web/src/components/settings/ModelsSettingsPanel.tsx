@@ -22,7 +22,7 @@ import { resolvePrimaryEnvironmentHttpUrl } from "../../environments/primary/tar
 import { usePrimaryEnvironment } from "../../state/environments";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ClaudeAI, Gemini, OpenAI, OpenCodeIcon } from "../Icons";
+import { ClaudeAI, Gemini, OpenAI } from "../Icons";
 import { Button } from "../ui/button";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 
@@ -102,14 +102,6 @@ const MODEL_APIS: ReadonlyArray<{
     placeholder: "AIza...",
     description: "Gemini models through Google AI Studio.",
     Logo: Gemini,
-  },
-  {
-    id: "opencode",
-    name: "OpenCode Zen",
-    envName: "OPENCODE_API_KEY",
-    placeholder: "OpenCode Zen API key",
-    description: "OpenCode Zen gateway models through Sparky.",
-    Logo: OpenCodeIcon,
   },
 ];
 

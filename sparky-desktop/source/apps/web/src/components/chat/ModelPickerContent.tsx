@@ -14,7 +14,7 @@ import {
   type ModelCatalogSectionId,
   type ModelPickerRailSelection,
 } from "./ModelPickerSidebar";
-import { ClaudeAI, Gemini, OpenAI, OpenCodeIcon } from "../Icons";
+import { ClaudeAI, Gemini, OpenAI } from "../Icons";
 import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
 import { Combobox, ComboboxEmpty, ComboboxInput, ComboboxListVirtualized } from "../ui/combobox";
@@ -54,17 +54,11 @@ const SPARKY_MODEL_CATALOGS: ReadonlyArray<ModelCatalogSection> = [
   { id: "catalog:Claude", label: "Claude", Icon: ClaudeAI },
   { id: "catalog:OpenAI", label: "OpenAI", Icon: OpenAI },
   { id: "catalog:Google", label: "Google", Icon: Gemini },
-  {
-    id: "catalog:OpenCode Zen",
-    label: "OpenCode Zen",
-    Icon: OpenCodeIcon,
-  },
 ];
 
 function catalogSectionForModel(model: string): ModelCatalogSectionId {
   if (model.startsWith("anthropic/")) return "catalog:Claude";
   if (model.startsWith("google/")) return "catalog:Google";
-  if (model.startsWith("opencode/")) return "catalog:OpenCode Zen";
   return "catalog:OpenAI";
 }
 

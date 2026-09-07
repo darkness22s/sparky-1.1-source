@@ -11,6 +11,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { writeFileStringAtomically } from "../atomicWrite.ts";
+import { isRetiredProviderModel } from "./providerSnapshot.ts";
 
 const decodeProviderStatusCache = Schema.decodeUnknownEffect(
   Schema.fromJsonString(ServerProviderSchema),
@@ -20,8 +21,13 @@ const mergeProviderModels = (
   fallbackModels: ReadonlyArray<ServerProvider["models"][number]>,
   cachedModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
-  const fallbackSlugs = new Set(fallbackModels.map((model) => model.slug));
-  return [...fallbackModels, ...cachedModels.filter((model) => !fallbackSlugs.has(model.slug))];
+  const activeFallbackModels = fallbackModels.filter((model) => !isRetiredProviderModel(model));
+  const activeCachedModels = cachedModels.filter((model) => !isRetiredProviderModel(model));
+  const fallbackSlugs = new Set(activeFallbackModels.map((model) => model.slug));
+  return [
+    ...activeFallbackModels,
+    ...activeCachedModels.filter((model) => !fallbackSlugs.has(model.slug)),
+  ];
 };
 
 export const orderProviderSnapshots = (
