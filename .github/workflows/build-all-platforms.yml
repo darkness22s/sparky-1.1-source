@@ -11,16 +11,6 @@ on:
         description: "Release version (for example 1.1.10)"
         required: false
         type: string
-      platform:
-        description: "Platform to build for a manual artifact-only run"
-        required: false
-        default: all
-        type: choice
-        options:
-          - all
-          - windows
-          - macos
-          - linux
 
 permissions:
   contents: write
@@ -79,12 +69,6 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     needs: preflight
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      inputs.platform == 'all' ||
-      (inputs.platform == 'windows' && matrix.platform == 'win') ||
-      (inputs.platform == 'macos' && matrix.platform == 'mac') ||
-      (inputs.platform == 'linux' && matrix.platform == 'linux')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -182,7 +166,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build]
-    if: github.event_name != 'workflow_dispatch' && needs.build.result == 'success'
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
