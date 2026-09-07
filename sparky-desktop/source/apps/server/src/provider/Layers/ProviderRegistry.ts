@@ -52,6 +52,7 @@ import {
   writeProviderStatusCache,
 } from "../providerStatusCache.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
+import { isRetiredProviderModel } from "../providerSnapshot.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import type { ProviderSnapshotSource } from "../builtInProviderCatalog.ts";
 
@@ -82,12 +83,14 @@ const mergeProviderModels = (
   previousModels: ReadonlyArray<ServerProvider["models"][number]>,
   nextModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
-  if (nextModels.length === 0 && previousModels.length > 0) {
-    return previousModels;
+  const activePreviousModels = previousModels.filter((model) => !isRetiredProviderModel(model));
+  const activeNextModels = nextModels.filter((model) => !isRetiredProviderModel(model));
+  if (activeNextModels.length === 0 && activePreviousModels.length > 0) {
+    return activePreviousModels;
   }
 
-  const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
-  const mergedModels = nextModels.map((model) => {
+  const previousBySlug = new Map(activePreviousModels.map((model) => [model.slug, model] as const));
+  const mergedModels = activeNextModels.map((model) => {
     const previousModel = previousBySlug.get(model.slug);
     if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
       return model;
@@ -97,8 +100,8 @@ const mergeProviderModels = (
       capabilities: previousModel.capabilities,
     };
   });
-  const nextSlugs = new Set(nextModels.map((model) => model.slug));
-  return [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))];
+  const nextSlugs = new Set(activeNextModels.map((model) => model.slug));
+  return [...mergedModels, ...activePreviousModels.filter((model) => !nextSlugs.has(model.slug))];
 };
 
 export const mergeProviderSnapshot = (

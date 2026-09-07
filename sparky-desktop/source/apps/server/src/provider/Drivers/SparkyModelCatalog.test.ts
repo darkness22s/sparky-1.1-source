@@ -147,18 +147,16 @@ describe("discoverSparkyModels", () => {
         OPENAI_API_KEY: "openai-secret",
         ANTHROPIC_API_KEY: "claude-secret",
         GEMINI_API_KEY: "google-secret",
-        OPENCODE_API_KEY: "zen-secret",
       },
       fetchImplementation,
     );
 
-    expect(result.configuredProviderCount).toBe(4);
+    expect(result.configuredProviderCount).toBe(3);
     expect(result.errors).toEqual([]);
     expect(result.models.map((model) => [model.slug, model.subProvider])).toEqual([
       ["openai/gpt-test", "OpenAI"],
       ["anthropic/claude-test", "Claude"],
       ["google/gemini-test", "Google"],
-      ["opencode/zen-test", "OpenCode Zen"],
     ]);
     expect(
       requests.find((request) => request.url.includes("openai.com"))?.headers.get("authorization"),
@@ -211,7 +209,7 @@ describe("discoverSparkyModels", () => {
       currentValue: "1048576",
     });
 
-    for (const slug of ["anthropic/claude-test", "opencode/zen-test"]) {
+    for (const slug of ["anthropic/claude-test"]) {
       expect(
         result.models
           .find((model) => model.slug === slug)
@@ -227,11 +225,11 @@ describe("discoverSparkyModels", () => {
         : jsonResponse({ data: [{ id: "zen-test" }] })) as typeof fetch;
 
     const result = await discoverSparkyModels(
-      { OPENAI_API_KEY: "bad", OPENCODE_API_KEY: "valid" },
+      { OPENAI_API_KEY: "bad", ANTHROPIC_API_KEY: "valid" },
       fetchImplementation,
     );
 
-    expect(result.models.map((model) => model.slug)).toEqual(["opencode/zen-test"]);
+    expect(result.models.map((model) => model.slug)).toEqual([]);
     expect(result.errors).toEqual(["OpenAI: HTTP 401"]);
   });
 
@@ -310,16 +308,6 @@ describe("discoverSparkyModels", () => {
               },
             },
           },
-          opencode: {
-            models: {
-              "zen-no-metadata": {
-                name: "Zen No Metadata",
-                reasoning: true,
-                reasoning_options: [{ type: "effort", values: ["high", "max"] }],
-                limit: { context: 262_144 },
-              },
-            },
-          },
         });
       }
       if (url === "https://api.anthropic.com/v1/models?limit=1000") {
@@ -364,7 +352,6 @@ describe("discoverSparkyModels", () => {
       {
         ANTHROPIC_API_KEY: "claude-secret",
         GEMINI_API_KEY: "google-secret",
-        OPENCODE_API_KEY: "zen-secret",
       },
       fetchImplementation,
     );
@@ -401,14 +388,6 @@ describe("discoverSparkyModels", () => {
         ?.optionDescriptors?.find((descriptor) => descriptor.id === "contextWindow"),
     ).toMatchObject({ options: [{ id: "1048576" }] });
 
-    expect(
-      result.models.find((model) => model.slug === "opencode/zen-no-metadata")?.capabilities
-        ?.optionDescriptors?.find((descriptor) => descriptor.id === "reasoningEffort"),
-    ).toMatchObject({ options: [{ id: "high" }, { id: "max" }] });
-    expect(
-      result.models.find((model) => model.slug === "opencode/zen-no-metadata")?.capabilities
-        ?.optionDescriptors?.find((descriptor) => descriptor.id === "contextWindow"),
-    ).toMatchObject({ options: [{ id: "262144" }] });
   });
 
   it("keeps models when optional metadata fails and does not fabricate unsupported effort", async () => {
@@ -431,14 +410,13 @@ describe("discoverSparkyModels", () => {
     }) as typeof fetch;
 
     const result = await discoverSparkyModels(
-      { GEMINI_API_KEY: "google-secret", OPENCODE_API_KEY: "zen-secret" },
+      { GEMINI_API_KEY: "google-secret" },
       fetchImplementation,
     );
 
     expect(result.errors).toEqual([]);
     expect(result.models.map((model) => model.slug)).toEqual([
       "google/gemini-no-thinking",
-      "opencode/zen-without-metadata",
     ]);
     expect(
       result.models

@@ -119,15 +119,17 @@ export function deriveProviderModelsForDisplay(input: {
     ),
   );
   const serverModels = input.liveModels?.filter((model) => !model.isCustom) ?? [];
-  const customModels = input.customModels.map(
-    (slug) =>
-      liveCustomModelsBySlug.get(slug) ?? {
-        slug,
-        name: slug,
-        isCustom: true,
-        capabilities: null,
-      },
-  );
+  const customModels = input.customModels
+    .filter((slug) => !slug.trim().toLowerCase().startsWith("opencode/"))
+    .map(
+      (slug) =>
+        liveCustomModelsBySlug.get(slug) ?? {
+          slug,
+          name: slug,
+          isCustom: true,
+          capabilities: null,
+        },
+    );
   return [...serverModels, ...customModels];
 }
 

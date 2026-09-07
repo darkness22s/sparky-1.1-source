@@ -383,13 +383,6 @@ function parseModelSelection(model: string | undefined): {
   if (provider === "google") {
     return { provider: "gemini", model: modelId };
   }
-  if (provider === "opencode") {
-    return {
-      provider: "opencode",
-      model: modelId,
-      baseUrl: "https://opencode.ai/zen/v1",
-    };
-  }
   return { provider, model: modelId };
 }
 
