@@ -101,12 +101,6 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     needs: preflight
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      inputs.platform == 'all' ||
-      (inputs.platform == 'windows' && matrix.platform == 'win') ||
-      (inputs.platform == 'macos' && matrix.platform == 'mac') ||
-      (inputs.platform == 'linux' && matrix.platform == 'linux')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
